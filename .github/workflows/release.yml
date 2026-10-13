@@ -13,7 +13,12 @@ env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
 
 jobs:
+  # The same format, lint and test checks as CI; nothing is published unless they pass.
+  checks:
+    uses: ./.github/workflows/ci.yml
+
   release:
+    needs: checks
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v4
@@ -41,4 +46,13 @@ jobs:
             dist/BDownloader-Setup-*.exe
             dist/bdownloader-extension-*.zip
             dist/SHA256SUMS.txt
+          # Shown above the generated list of changes.
+          body: |
+            ## Install
+
+            Download **BDownloader-Setup-${{ github.ref_name }}.exe** below and run it. It installs for your user only, without admin rights. Already have BDownloader 0.1.1 or later? It updates itself.
+
+            > **Windows says "Windows protected your PC"?** Click **More info**, then **Run anyway**. BDownloader isn't code-signed yet, so Windows doesn't know the publisher. The installer is the one built by this repository's release workflow; you can check it against `SHA256SUMS.txt`.
+
+            The extension zip is for the Chrome Web Store and Edge Add-ons. To add the extension yourself, open **Browser extension** in BDownloader.
           generate_release_notes: true

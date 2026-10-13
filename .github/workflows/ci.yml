@@ -18,6 +18,8 @@ on:
       - "rustfmt.toml"
       - ".github/workflows/ci.yml"
   workflow_dispatch:
+  # The release workflow runs these checks before building.
+  workflow_call:
 
 env:
   CARGO_TERM_COLOR: always

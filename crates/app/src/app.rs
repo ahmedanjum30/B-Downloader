@@ -1,3 +1,4 @@
+use std::collections::VecDeque;
 use std::ffi::OsString;
 use std::path::PathBuf;
 use std::time::Duration;
@@ -123,9 +124,40 @@ pub struct AddDialog {
     pub probe: Probe,
     /// Ignores answers to checks of a URL that has since changed.
     probe_id: u64,
+    /// Cookies, referrer and user agent from the browser, for the check and the download.
+    headers: Vec<(String, String)>,
 }
 
 impl AddDialog {
+    fn new(settings: &Settings) -> Self {
+        Self {
+            url: String::new(),
+            file_name: String::new(),
+            name_edited: false,
+            dir: settings.download_dir.clone(),
+            connections: settings.connections,
+            verify: false,
+            hash_kind: HashKind::Sha256,
+            hash: String::new(),
+            probe: Probe::Idle,
+            probe_id: 0,
+            headers: Vec::new(),
+        }
+    }
+
+    /// For a download from the browser, with the name it suggested.
+    fn from_request(settings: &Settings, request: AddRequest) -> Self {
+        let headers = request.headers();
+        let file_name = request.file_name.map(|n| n.trim().to_owned()).filter(|n| !n.is_empty());
+        Self {
+            url: request.url.trim().to_owned(),
+            name_edited: file_name.is_some(),
+            file_name: file_name.unwrap_or_default(),
+            headers,
+            ..Self::new(settings)
+        }
+    }
+
     pub fn url_is_valid(&self) -> bool {
         let url = self.url.trim();
         (url.starts_with("http://") || url.starts_with("https://")) && url.len() > "https://x".len()
@@ -192,6 +224,8 @@ pub enum Message {
     UpdateDownloaded(Release, Result<Outcome, String>),
     DismissUpdate,
     OpenReleasePage,
+    /// The folder with the diagnostic log, for bug reports.
+    OpenLogs,
 
     /// The window's close button.
     CloseRequested(window::Id),
@@ -229,6 +263,8 @@ pub struct App {
     pub update_manual: bool,
     /// Run the downloaded installer when quitting, and how to come back.
     install_on_quit: Option<Relaunch>,
+    /// Downloads from the browser waiting for their confirmation dialog.
+    pending: VecDeque<AddRequest>,
 }
 
 impl App {
@@ -253,6 +289,7 @@ impl App {
             window_hidden: false,
             update_manual: false,
             install_on_quit: None,
+            pending: VecDeque::new(),
         };
         // `BDownloader.exe URL...` starts those downloads right away.
         for url in std::env::args().skip(1).filter(|a| a.starts_with("http://") || a.starts_with("https://")) {
@@ -380,6 +417,19 @@ impl App {
     }
 
     pub fn update(&mut self, message: Message) -> Task<Message> {
+        let task = self.handle(message);
+        // Once no dialog is showing, the next download from the browser asks for confirmation.
+        if self.modal.is_none()
+            && !self.exiting
+            && let Some(request) = self.pending.pop_front()
+        {
+            self.modal = Some(Modal::Add(Box::new(AddDialog::from_request(&self.settings, request))));
+            return Task::batch([task, self.probe()]);
+        }
+        task
+    }
+
+    fn handle(&mut self, message: Message) -> Task<Message> {
         match message {
             Message::Tick => return self.tick(),
             Message::Finished(id, result) => {
@@ -429,18 +479,7 @@ impl App {
             }
 
             Message::OpenAdd => {
-                self.modal = Some(Modal::Add(Box::new(AddDialog {
-                    url: String::new(),
-                    file_name: String::new(),
-                    name_edited: false,
-                    dir: self.settings.download_dir.clone(),
-                    connections: self.settings.connections,
-                    verify: false,
-                    hash_kind: HashKind::Sha256,
-                    hash: String::new(),
-                    probe: Probe::Idle,
-                    probe_id: 0,
-                })));
+                self.modal = Some(Modal::Add(Box::new(AddDialog::new(&self.settings))));
                 return clipboard::read().map(Message::Clipboard);
             }
             Message::Clipboard(text) => {
@@ -529,7 +568,7 @@ impl App {
                         file_name,
                         dialog.connections,
                         checksum,
-                        Vec::new(),
+                        dialog.headers,
                     );
                     if let Probe::Ready(info) = &dialog.probe {
                         item.size = info.size;
@@ -557,9 +596,17 @@ impl App {
             Message::External(request) => match request {
                 Request::Show => return self.show_window(),
                 Request::Hello { .. } => self.extension_connected(),
-                Request::Add(add) => {
+                Request::Add(add) if add.start => {
                     self.add(add);
                     self.filter = Filter::All;
+                    return self.show_window();
+                }
+                // From the browser: ask where to save it first. Several queue up.
+                Request::Add(add) => {
+                    if add.is_valid() {
+                        log::info!("download from the browser, waiting for confirmation");
+                        self.pending.push_back(add);
+                    }
                     return self.show_window();
                 }
             },
@@ -599,6 +646,11 @@ impl App {
                 return Task::perform(update::check(self.engine.clone()), Message::UpdateChecked);
             }
             Message::UpdateChecked(result) => {
+                match &result {
+                    Ok(Some(release)) => log::info!("update {} available", release.version),
+                    Ok(None) => {}
+                    Err(e) => log::warn!("update check failed: {e}"),
+                }
                 self.update = match result {
                     Ok(Some(release)) => {
                         self.update_dismissed = false;
@@ -629,6 +681,9 @@ impl App {
                 _ => {}
             },
             Message::UpdateDownloaded(release, result) => {
+                if let Err(e) = &result {
+                    log::warn!("update {} download failed: {e}", release.version);
+                }
                 self.update = match result {
                     Ok(Outcome::Completed(installer)) => Update::Ready { release, installer },
                     Ok(Outcome::Paused) => Update::Available(release),
@@ -637,6 +692,11 @@ impl App {
                 return self.install_if_idle();
             }
             Message::DismissUpdate => self.update_dismissed = true,
+            Message::OpenLogs => {
+                let dir = store::data_dir().join("logs");
+                let _ = std::fs::create_dir_all(&dir);
+                store::open_file(&dir);
+            }
             Message::OpenReleasePage => {
                 if let Update::Available(release) | Update::Ready { release, .. } = &self.update {
                     store::open_file(std::path::Path::new(&release.page));
@@ -793,10 +853,11 @@ impl App {
             return Task::none();
         }
         dialog.probe = Probe::Checking;
-        let (engine, url, probe_id) = (self.engine.clone(), dialog.url.trim().to_owned(), dialog.probe_id);
-        Task::perform(async move { engine.probe(&url, &[]).await.map_err(|e| e.to_string()) }, move |result| {
-            Message::Probed(probe_id, result)
-        })
+        let (engine, url, probe_id, headers) = (self.engine.clone(), dialog.url.trim().to_owned(), dialog.probe_id, dialog.headers.clone());
+        Task::perform(
+            async move { engine.probe(&url, &headers).await.map_err(|e| e.to_string()) },
+            move |result| Message::Probed(probe_id, result),
+        )
     }
 
     /// Removes a download from the list. Unfinished downloads also lose their partial files.

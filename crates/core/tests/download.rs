@@ -26,6 +26,9 @@ struct Server {
     /// Add bytes to the body when the request has a `Range` header, like
     /// pages that echo the request back.
     echo_range: bool,
+    /// Send this many bytes per response, then keep the connection open
+    /// without sending more, like servers that throttle or stall.
+    stall_after: Option<usize>,
     open: AtomicUsize,
 }
 
@@ -48,6 +51,7 @@ impl Server {
             max_connections: None,
             require_cookie: None,
             echo_range: false,
+            stall_after: None,
             open: AtomicUsize::new(0),
         }
     }
@@ -117,7 +121,12 @@ impl Server {
         if socket.write_all(head.as_bytes()).await.is_err() {
             return;
         }
-        for chunk in self.data[start..end].chunks(16 * 1024) {
+        for (sent, chunk) in self.data[start..end].chunks(16 * 1024).enumerate() {
+            if self.stall_after.is_some_and(|limit| sent * 16 * 1024 >= limit) {
+                // Hold the connection open and send nothing more.
+                tokio::time::sleep(Duration::from_secs(60)).await;
+                return;
+            }
             if socket.write_all(chunk).await.is_err() {
                 return;
             }
@@ -263,6 +272,60 @@ async fn size_comes_from_the_response_without_ranges() {
         .unwrap();
     let Outcome::Completed(path) = outcome else { panic!("not completed") };
     assert!(std::fs::read(path).unwrap() == data);
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn recovers_when_the_server_stops_sending() {
+    // Every response hangs after 512 KiB; each reconnect gets the next part.
+    let data = test_data(4 * MB);
+    let addr = Server {
+        stall_after: Some(512 * 1024),
+        ..Server::new(data.clone())
+    }
+    .start()
+    .await;
+    let dir = tempfile::tempdir().unwrap();
+    let engine = Engine::with_stall_timeout(Duration::from_millis(500)).unwrap();
+    let mut options = DownloadOptions::new(format!("http://{addr}/stall.bin"), dir.path());
+    options.connections = 4;
+
+    let handle = engine.start(options);
+    let mut saw_problem = false;
+    while !handle.is_finished() {
+        saw_problem |= handle.progress().problem.is_some();
+        tokio::time::sleep(Duration::from_millis(20)).await;
+    }
+    let Outcome::Completed(path) = handle.wait().await.unwrap() else {
+        panic!("not completed")
+    };
+    assert!(std::fs::read(path).unwrap() == data);
+    assert!(saw_problem, "the stall was never reported");
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn gives_up_on_a_server_that_never_answers() {
+    // Accepts connections and reads the request, but never replies.
+    let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let addr = listener.local_addr().unwrap();
+    tokio::spawn(async move {
+        loop {
+            let (mut socket, _) = listener.accept().await.unwrap();
+            tokio::spawn(async move {
+                let mut buf = [0; 1024];
+                let _ = socket.read(&mut buf).await;
+                tokio::time::sleep(Duration::from_secs(60)).await;
+            });
+        }
+    });
+    let engine = Engine::with_stall_timeout(Duration::from_millis(300)).unwrap();
+    let dir = tempfile::tempdir().unwrap();
+    let started = std::time::Instant::now();
+    let result = engine
+        .start(DownloadOptions::new(format!("http://{addr}/silent"), dir.path()))
+        .wait()
+        .await;
+    assert!(result.is_err());
+    assert!(started.elapsed() < Duration::from_secs(10), "took {:?}", started.elapsed());
 }
 
 #[tokio::test(flavor = "multi_thread")]

@@ -43,6 +43,10 @@ pub struct AddRequest {
     pub cookies: Option<String>,
     #[serde(default)]
     pub user_agent: Option<String>,
+    /// Start right away. Links given on the command line do; downloads from
+    /// the browser leave this out, so the app asks where to save them first.
+    #[serde(default)]
+    pub start: bool,
 }
 
 impl AddRequest {
@@ -53,6 +57,7 @@ impl AddRequest {
             referrer: None,
             cookies: None,
             user_agent: None,
+            start: false,
         }
     }
 

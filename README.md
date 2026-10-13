@@ -24,7 +24,16 @@ Free for personal and other non-commercial use. See [License](#license).
 
 ## Installing
 
-Download `BDownloader-Setup-<version>.exe` from [Releases](https://github.com/ahmedanjum30/BDownloader/releases) and run it. It installs for your user only, so it doesn't need admin rights. Windows may warn that the installer is from an unknown publisher, because it isn't code-signed yet: click **More info → Run anyway**.
+Download `BDownloader-Setup-<version>.exe` from [Releases](https://github.com/ahmedanjum30/BDownloader/releases) and run it. It installs for your user only, into `%LOCALAPPDATA%\Programs\BDownloader`, so it doesn't need admin rights. After that, BDownloader keeps itself up to date (from version 0.1.1 on).
+
+### "Windows protected your PC"
+
+Windows SmartScreen shows this for programs that aren't code-signed and that Microsoft hasn't seen many people download yet. BDownloader isn't code-signed yet, so Windows can't name the publisher and says "Unknown publisher". To install it anyway:
+
+1. Click **More info**.
+2. Click **Run anyway**.
+
+The installer on the Releases page is built by this repository's [release workflow](.github/workflows/release.yml) from the source you see here. To check that your download is that file, compare its SHA-256 (`Get-FileHash BDownloader-Setup-<version>.exe` in PowerShell) with `SHA256SUMS.txt` on the same release. Updates that BDownloader installs itself don't show this warning.
 
 To add the browser extension, open **Browser extension** in BDownloader and follow the steps.
 

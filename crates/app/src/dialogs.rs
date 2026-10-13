@@ -198,6 +198,15 @@ fn updates<'a>(draft: &Settings, status: String) -> Element<'a, Message> {
         .spacing(12)
         .align_y(Center),
         muted("Automatic updates install while nothing is downloading and BDownloader is in the tray.").size(12),
+        row![
+            muted("Something not working? The log helps find out why.").size(12).width(Fill),
+            button(text("Open log folder").size(13))
+                .padding([7, 14])
+                .style(style::secondary)
+                .on_press(Message::OpenLogs),
+        ]
+        .spacing(12)
+        .align_y(Center),
     ]
     .spacing(8)
     .into()

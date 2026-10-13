@@ -18,6 +18,8 @@ mod segment;
 mod state;
 
 pub use checksum::Checksum;
-pub use download::{DEFAULT_CONNECTIONS, DownloadHandle, DownloadOptions, Engine, MAX_CONNECTIONS, Outcome, Progress, SegmentProgress, Status};
+pub use download::{
+    DEFAULT_CONNECTIONS, DownloadHandle, DownloadOptions, Engine, MAX_CONNECTIONS, Outcome, Progress, STALL_TIMEOUT, SegmentProgress, Status,
+};
 pub use error::{Error, Result};
 pub use http::ProbeInfo;

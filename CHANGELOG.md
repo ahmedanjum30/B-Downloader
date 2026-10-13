@@ -6,6 +6,26 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+## [0.1.2] - 2026-10-13
+
+### Changed
+- Downloads caught from the browser no longer start right away. They open
+  the Add download dialog first, with the link already checked, the name the
+  browser suggested, your default folder and your default number of
+  connections. Several arrive one after another. Links given on the command
+  line still start right away.
+- A connection that stops receiving data is reopened after 20 seconds
+  instead of 30.
+
+### Added
+- While a download is reconnecting, it says so ("Reconnecting… the
+  connection timed out") instead of showing 0 B/s.
+- A diagnostic log in `%APPDATA%\BDownloader\logs`: connection errors,
+  retries, updates and crashes. Web addresses are logged without their query
+  part, and cookies never. Settings has an Open log folder button.
+- Releases are published only if the format, lint and test checks pass. The
+  release page explains the Windows "unknown publisher" warning.
+
 ## [0.1.1] - 2026-10-13
 
 ### Added
@@ -86,6 +106,7 @@ First release.
   from 167 MB to 24 MB (working set) and the exe from 11.6 MB to 6.8 MB, with
   no change in download speed (28 MB/s over 8 connections, about 1% CPU).
 
-[Unreleased]: https://github.com/ahmedanjum30/BDownloader/compare/v0.1.1...HEAD
+[Unreleased]: https://github.com/ahmedanjum30/BDownloader/compare/v0.1.2...HEAD
+[0.1.2]: https://github.com/ahmedanjum30/BDownloader/compare/v0.1.1...v0.1.2
 [0.1.1]: https://github.com/ahmedanjum30/BDownloader/compare/v0.1.0...v0.1.1
 [0.1.0]: https://github.com/ahmedanjum30/BDownloader/releases/tag/v0.1.0

@@ -15,7 +15,13 @@ pub fn hand_over(urls: &[String]) -> bool {
     if urls.is_empty() {
         return bdownloader_ipc::send(&Request::Show).is_ok();
     }
-    let mut requests = urls.iter().map(|url| Request::Add(bdownloader_ipc::AddRequest::new(url.as_str())));
+    // Links on the command line start without asking, as they do in a fresh copy.
+    let mut requests = urls.iter().map(|url| {
+        Request::Add(bdownloader_ipc::AddRequest {
+            start: true,
+            ..bdownloader_ipc::AddRequest::new(url.as_str())
+        })
+    });
     let Some(first) = requests.next() else { return false };
     if bdownloader_ipc::send(&first).is_err() {
         return false;

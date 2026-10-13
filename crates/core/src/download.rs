@@ -1,6 +1,7 @@
 use std::fs::{File, OpenOptions};
 use std::io;
 use std::path::{Path, PathBuf};
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex, MutexGuard, PoisonError};
 use std::time::Duration;
 
@@ -32,15 +33,23 @@ pub struct Engine {
     client: Client,
 }
 
+/// A connection that sends nothing for this long is dropped and reopened.
+pub const STALL_TIMEOUT: Duration = Duration::from_secs(20);
+
 impl Engine {
     pub fn new() -> Result<Self> {
+        Self::with_stall_timeout(STALL_TIMEOUT)
+    }
+
+    /// Like [`Engine::new`] with a different [`STALL_TIMEOUT`], for tests.
+    pub fn with_stall_timeout(stall_timeout: Duration) -> Result<Self> {
         let client = Client::builder()
             .user_agent(concat!("BDownloader/", env!("CARGO_PKG_VERSION")))
             // With HTTP/2 all range requests would share a single TCP
             // connection, which defeats downloading over several connections.
             .http1_only()
             .connect_timeout(Duration::from_secs(15))
-            .read_timeout(Duration::from_secs(30))
+            .read_timeout(stall_timeout)
             .build()?;
         Ok(Self { client })
     }
@@ -139,6 +148,8 @@ pub struct Progress {
     /// The download can be paused and continued later.
     pub resumable: bool,
     pub active_connections: usize,
+    /// Why connections are reconnecting, while they are. Cleared once data flows again.
+    pub problem: Option<String>,
     /// Parts not finished yet. Everything outside these ranges is downloaded.
     pub segments: Vec<SegmentProgress>,
 }
@@ -202,6 +213,31 @@ struct Shared {
     segments: Mutex<Segments>,
     /// Everything in [`Progress`] except the segment figures.
     info: Mutex<Progress>,
+    /// `info.problem` is set, so the next data that arrives should clear it.
+    has_problem: AtomicBool,
+}
+
+impl Shared {
+    fn report_problem(&self, problem: String) {
+        lock(&self.info).problem = Some(problem);
+        self.has_problem.store(true, Ordering::Relaxed);
+    }
+
+    fn clear_problem(&self) {
+        if self.has_problem.swap(false, Ordering::Relaxed) {
+            lock(&self.info).problem = None;
+        }
+    }
+}
+
+/// The URL for logs: without the query and fragment, which often hold tokens.
+pub(crate) fn redact(url: &Url) -> String {
+    let mut url = url.clone();
+    url.set_query(None);
+    url.set_fragment(None);
+    let _ = url.set_password(None);
+    let _ = url.set_username("");
+    url.to_string()
 }
 
 fn lock<T>(mutex: &Mutex<T>) -> MutexGuard<'_, T> {
@@ -218,6 +254,13 @@ fn parse_url(url: &str) -> Result<Url> {
 
 async fn run(client: Client, options: DownloadOptions, shared: Arc<Shared>, pause: CancellationToken) -> Result<Outcome> {
     let result = download(&client, &options, &shared, &pause).await;
+    let url = Url::parse(&options.url).map_or_else(|_| "invalid URL".to_owned(), |u| redact(&u));
+    match &result {
+        Ok(Outcome::Completed(_)) => log::info!("{url}: completed"),
+        Ok(Outcome::Paused) => log::info!("{url}: paused"),
+        Err(e) => log::warn!("{url}: failed: {e}"),
+    }
+    lock(&shared.info).problem = None;
     lock(&shared.info).status = match &result {
         Ok(Outcome::Completed(_)) => Status::Completed,
         Ok(Outcome::Paused) => Status::Paused,
@@ -250,6 +293,13 @@ async fn download(client: &Client, options: &DownloadOptions, shared: &Arc<Share
     } else {
         1
     };
+    log::info!(
+        "{}: size {:?}, ranges {}, {connections} connection(s), {}",
+        redact(&url),
+        info.size,
+        if info.resumable { "yes" } else { "no" },
+        if target.resume.is_some() { "resuming" } else { "new" },
+    );
 
     // `stop` ends the workers on pause, or when one of them fails.
     let stop = pause.child_token();
@@ -290,6 +340,7 @@ async fn download(client: &Client, options: &DownloadOptions, shared: &Arc<Share
         if let Err(e) = result
             && error.is_none()
         {
+            log::warn!("{}: stopping all connections: {e}", redact(&ctx.url));
             error = Some(e);
             stop.cancel();
         }
@@ -468,19 +519,27 @@ impl Worker {
                 Err(_) if self.stop.is_cancelled() => return Ok(Ended::Finished),
                 Err(e) => e,
             };
-            let written = lock(&self.shared.segments).get(i).written;
+            let (written, end) = {
+                let segments = lock(&self.shared.segments);
+                (segments.get(i).written, segments.get(i).end)
+            };
+            let url = redact(&self.url);
             // Without range requests a retry would have to start from the beginning.
             if !err.is_retryable() || (!self.ranged && written > 0) {
+                log::warn!("{url}: bytes {written}-{end}: {err} (not retrying)");
                 return Err(err);
             }
             if written > before {
                 attempt = 0;
             }
             attempt += 1;
+            log::warn!("{url}: bytes {written}-{end}: {err} (attempt {attempt})");
+            self.shared.report_problem(err.to_string());
             // A server that limits connections answers extra ones with 429 or
             // 503. Drop this connection and let the others finish its segment.
             // Only the last connection keeps retrying.
             if (err.is_overloaded() || attempt > MAX_RETRIES) && lock(&self.shared.segments).leave(i) {
+                log::info!("{url}: a connection gave its part to the others");
                 return Ok(Ended::Left);
             }
             if attempt > MAX_RETRIES {
@@ -529,6 +588,7 @@ impl Worker {
                 Ok(None) => break lock(&self.shared.segments).finish_stream(i),
                 Err(e) => break Err(e.into()),
             };
+            self.shared.clear_problem();
             let (take, complete) = lock(&self.shared.segments).claim(i, chunk.len() as u64);
             buf.extend_from_slice(&chunk[..take as usize]);
             if buf.len() >= WRITE_BUFFER {

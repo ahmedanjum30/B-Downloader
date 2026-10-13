@@ -8,6 +8,7 @@ mod format;
 mod icons;
 mod instance;
 mod item;
+mod logging;
 mod store;
 mod style;
 mod tray;
@@ -33,6 +34,7 @@ fn main() -> iced::Result {
     if instance::hand_over(&urls) {
         return Ok(());
     }
+    logging::init();
     // Not fatal: without it only the browser extension can't reach the app.
     let _ = browser::register();
 

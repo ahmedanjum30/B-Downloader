@@ -45,6 +45,8 @@ pub struct Item {
     pub speed: Speed,
     pub segments: Vec<SegmentProgress>,
     pub active_connections: usize,
+    /// Why the download is reconnecting, while it is.
+    pub problem: Option<String>,
 }
 
 impl Item {
@@ -65,6 +67,7 @@ impl Item {
             speed: Speed::default(),
             segments: Vec::new(),
             active_connections: 0,
+            problem: None,
         }
     }
 
@@ -153,6 +156,7 @@ impl Item {
         self.downloaded = progress.downloaded;
         self.segments = progress.segments;
         self.active_connections = progress.active_connections;
+        self.problem = progress.problem;
         self.speed.sample(self.downloaded);
     }
 

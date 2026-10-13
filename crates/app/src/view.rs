@@ -300,6 +300,11 @@ fn download_card(item: &Item) -> Element<'_, Message> {
     let id = item.id;
     let (status_pick, status): (Pick, String) = match &item.state {
         State::Starting => (|c| c.accent, "Connecting…".into()),
+        // Only once data has stopped, so a brief reconnect while others keep going doesn't flash.
+        State::Downloading if item.problem.is_some() && item.speed.rate() < 1024.0 => (
+            |c| c.warning,
+            format!("Reconnecting… {}", capitalize(item.problem.as_deref().unwrap_or_default())),
+        ),
         State::Downloading => (|c| c.accent, downloading_text(item)),
         State::Verifying => (|c| c.accent, "Verifying checksum…".into()),
         State::Paused => (
