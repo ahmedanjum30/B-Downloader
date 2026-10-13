@@ -46,7 +46,7 @@ The `key` in `extension/manifest.json` fixes the unpacked extension's ID (`glehd
 
 ### Publishing the extension
 
-Pushing a version tag (`git tag v0.1.0 && git push --tags`) runs the release workflow, which attaches the app zip and the extension zip to a GitHub release. `scripts/package-extension.ps1` builds the extension zip to upload to the Chrome Web Store and Edge Add-ons, without the development `key` (each store assigns its own ID). After the first upload, add the store's ID to `EXTENSION_IDS`. Listing texts, permission justifications and images are in `store/`.
+To release, set the same version in `Cargo.toml` and `extension/manifest.json`, move the `[Unreleased]` changelog entries under it, commit, and push a version tag (`git tag v0.1.4 && git push origin v0.1.4`). The release workflow runs the checks, builds the installer and the extension zip, and publishes a GitHub release. `scripts/package-extension.ps1` builds the extension zip to upload to the Chrome Web Store and Edge Add-ons, without the development `key` (each store assigns its own ID). After the first upload, add the store's ID to `EXTENSION_IDS`. Listing texts, permission justifications and images are in `store/`.
 
 Please don't benchmark against public speed-test servers in loops. They rate-limit or block IPs that open many connections, which looks like a slow engine but isn't. The end-to-end tests use a local server that can limit speed per connection or refuse extra connections.
 

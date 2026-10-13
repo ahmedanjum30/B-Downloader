@@ -289,7 +289,9 @@ async fn recovers_when_the_server_stops_sending() {
     let dir = tempfile::tempdir().unwrap();
     let engine = Engine::with_stall_timeout(Duration::from_millis(500)).unwrap();
     let mut options = DownloadOptions::new(format!("http://{addr}/stall.bin"), dir.path());
-    options.connections = 4;
+    // One connection, so the whole download stalls. With several, data from
+    // the others clears the problem at once, as it should: nothing to report.
+    options.connections = 1;
 
     let handle = engine.start(options);
     let mut saw_problem = false;

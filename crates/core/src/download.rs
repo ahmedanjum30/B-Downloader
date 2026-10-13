@@ -30,7 +30,7 @@ const SAVE_INTERVAL: Duration = Duration::from_secs(2);
 /// at this interval, up to the number asked for, while the server accepts
 /// them. Sites that limit connections never see a burst, and the first
 /// refusal stops the growth.
-const RAMP_INTERVAL: Duration = Duration::from_secs(1);
+const RAMP_INTERVAL: Duration = Duration::from_millis(500);
 /// A connection counts as receiving if data arrived this recently.
 const RECEIVING_WINDOW: Duration = Duration::from_secs(3);
 /// Creates downloads. Cheap to clone; all downloads share one connection pool.
@@ -412,7 +412,9 @@ async fn download(client: &Client, options: &DownloadOptions, shared: &Arc<Share
     }
 
     // Close the file before renaming it; Windows can't rename an open file.
-    tokio::task::spawn_blocking(move || file.sync_all()).await.map_err(io::Error::other)??;
+    // No fsync: forcing gigabytes onto the disk here takes seconds, and the
+    // system writes them out on its own, as it does for browsers and IDM.
+    drop(file);
     let path = finish(&target).await?;
     lock(&shared.info).path = Some(path.clone());
     if let Some(checksum) = &options.checksum {

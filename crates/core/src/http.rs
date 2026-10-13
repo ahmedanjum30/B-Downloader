@@ -56,7 +56,7 @@ pub(crate) async fn probe(client: &Client, url: &Url, extra: &HeaderMap) -> Resu
     let file_name = header_str(headers, header::CONTENT_DISPOSITION)
         .and_then(filename_from_disposition)
         .or_else(|| filename_from_url(resp.url()));
-    Ok(ProbeInfo {
+    let info = ProbeInfo {
         final_url: resp.url().clone(),
         size,
         resumable,
@@ -64,7 +64,14 @@ pub(crate) async fn probe(client: &Client, url: &Url, extra: &HeaderMap) -> Resu
         etag: header_str(headers, header::ETAG).map(str::to_owned),
         last_modified: header_str(headers, header::LAST_MODIFIED).map(str::to_owned),
         content_type: header_str(headers, header::CONTENT_TYPE).map(str::to_owned),
-    })
+    };
+    // Read the one-byte answer to the end, so the connection goes back into
+    // the pool and the download's first connection reuses it instead of
+    // setting up a new one. A full-file answer (no range support) is dropped.
+    if resp.status() == StatusCode::PARTIAL_CONTENT && resp.content_length().is_some_and(|len| len <= 1024) {
+        let _ = resp.bytes().await;
+    }
+    Ok(info)
 }
 
 /// Turns user-supplied headers into a header map, skipping invalid ones and

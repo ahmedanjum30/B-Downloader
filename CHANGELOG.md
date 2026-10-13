@@ -6,6 +6,19 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+## [0.1.4] - 2026-10-13
+
+### Performance
+- Connections double every half second instead of every second (1, 2, 4,
+  8, ...), so downloads reach full speed in about half the time.
+- The connection that checks the link is reused by the download, saving a
+  connection setup (0.2 to 0.5 s through a proxy).
+- Finished files are no longer forced onto the disk before being renamed,
+  which took seconds on large files; Windows writes them out by itself.
+
+### Changed
+- The browser extension now has the same version number as the app.
+
 ## [0.1.3] - 2026-10-13
 
 ### Changed
@@ -129,7 +142,8 @@ First release.
   from 167 MB to 24 MB (working set) and the exe from 11.6 MB to 6.8 MB, with
   no change in download speed (28 MB/s over 8 connections, about 1% CPU).
 
-[Unreleased]: https://github.com/ahmedanjum30/BDownloader/compare/v0.1.3...HEAD
+[Unreleased]: https://github.com/ahmedanjum30/BDownloader/compare/v0.1.4...HEAD
+[0.1.4]: https://github.com/ahmedanjum30/BDownloader/compare/v0.1.3...v0.1.4
 [0.1.3]: https://github.com/ahmedanjum30/BDownloader/compare/v0.1.2...v0.1.3
 [0.1.2]: https://github.com/ahmedanjum30/BDownloader/compare/v0.1.1...v0.1.2
 [0.1.1]: https://github.com/ahmedanjum30/BDownloader/compare/v0.1.0...v0.1.1
