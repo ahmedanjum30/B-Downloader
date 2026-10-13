@@ -6,6 +6,18 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+## [0.1.6] - 2026-10-13
+
+### Fixed
+- Checking for updates no longer fails with "HTTP 403". It used GitHub's
+  API, which allows only 60 requests an hour per internet address and runs
+  out quickly where many people share one address. It now reads the normal
+  release pages.
+
+### Added
+- Removing a finished download asks first, with an option to also delete
+  the file (it goes to the Recycle Bin). Removing an unfinished download
+  says that the partly downloaded file will be deleted.
 ## [0.1.5] - 2026-10-13
 
 ### Fixed
@@ -150,7 +162,8 @@ First release.
   from 167 MB to 24 MB (working set) and the exe from 11.6 MB to 6.8 MB, with
   no change in download speed (28 MB/s over 8 connections, about 1% CPU).
 
-[Unreleased]: https://github.com/ahmedanjum30/BDownloader/compare/v0.1.5...HEAD
+[Unreleased]: https://github.com/ahmedanjum30/BDownloader/compare/v0.1.6...HEAD
+[0.1.6]: https://github.com/ahmedanjum30/BDownloader/compare/v0.1.5...v0.1.6
 [0.1.5]: https://github.com/ahmedanjum30/BDownloader/compare/v0.1.4...v0.1.5
 [0.1.4]: https://github.com/ahmedanjum30/BDownloader/compare/v0.1.3...v0.1.4
 [0.1.3]: https://github.com/ahmedanjum30/BDownloader/compare/v0.1.2...v0.1.3

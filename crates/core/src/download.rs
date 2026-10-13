@@ -83,6 +83,16 @@ impl Engine {
         String::from_utf8(body).map_err(|e| io::Error::other(e).into())
     }
 
+    /// Follows redirects from `url` and returns where they end, without
+    /// downloading the body.
+    pub async fn final_url(&self, url: &str) -> Result<String> {
+        let response = self.client.head(parse_url(url)?).send().await?;
+        if !response.status().is_success() {
+            return Err(Error::Status(response.status().as_u16()));
+        }
+        Ok(response.url().to_string())
+    }
+
     /// Starts a download in the background. Must be called inside a Tokio runtime.
     ///
     /// If an unfinished download of the same URL exists in the folder under

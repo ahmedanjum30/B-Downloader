@@ -10,6 +10,7 @@ use crate::app::{AddDialog, Message, Probe, RefreshDialog};
 use crate::browser;
 use crate::format;
 use crate::icons::{self, icon};
+use crate::item::{Item, State};
 use crate::store::{HashKind, Settings, ThemeChoice};
 use crate::style;
 use crate::view::{BOLD, SEMIBOLD, colored, file_badge, muted};
@@ -461,4 +462,60 @@ pub fn refresh(dialog: &RefreshDialog) -> Element<'_, Message> {
         body.into(),
         footer("Continue download", dialog.matches().then_some(Message::ConfirmRefresh)),
     )
+}
+
+pub fn remove(item: &Item, delete_file: bool) -> Element<'_, Message> {
+    let finished = item.state == State::Completed;
+    let mut body = column![
+        container(
+            row![
+                file_badge(item.extension()),
+                text(format::middle_ellipsis(&item.display_name(), 48)).size(15).font(SEMIBOLD),
+            ]
+            .spacing(14)
+            .align_y(Center),
+        )
+        .padding(12)
+        .width(Fill)
+        .style(style::panel),
+    ]
+    .spacing(16);
+
+    if finished {
+        body = body.push(text("It's removed from the list. The file itself stays where it is, unless you tick the box.").size(14));
+        body = body.push(
+            checkbox(delete_file)
+                .label("Also delete the file from disk (moves it to the Recycle Bin)")
+                .on_toggle(Message::RemoveDeleteFile)
+                .size(18)
+                .text_size(14)
+                .spacing(10),
+        );
+    } else {
+        let done = if item.downloaded > 0 {
+            format!("The {} downloaded so far will be deleted.", format::size(item.downloaded))
+        } else {
+            "Nothing has been downloaded yet.".to_owned()
+        };
+        body = body.push(text(format!("The download stops and is removed from the list. {done}")).size(14));
+    }
+
+    let footer = row![
+        space().width(Fill),
+        button(text("Cancel").size(14))
+            .padding([10, 18])
+            .style(style::secondary)
+            .on_press(Message::CloseModal),
+        button(
+            text(if finished && !delete_file { "Remove" } else { "Remove and delete" })
+                .size(14)
+                .font(SEMIBOLD)
+        )
+        .padding([10, 20])
+        .style(style::danger)
+        .on_press(Message::ConfirmRemove),
+    ]
+    .spacing(10);
+
+    frame("Remove download", body.into(), footer.into())
 }

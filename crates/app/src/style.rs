@@ -229,6 +229,22 @@ pub fn primary(theme: &Theme, status: button::Status) -> button::Style {
     }
 }
 
+/// For actions that delete something.
+pub fn danger(theme: &Theme, status: button::Status) -> button::Style {
+    let c = colors(theme);
+    let background = match status {
+        button::Status::Hovered | button::Status::Pressed => alpha(c.danger, 0.85),
+        _ => c.danger,
+    };
+    button::Style {
+        background: Some(background.into()),
+        text_color: c.on_accent,
+        border: border(Color::TRANSPARENT, 0.0, RADIUS),
+        shadow: Shadow::default(),
+        snap: true,
+    }
+}
+
 pub fn secondary(theme: &Theme, status: button::Status) -> button::Style {
     let c = colors(theme);
     let background = match status {

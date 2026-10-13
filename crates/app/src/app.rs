@@ -173,6 +173,11 @@ pub enum Modal {
     Settings(Settings),
     Extension,
     Refresh(Box<RefreshDialog>),
+    /// `delete_file`: also move a finished download's file to the Recycle Bin.
+    Remove {
+        id: u64,
+        delete_file: bool,
+    },
 }
 
 /// Gives an unfinished download a new link when the old one expired, like
@@ -207,7 +212,10 @@ pub enum Message {
     Search(String),
     Pause(u64),
     Resume(u64),
+    /// Asks before removing a download.
     Remove(u64),
+    RemoveDeleteFile(bool),
+    ConfirmRemove,
     OpenFile(u64),
     ShowInFolder(u64),
 
@@ -513,7 +521,17 @@ impl App {
                 }
                 self.save();
             }
-            Message::Remove(id) => return self.remove(id),
+            Message::Remove(id) => self.modal = Some(Modal::Remove { id, delete_file: false }),
+            Message::RemoveDeleteFile(delete) => {
+                if let Some(Modal::Remove { delete_file, .. }) = &mut self.modal {
+                    *delete_file = delete;
+                }
+            }
+            Message::ConfirmRemove => {
+                if let Some(Modal::Remove { id, delete_file }) = self.modal.take() {
+                    return self.remove(id, delete_file);
+                }
+            }
             Message::OpenFile(id) => {
                 if let Some(path) = self.item(id).and_then(|i| i.path()) {
                     store::open_file(&path);
@@ -1055,14 +1073,28 @@ impl App {
     }
 
     /// Removes a download from the list. Unfinished downloads also lose their partial files.
-    fn remove(&mut self, id: u64) -> Task<Message> {
+    ///
+    /// `delete_file` also moves a finished download's file to the Recycle Bin.
+    fn remove(&mut self, id: u64, delete_file: bool) -> Task<Message> {
         let Some(index) = self.items.iter().position(|i| i.id == id) else {
             return Task::none();
         };
         let item = self.items.remove(index);
         self.save();
         if item.state == State::Completed {
-            return Task::none();
+            let Some(path) = item.path().filter(|_| delete_file) else {
+                return Task::none();
+            };
+            return Task::perform(
+                async move {
+                    // The Recycle Bin rather than gone for good, so a wrong click can be undone.
+                    let result = tokio::task::spawn_blocking(move || trash::delete(&path)).await;
+                    if let Ok(Err(e)) = result {
+                        log::warn!("could not move a finished download to the Recycle Bin: {e}");
+                    }
+                },
+                |_| Message::Removed,
+            );
         }
         let path = item.path();
         let handle = item.handle;

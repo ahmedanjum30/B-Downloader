@@ -29,6 +29,10 @@ struct Server {
     /// Send this many bytes per response, then keep the connection open
     /// without sending more, like servers that throttle or stall.
     stall_after: Option<usize>,
+    /// Send data to at most this many connections at once; any more get
+    /// their headers and then nothing, like a proxy throttling a download.
+    stream_limit: Option<usize>,
+    streaming: AtomicUsize,
     open: AtomicUsize,
 }
 
@@ -52,6 +56,8 @@ impl Server {
             require_cookie: None,
             echo_range: false,
             stall_after: None,
+            stream_limit: None,
+            streaming: AtomicUsize::new(0),
             open: AtomicUsize::new(0),
         }
     }
@@ -121,6 +127,14 @@ impl Server {
         if socket.write_all(head.as_bytes()).await.is_err() {
             return;
         }
+        // Only the 1-byte link check is exempt from the stream limit. A held
+        // connection doesn't take a slot, so slots free up as sends finish.
+        if end - start > 1 && self.stream_limit.is_some_and(|limit| self.streaming.load(Ordering::SeqCst) >= limit) {
+            tokio::time::sleep(Duration::from_secs(60)).await;
+            return;
+        }
+        self.streaming.fetch_add(1, Ordering::SeqCst);
+        let _streaming = OpenGuard(&self.streaming);
         for (sent, chunk) in self.data[start..end].chunks(16 * 1024).enumerate() {
             if self.stall_after.is_some_and(|limit| sent * 16 * 1024 >= limit) {
                 // Hold the connection open and send nothing more.
@@ -304,6 +318,31 @@ async fn recovers_when_the_server_stops_sending() {
     };
     assert!(std::fs::read(path).unwrap() == data);
     assert!(saw_problem, "the stall was never reported");
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn finishes_when_the_server_silently_serves_only_some_connections() {
+    // Only 2 connections get data; the others hang without any refusal.
+    let data = test_data(8 * MB);
+    let addr = Server {
+        stream_limit: Some(2),
+        delay: Some(Duration::from_millis(2)),
+        ..Server::new(data.clone())
+    }
+    .start()
+    .await;
+    let dir = tempfile::tempdir().unwrap();
+    let engine = Engine::with_stall_timeout(Duration::from_millis(400)).unwrap();
+    let mut options = DownloadOptions::new(format!("http://{addr}/throttled.bin"), dir.path());
+    options.connections = 8;
+
+    let started = std::time::Instant::now();
+    let Outcome::Completed(path) = engine.start(options).wait().await.unwrap() else {
+        panic!("not completed")
+    };
+    assert!(std::fs::read(path).unwrap() == data);
+    // Stalled connections time out and retry until a sending slot is free.
+    assert!(started.elapsed() < Duration::from_secs(15), "took {:?}", started.elapsed());
 }
 
 #[tokio::test(flavor = "multi_thread")]

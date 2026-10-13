@@ -4,9 +4,8 @@
 use std::path::{Path, PathBuf};
 
 use bdownloader_core::Engine;
-use serde::Deserialize;
 
-const LATEST_RELEASE: &str = "https://api.github.com/repos/ahmedanjum30/BDownloader/releases/latest";
+const REPO: &str = "https://github.com/ahmedanjum30/BDownloader";
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Release {
@@ -19,43 +18,37 @@ pub struct Release {
     pub sha256: String,
 }
 
-#[derive(Deserialize)]
-struct GithubRelease {
-    tag_name: String,
-    html_url: String,
-    draft: bool,
-    prerelease: bool,
-    assets: Vec<GithubAsset>,
-}
-
-#[derive(Deserialize)]
-struct GithubAsset {
-    name: String,
-    browser_download_url: String,
-}
-
 /// The newest release, if it's newer than this copy.
 pub async fn check(engine: Engine) -> Result<Option<Release>, String> {
     check_against(engine, env!("CARGO_PKG_VERSION")).await
 }
 
+/// Uses the release pages instead of GitHub's API: the API allows only 60
+/// requests an hour per internet address without an account, which people
+/// sharing an address (common with home providers) run out of.
 async fn check_against(engine: Engine, current: &str) -> Result<Option<Release>, String> {
-    let json = engine.get_text(LATEST_RELEASE, 1024 * 1024).await.map_err(|e| e.to_string())?;
-    let release: GithubRelease = serde_json::from_str(&json).map_err(|e| format!("unexpected answer from GitHub: {e}"))?;
-    let version = release.tag_name.trim_start_matches('v').to_owned();
-    if release.draft || release.prerelease || !is_newer(&version, current) {
+    // `releases/latest` redirects to the newest full release's page, `.../releases/tag/v1.2.3`.
+    let page = engine.final_url(&format!("{REPO}/releases/latest")).await.map_err(|e| e.to_string())?;
+    let tag = page
+        .rsplit_once("/releases/tag/")
+        .map(|(_, tag)| tag.trim_end_matches('/'))
+        .ok_or("no release found on GitHub")?
+        .to_owned();
+    let version = tag.trim_start_matches('v').to_owned();
+    if !is_newer(&version, current) {
         return Ok(None);
     }
-    let asset = |pred: &dyn Fn(&str) -> bool| release.assets.iter().find(|a| pred(&a.name));
-    let installer = asset(&|n| n.starts_with("BDownloader-Setup-") && n.ends_with(".exe")).ok_or("the release has no installer")?;
-    let sums = asset(&|n| n == "SHA256SUMS.txt").ok_or("the release has no checksums")?;
-    let sums = engine.get_text(&sums.browser_download_url, 64 * 1024).await.map_err(|e| e.to_string())?;
-    let sha256 = checksum_for(&sums, &installer.name).ok_or("the installer is missing from the checksums")?;
+    let installer_name = format!("BDownloader-Setup-{version}.exe");
+    let sums = engine
+        .get_text(&format!("{REPO}/releases/download/{tag}/SHA256SUMS.txt"), 64 * 1024)
+        .await
+        .map_err(|e| e.to_string())?;
+    let sha256 = checksum_for(&sums, &installer_name).ok_or("the installer is missing from the release")?;
     Ok(Some(Release {
+        installer_url: format!("{REPO}/releases/download/{tag}/{installer_name}"),
+        installer_name,
         version,
-        page: release.html_url,
-        installer_url: installer.browser_download_url.clone(),
-        installer_name: installer.name.clone(),
+        page,
         sha256,
     }))
 }

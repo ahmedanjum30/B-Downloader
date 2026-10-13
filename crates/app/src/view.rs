@@ -33,6 +33,10 @@ pub fn view(app: &App) -> Element<'_, Message> {
         Some(Modal::Add(dialog)) => modal(base, dialogs::add(dialog, app.existing_partial(dialog))),
         Some(Modal::Settings(draft)) => modal(base, dialogs::settings(draft, app.update.status())),
         Some(Modal::Refresh(dialog)) => modal(base, dialogs::refresh(dialog)),
+        Some(Modal::Remove { id, delete_file }) => match app.items.iter().find(|i| i.id == *id) {
+            Some(item) => modal(base, dialogs::remove(item, *delete_file)),
+            None => base.into(),
+        },
         Some(Modal::Extension) => modal(base, dialogs::extension(app.settings.extension_connected, app.copied.as_deref())),
     }
 }
@@ -372,11 +376,7 @@ fn download_card(item: &Item) -> Element<'_, Message> {
         }
         _ => {}
     }
-    let remove_tip = if item.state == State::Completed {
-        "Remove from list (keeps the file)"
-    } else {
-        "Cancel and remove"
-    };
+    let remove_tip = if item.state == State::Completed { "Remove" } else { "Cancel and remove" };
     actions = actions.push(action(&icons::TRASH, remove_tip, Message::Remove(id)));
 
     let top = row![file_badge(item.extension()), column![name, meta].spacing(4).width(Fill), actions]
