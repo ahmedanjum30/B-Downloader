@@ -34,8 +34,6 @@ fn focus_window() -> Task<Message> {
 
 /// How often running downloads refresh on screen.
 const REFRESH: Duration = Duration::from_millis(250);
-/// How often to look for a new version while the app runs.
-const UPDATE_CHECK_INTERVAL: Duration = Duration::from_secs(6 * 60 * 60);
 
 /// Where the app is with updates.
 pub enum Update {
@@ -434,7 +432,6 @@ impl App {
             Subscription::run(instance::listen),
             Subscription::run(tray::events),
             window::close_requests().map(Message::CloseRequested),
-            time::every(UPDATE_CHECK_INTERVAL).map(|_| Message::CheckForUpdates { manual: false }),
         ];
         if self.items.iter().any(|i| i.handle.is_some()) || matches!(self.update, Update::Downloading { .. }) {
             subscriptions.push(time::every(REFRESH).map(|_| Message::Tick));
