@@ -6,7 +6,7 @@ use bdownloader_core::MAX_CONNECTIONS;
 use iced::widget::{button, checkbox, column, container, pick_list, row, slider, space, text, text_input};
 use iced::{Center, Element, Fill};
 
-use crate::app::{AddDialog, Message, Probe};
+use crate::app::{AddDialog, Message, Probe, RefreshDialog};
 use crate::browser;
 use crate::format;
 use crate::icons::{self, icon};
@@ -89,7 +89,9 @@ fn footer<'a>(confirm: &'a str, on_confirm: Option<Message>) -> Element<'a, Mess
     .into()
 }
 
-pub fn add(dialog: &AddDialog) -> Element<'_, Message> {
+/// `existing`: an unfinished download of the same file (its id and how much
+/// of it is done), which this link can continue instead of starting over.
+pub fn add(dialog: &AddDialog, existing: Option<(u64, u64)>) -> Element<'_, Message> {
     let url = input("https://example.com/file.zip", &dialog.url)
         .on_input(Message::AddUrl)
         .on_paste(Message::AddUrlPasted)
@@ -137,6 +139,27 @@ pub fn add(dialog: &AddDialog) -> Element<'_, Message> {
     };
     if let Some(probe) = probe {
         body = body.push(probe);
+    }
+    if let Some((id, done)) = existing {
+        body = body.push(
+            container(
+                row![
+                    icon(&icons::LINK, 18.0, |c| c.accent),
+                    text(format!("You already have {} of this file in an unfinished download.", format::size(done)))
+                        .size(14)
+                        .width(Fill),
+                    button(text("Continue that download").size(13).font(SEMIBOLD))
+                        .padding([7, 14])
+                        .style(style::primary)
+                        .on_press(Message::ContinueExisting(id)),
+                ]
+                .spacing(12)
+                .align_y(Center),
+            )
+            .padding(12)
+            .width(Fill)
+            .style(style::accent_soft(10.0)),
+        );
     }
 
     body = body.push(field(
@@ -338,4 +361,104 @@ pub fn extension<'a>(connected: bool, copied: Option<&str>) -> Element<'a, Messa
     ];
 
     frame("Browser extension", body.into(), footer.into())
+}
+
+pub fn refresh(dialog: &RefreshDialog) -> Element<'_, Message> {
+    let size = dialog.size.map_or("Unknown size".to_owned(), format::size);
+    let extension = dialog
+        .name
+        .rsplit_once('.')
+        .filter(|(stem, ext)| !stem.is_empty() && (1..=5).contains(&ext.len()))
+        .map_or("FILE".to_owned(), |(_, ext)| ext.to_ascii_uppercase());
+    let file = container(
+        row![
+            file_badge(extension),
+            column![
+                text(format::middle_ellipsis(&dialog.name, 48)).size(15).font(SEMIBOLD),
+                muted(size).size(13)
+            ]
+            .spacing(3)
+        ]
+        .spacing(14)
+        .align_y(Center),
+    )
+    .padding(12)
+    .width(Fill)
+    .style(style::panel);
+
+    let mut body =
+        column![
+        file,
+        text("Download links often stop working after a while. Give BDownloader a new link to the same file, and it continues from where it stopped.")
+            .size(14),
+    ]
+        .spacing(16);
+
+    if dialog.referrer.is_some() {
+        body = body.push(
+            row![
+                button(text("Open download page").size(14))
+                    .padding([10, 16])
+                    .style(style::secondary)
+                    .on_press(Message::RefreshFromPage),
+                muted("Then click the download again in your browser. BDownloader picks up the new link.").size(13),
+            ]
+            .spacing(12)
+            .align_y(Center),
+        );
+    }
+
+    body = body.push(field(
+        if dialog.referrer.is_some() {
+            "Or paste the new link"
+        } else {
+            "Paste the new link, or click the download again in your browser"
+        },
+        input("https://…", &dialog.url)
+            .on_input(Message::RefreshUrl)
+            .on_paste(Message::RefreshPasted),
+    ));
+
+    let status: Option<Element<'_, Message>> = match &dialog.probe {
+        Probe::Idle => None,
+        Probe::Checking => Some(muted("Checking the link…").size(13).into()),
+        Probe::Failed(error) => Some(colored(error.as_str(), |c| c.danger).size(13).into()),
+        Probe::Ready(_) if dialog.matches() => Some(
+            row![
+                icon(&icons::CHECK, 16.0, |c| c.success),
+                colored("Same file. Ready to continue.", |c| c.success).size(13)
+            ]
+            .spacing(8)
+            .align_y(Center)
+            .into(),
+        ),
+        Probe::Ready(info) if !info.resumable => Some(
+            colored("This server can't continue a partial download, so this link can't be used.", |c| {
+                c.warning
+            })
+            .size(13)
+            .into(),
+        ),
+        Probe::Ready(info) => Some(
+            colored(
+                format!(
+                    "This link is for a different file ({} instead of {}).",
+                    info.size.map_or("unknown size".to_owned(), format::size),
+                    dialog.size.map_or("unknown size".to_owned(), format::size)
+                ),
+                |c| c.warning,
+            )
+            .size(13)
+            .into(),
+        ),
+    };
+    if let Some(status) = status {
+        body = body.push(status);
+    }
+
+    frame(
+        "Refresh download link",
+        body.into(),
+        footer("Continue download", dialog.matches().then_some(Message::ConfirmRefresh)),
+    )
 }

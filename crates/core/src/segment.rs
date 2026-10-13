@@ -1,3 +1,5 @@
+use std::time::{Duration, Instant};
+
 use crate::error::{Error, Result};
 
 /// Never create a segment smaller than this by splitting. Below it, the cost
@@ -19,6 +21,8 @@ pub(crate) struct Segment {
     pub written: u64,
     /// A connection is working on this segment.
     pub active: bool,
+    /// When data last arrived for it.
+    pub last_data: Option<Instant>,
 }
 
 impl Segment {
@@ -29,6 +33,7 @@ impl Segment {
             received: start,
             written: start,
             active: false,
+            last_data: None,
         }
     }
 
@@ -98,6 +103,30 @@ impl Segments {
         self.workers = workers;
     }
 
+    pub fn workers(&self) -> usize {
+        self.workers
+    }
+
+    /// Counts in a connection added while the download runs.
+    pub fn add_worker(&mut self) {
+        self.workers += 1;
+    }
+
+    /// Whether one more connection would find a segment to work on.
+    pub fn has_work_for_another(&self) -> bool {
+        self.list.iter().any(|s| !s.active && !s.is_done())
+            || (self.splittable && self.list.iter().any(|s| s.active && s.end - s.received >= 2 * MIN_SPLIT))
+    }
+
+    /// Connections that received data within `recent`; the others are
+    /// connected but waiting on the server.
+    pub fn receiving(&self, recent: Duration) -> usize {
+        self.list
+            .iter()
+            .filter(|s| s.active && s.last_data.is_some_and(|t| t.elapsed() <= recent))
+            .count()
+    }
+
     /// Like [`Segments::take`], but a connection that gets nothing is counted as gone.
     pub fn take_or_leave(&mut self) -> Option<usize> {
         let taken = self.take();
@@ -162,6 +191,9 @@ impl Segments {
         let s = &mut self.list[i];
         let take = len.min(s.end - s.received);
         s.received += take;
+        if take > 0 {
+            s.last_data = Some(Instant::now());
+        }
         (take, s.received >= s.end)
     }
 

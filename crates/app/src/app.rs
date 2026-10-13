@@ -172,6 +172,29 @@ pub enum Modal {
     Add(Box<AddDialog>),
     Settings(Settings),
     Extension,
+    Refresh(Box<RefreshDialog>),
+}
+
+/// Gives an unfinished download a new link when the old one expired, like
+/// IDM's "Refresh download address". The new link must lead to a file of
+/// the same size, so the partial file can't end up mixed with another one.
+#[derive(Debug, Clone)]
+pub struct RefreshDialog {
+    pub id: u64,
+    pub name: String,
+    pub size: Option<u64>,
+    pub referrer: Option<String>,
+    pub url: String,
+    pub probe: Probe,
+    probe_id: u64,
+    headers: Vec<(String, String)>,
+}
+
+impl RefreshDialog {
+    /// The checked link points to the same file.
+    pub fn matches(&self) -> bool {
+        matches!(&self.probe, Probe::Ready(info) if info.resumable && info.size.is_some() && info.size == self.size)
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -226,6 +249,16 @@ pub enum Message {
     OpenReleasePage,
     /// The folder with the diagnostic log, for bug reports.
     OpenLogs,
+
+    OpenRefresh(u64),
+    RefreshUrl(String),
+    RefreshPasted(String),
+    RefreshProbed(u64, Result<ProbeInfo, String>),
+    /// Open the page the download came from; its next download refreshes this one.
+    RefreshFromPage,
+    ConfirmRefresh,
+    /// Use the Add dialog's link to continue this unfinished download of the same file.
+    ContinueExisting(u64),
 
     /// The window's close button.
     CloseRequested(window::Id),
@@ -423,6 +456,13 @@ impl App {
             && !self.exiting
             && let Some(request) = self.pending.pop_front()
         {
+            // "Open download page" was used for an expired download: this is likely its new link.
+            if let Some(id) = self.items.iter().find(|i| i.awaiting_link).map(|i| i.id) {
+                if let Some(item) = self.item(id) {
+                    item.awaiting_link = false;
+                }
+                return Task::batch([task, self.open_refresh(id, Some(request))]);
+            }
             self.modal = Some(Modal::Add(Box::new(AddDialog::from_request(&self.settings, request))));
             return Task::batch([task, self.probe()]);
         }
@@ -433,9 +473,11 @@ impl App {
         match message {
             Message::Tick => return self.tick(),
             Message::Finished(id, result) => {
+                let engine = self.engine.clone();
                 if let Some(item) = self.item(id) {
                     item.segments.clear();
                     item.active_connections = 0;
+                    item.receiving = 0;
                     match result {
                         Ok(Outcome::Completed(path)) => {
                             item.file_name = path.file_name().map(|n| n.to_string_lossy().into_owned());
@@ -445,6 +487,11 @@ impl App {
                         }
                         Ok(Outcome::Paused) => item.state = State::Paused,
                         Err(e) => item.state = State::Failed(e),
+                    }
+                    // A refreshed link was confirmed while the old one was still stopping.
+                    if item.resume && item.state != State::Completed {
+                        item.resume = false;
+                        item.start(&engine);
                     }
                 }
                 self.save();
@@ -602,6 +649,16 @@ impl App {
                     return self.show_window();
                 }
                 // From the browser: ask where to save it first. Several queue up.
+                // The Refresh link dialog is waiting for a link: this is it.
+                Request::Add(add)
+                    if add.is_valid() && matches!(&self.modal, Some(Modal::Refresh(dialog)) if !matches!(dialog.probe, Probe::Ready(_))) =>
+                {
+                    if let Some(Modal::Refresh(dialog)) = &mut self.modal {
+                        dialog.url = add.url.trim().to_owned();
+                        dialog.headers = add.headers();
+                    }
+                    return Task::batch([self.show_window(), self.refresh_probe()]);
+                }
                 Request::Add(add) => {
                     if add.is_valid() {
                         log::info!("download from the browser, waiting for confirmation");
@@ -692,6 +749,85 @@ impl App {
                 return self.install_if_idle();
             }
             Message::DismissUpdate => self.update_dismissed = true,
+            Message::OpenRefresh(id) => {
+                // Pausing frees the old link's connections before a new one is tried.
+                if let Some(item) = self.item(id) {
+                    item.pause();
+                }
+                return self.open_refresh(id, None);
+            }
+            Message::RefreshUrl(url) => {
+                if let Some(Modal::Refresh(dialog)) = &mut self.modal {
+                    dialog.url = url;
+                    dialog.probe = Probe::Idle;
+                    dialog.probe_id += 1;
+                }
+            }
+            Message::RefreshPasted(url) => {
+                if let Some(Modal::Refresh(dialog)) = &mut self.modal {
+                    dialog.url = url;
+                    return self.refresh_probe();
+                }
+            }
+            Message::RefreshProbed(probe_id, result) => {
+                if let Some(Modal::Refresh(dialog)) = &mut self.modal
+                    && dialog.probe_id == probe_id
+                {
+                    dialog.probe = match result {
+                        Ok(info) => Probe::Ready(info),
+                        Err(e) => Probe::Failed(e),
+                    };
+                }
+            }
+            Message::RefreshFromPage => {
+                if let Some(Modal::Refresh(dialog)) = self.modal.take() {
+                    if let Some(page) = &dialog.referrer {
+                        store::open_file(std::path::Path::new(page));
+                    }
+                    if let Some(item) = self.item(dialog.id) {
+                        item.awaiting_link = true;
+                    }
+                }
+            }
+            Message::ConfirmRefresh => {
+                if let Some(Modal::Refresh(dialog)) = &self.modal
+                    && dialog.matches()
+                {
+                    let (id, url, headers) = (dialog.id, dialog.url.trim().to_owned(), dialog.headers.clone());
+                    self.modal = None;
+                    let engine = self.engine.clone();
+                    if let Some(item) = self.item(id) {
+                        log::info!("download link refreshed");
+                        item.url = url;
+                        item.headers = headers;
+                        item.new_link = true;
+                        // A paused download may still be stopping; the finished message restarts nothing,
+                        // so start once its handle is gone.
+                        if item.handle.is_none() {
+                            item.start(&engine);
+                        } else {
+                            item.resume = true;
+                        }
+                    }
+                    self.save();
+                }
+            }
+            Message::ContinueExisting(id) => {
+                if let Some(Modal::Add(dialog)) = self.modal.take() {
+                    let engine = self.engine.clone();
+                    if let Some(item) = self.item(id)
+                        && item.handle.is_none()
+                    {
+                        log::info!("download continued with a new link from the browser");
+                        item.url = dialog.url.trim().to_owned();
+                        item.headers = dialog.headers;
+                        item.new_link = true;
+                        item.start(&engine);
+                    }
+                    self.filter = Filter::All;
+                    self.save();
+                }
+            }
             Message::OpenLogs => {
                 let dir = store::data_dir().join("logs");
                 let _ = std::fs::create_dir_all(&dir);
@@ -858,6 +994,64 @@ impl App {
             async move { engine.probe(&url, &headers).await.map_err(|e| e.to_string()) },
             move |result| Message::Probed(probe_id, result),
         )
+    }
+
+    /// An unfinished, stopped download of the file this dialog's link points
+    /// to (same name, same size): its id and how much of it is done.
+    pub fn existing_partial(&self, dialog: &AddDialog) -> Option<(u64, u64)> {
+        let Probe::Ready(info) = &dialog.probe else { return None };
+        let size = info.size.filter(|_| info.resumable)?;
+        let name = dialog.file_name.trim();
+        self.items
+            .iter()
+            .find(|i| {
+                i.handle.is_none()
+                    && i.state != State::Completed
+                    && i.downloaded > 0
+                    && i.size == Some(size)
+                    && i.file_name.as_deref().is_some_and(|n| n.eq_ignore_ascii_case(name))
+            })
+            .map(|i| (i.id, i.downloaded))
+    }
+
+    fn refresh_probe(&mut self) -> Task<Message> {
+        let Some(Modal::Refresh(dialog)) = &mut self.modal else {
+            return Task::none();
+        };
+        dialog.probe_id += 1;
+        let url = dialog.url.trim().to_owned();
+        if !(url.starts_with("http://") || url.starts_with("https://")) {
+            dialog.probe = Probe::Idle;
+            return Task::none();
+        }
+        dialog.probe = Probe::Checking;
+        let (engine, probe_id, headers) = (self.engine.clone(), dialog.probe_id, dialog.headers.clone());
+        Task::perform(
+            async move { engine.probe(&url, &headers).await.map_err(|e| e.to_string()) },
+            move |result| Message::RefreshProbed(probe_id, result),
+        )
+    }
+
+    /// The Refresh link dialog for download `id`, optionally with a link already in it.
+    fn open_refresh(&mut self, id: u64, link: Option<AddRequest>) -> Task<Message> {
+        let Some(item) = self.items.iter().find(|i| i.id == id) else {
+            return Task::none();
+        };
+        let (url, headers) = match link {
+            Some(request) => (request.url.trim().to_owned(), request.headers()),
+            None => (String::new(), item.headers.clone()),
+        };
+        self.modal = Some(Modal::Refresh(Box::new(RefreshDialog {
+            id,
+            name: item.display_name(),
+            size: item.size,
+            referrer: item.referrer().map(str::to_owned),
+            url,
+            probe: Probe::Idle,
+            probe_id: 0,
+            headers,
+        })));
+        self.refresh_probe()
     }
 
     /// Removes a download from the list. Unfinished downloads also lose their partial files.

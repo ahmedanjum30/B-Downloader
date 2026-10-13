@@ -6,6 +6,27 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+### Changed
+- Connections start at one and double every second (1, 2, 4, 8, ...) up to
+  the number you chose, and stop growing as soon as the server refuses one.
+  Sites that limit connections, such as gofile, no longer see a burst of
+  requests and throttle the download.
+- The browser extension cancels the browser's own download right away
+  instead of pausing it, so it can't keep a connection open that counts
+  against BDownloader. If BDownloader can't be reached, the browser downloads
+  the file again itself. Restart the browser after updating to load it.
+
+### Added
+- Refresh link: paused and failed downloads have a Refresh link button for
+  when the link has expired. Paste a new link, or open the page the download
+  came from and click the download again; BDownloader continues the partial
+  file if the new link is for a file of exactly the same size. Failures that
+  usually mean an expired link (HTTP 401, 403, 404, 410) say so.
+- Clicking a download in the browser for a file you already have partly
+  downloaded offers to continue that download with the new link.
+- The download line shows how many connections are actually receiving data,
+  e.g. "10 connections · 3 receiving".
+
 ## [0.1.2] - 2026-10-13
 
 ### Changed

@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "BDownloader",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Sends your downloads to BDownloader, a fast multi-connection download manager.",
   "key": "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEArGb7QZ7PYR2w7OAFuQGsv3ais4oZTVSlS2Q6e7zziOKhP2BcFlplAuJarKESyk9biW5VKMEahxTGQ/LZQw0ztDd1g89i33mFNWp3YafVzFzIjA/OX1jxO7rgL7ElTLNMoivm9A9ECTPebA8O1NFRJjJb2FivAtsGDm749nRfc1LWZz+7aBKmVQs1BUecuznXZCyrrkQcbjMR2vF0iiyaECvqSQ5CrujNNA1sX5iEjm2odSFfij5qO42jWJvDeMcPQcNHcAmSlocJAshhkhbTw6VSch7gi5LkGIa2GfEBrJePQGYAtktYkZiJgvdmb8LyrTgC9/MlNMq1MhgaFkmyfwIDAQAB",
   "permissions": ["downloads", "contextMenus", "nativeMessaging", "cookies"],

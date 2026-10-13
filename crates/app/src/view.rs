@@ -30,8 +30,9 @@ pub fn view(app: &App) -> Element<'_, Message> {
         .style(style::app_background);
     match &app.modal {
         None => base.into(),
-        Some(Modal::Add(dialog)) => modal(base, dialogs::add(dialog)),
+        Some(Modal::Add(dialog)) => modal(base, dialogs::add(dialog, app.existing_partial(dialog))),
         Some(Modal::Settings(draft)) => modal(base, dialogs::settings(draft, app.update.status())),
+        Some(Modal::Refresh(dialog)) => modal(base, dialogs::refresh(dialog)),
         Some(Modal::Extension) => modal(base, dialogs::extension(app.settings.extension_connected, app.copied.as_deref())),
     }
 }
@@ -299,6 +300,9 @@ pub fn file_badge<'a>(extension: String) -> Element<'a, Message> {
 fn download_card(item: &Item) -> Element<'_, Message> {
     let id = item.id;
     let (status_pick, status): (Pick, String) = match &item.state {
+        State::Paused | State::Failed(_) if item.awaiting_link => {
+            (|c| c.accent, "Waiting for a new link: click the download again in your browser".into())
+        }
         State::Starting => (|c| c.accent, "Connecting…".into()),
         // Only once data has stopped, so a brief reconnect while others keep going doesn't flash.
         State::Downloading if item.problem.is_some() && item.speed.rate() < 1024.0 => (
@@ -318,6 +322,10 @@ fn download_card(item: &Item) -> Element<'_, Message> {
         State::Completed => (
             |c| c.success,
             format!("{} · {}", item.size.map(format::size).unwrap_or_default(), item.host()),
+        ),
+        State::Failed(error) if item.link_may_have_expired() => (
+            |c| c.danger,
+            format!("{} · The link may have expired: use Refresh link", capitalize(error)),
         ),
         State::Failed(error) => (|c| c.danger, capitalize(error)),
     };
@@ -343,9 +351,21 @@ fn download_card(item: &Item) -> Element<'_, Message> {
         actions = actions.push(Space::new().width(8));
         actions = actions.push(action(&icons::PAUSE, "Pause", Message::Pause(id)));
     }
+    // A fresh link only helps a download that already has part of a known-size file.
+    let refreshable = item.size.is_some() && item.downloaded > 0 && item.file_name.is_some();
     match &item.state {
-        State::Paused => actions = actions.push(action(&icons::PLAY, "Resume", Message::Resume(id))),
-        State::Failed(_) => actions = actions.push(action(&icons::RETRY, "Try again", Message::Resume(id))),
+        State::Paused => {
+            actions = actions.push(action(&icons::PLAY, "Resume", Message::Resume(id)));
+            if refreshable {
+                actions = actions.push(action(&icons::LINK, "Refresh link", Message::OpenRefresh(id)));
+            }
+        }
+        State::Failed(_) => {
+            actions = actions.push(action(&icons::RETRY, "Try again", Message::Resume(id)));
+            if refreshable {
+                actions = actions.push(action(&icons::LINK, "Refresh link", Message::OpenRefresh(id)));
+            }
+        }
         State::Completed => {
             actions = actions.push(action(&icons::OPEN, "Open", Message::OpenFile(id)));
             actions = actions.push(action(&icons::FOLDER, "Show in folder", Message::ShowInFolder(id)));
@@ -388,8 +408,11 @@ fn downloading_text(item: &Item) -> String {
     if let Some(eta) = item.eta() {
         parts.push(format::eta(eta));
     }
-    if item.active_connections > 1 {
-        parts.push(format!("{} connections", item.active_connections));
+    // Connections that are open but get no data are worth knowing about.
+    match (item.active_connections, item.receiving) {
+        (0 | 1, _) => {}
+        (open, receiving) if receiving < open => parts.push(format!("{open} connections · {receiving} receiving")),
+        (open, _) => parts.push(format!("{open} connections")),
     }
     parts.join(" · ")
 }

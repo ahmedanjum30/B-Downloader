@@ -29,6 +29,12 @@ impl ResumeState {
         tokio::fs::rename(&tmp, path).await
     }
 
+    /// For a refreshed link: the new link's tokens, ETag and dates may all
+    /// differ, so only the size can tell whether it is the same file.
+    pub fn same_size(&self, info: &ProbeInfo) -> bool {
+        info.resumable && Some(self.size) == info.size
+    }
+
     /// Whether the saved download is for the same file as the server has now.
     pub fn matches(&self, url: &str, info: &ProbeInfo) -> bool {
         fn same(saved: &Option<String>, now: &Option<String>) -> bool {

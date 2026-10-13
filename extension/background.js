@@ -1,8 +1,9 @@
 // Hands downloads to BDownloader through its native messaging host.
 //
-// Downloads the browser starts are paused at once and offered to the app.
-// If the app takes them, the browser's copy is cancelled; if the app can't
-// be reached, the browser just carries on.
+// A download the browser starts is cancelled at once, so it never holds a
+// connection that the server counts against BDownloader, and is offered to
+// the app. If the app can't be reached, the browser downloads it again
+// itself, so nothing is lost.
 
 const HOST = "com.bdownloader.host";
 const MENU_ID = "bdownloader";
@@ -46,17 +47,21 @@ function hello() {
 }
 
 chrome.downloads.onCreated.addListener(async (item) => {
+  // Our own fallback downloads (below) stay in the browser.
+  if (item.byExtensionId === chrome.runtime.id) return;
   const url = item.finalUrl || item.url;
   // blob:, data: and file: downloads only exist inside the browser.
   if (!isWebUrl(url) || item.state !== "in_progress") return;
 
-  await chrome.downloads.pause(item.id).catch(() => {});
+  // Cancel rather than pause: a paused download can keep its connection
+  // open, and sites that limit connections count it against BDownloader.
+  await chrome.downloads.cancel(item.id).catch(() => {});
+  await chrome.downloads.erase({ id: item.id }).catch(() => {});
+
   const name = item.filename ? item.filename.split(/[\\/]/).pop() : null;
-  if (await handOver(url, item.referrer, name)) {
-    await chrome.downloads.cancel(item.id).catch(() => {});
-    await chrome.downloads.erase({ id: item.id }).catch(() => {});
-  } else {
-    await chrome.downloads.resume(item.id).catch(() => {});
+  if (!(await handOver(url, item.referrer, name))) {
+    // BDownloader isn't available: let the browser download it after all.
+    chrome.downloads.download({ url: item.url }).catch(() => {});
   }
 });
 

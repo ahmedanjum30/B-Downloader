@@ -47,6 +47,12 @@ pub struct Item {
     pub active_connections: usize,
     /// Why the download is reconnecting, while it is.
     pub problem: Option<String>,
+    /// Connections that got data in the last few seconds.
+    pub receiving: usize,
+    /// The next start uses a refreshed link for the partial file.
+    pub new_link: bool,
+    /// Waiting for the browser to send a fresh link for this download.
+    pub awaiting_link: bool,
 }
 
 impl Item {
@@ -68,6 +74,9 @@ impl Item {
             segments: Vec::new(),
             active_connections: 0,
             problem: None,
+            receiving: 0,
+            new_link: false,
+            awaiting_link: false,
         }
     }
 
@@ -127,7 +136,9 @@ impl Item {
             connections: self.connections,
             checksum: self.checksum.clone().map(|(kind, hex)| kind.checksum(hex)),
             headers: self.headers.clone(),
+            new_link: std::mem::take(&mut self.new_link),
         };
+        self.awaiting_link = false;
         self.handle = Some(engine.start(options));
         self.state = State::Starting;
         self.speed = Speed::default();
@@ -157,7 +168,24 @@ impl Item {
         self.segments = progress.segments;
         self.active_connections = progress.active_connections;
         self.problem = progress.problem;
+        self.receiving = progress.receiving;
         self.speed.sample(self.downloaded);
+    }
+
+    /// The page the download came from, to get a fresh link from.
+    pub fn referrer(&self) -> Option<&str> {
+        self.headers
+            .iter()
+            .find(|(name, _)| name.eq_ignore_ascii_case("referer"))
+            .map(|(_, v)| v.as_str())
+    }
+
+    /// The error usually means the link's token or session has run out.
+    pub fn link_may_have_expired(&self) -> bool {
+        let State::Failed(error) = &self.state else { return false };
+        ["HTTP 401", "HTTP 403", "HTTP 404", "HTTP 410", "changed on the server"]
+            .iter()
+            .any(|sign| error.contains(sign))
     }
 
     pub fn path(&self) -> Option<PathBuf> {

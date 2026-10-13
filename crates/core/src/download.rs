@@ -26,7 +26,13 @@ const WRITE_BUFFER: usize = 1024 * 1024;
 /// Attempts per segment in a row without progress before the download fails.
 const MAX_RETRIES: u32 = 5;
 const SAVE_INTERVAL: Duration = Duration::from_secs(2);
-
+/// A download starts with one connection and doubles them (1, 2, 4, 8, ...)
+/// at this interval, up to the number asked for, while the server accepts
+/// them. Sites that limit connections never see a burst, and the first
+/// refusal stops the growth.
+const RAMP_INTERVAL: Duration = Duration::from_secs(1);
+/// A connection counts as receiving if data arrived this recently.
+const RECEIVING_WINDOW: Duration = Duration::from_secs(3);
 /// Creates downloads. Cheap to clone; all downloads share one connection pool.
 #[derive(Debug, Clone)]
 pub struct Engine {
@@ -104,6 +110,10 @@ pub struct DownloadOptions {
     /// Extra request headers, such as the browser's `Cookie`, `Referer` and
     /// `User-Agent` for downloads handed over by the extension.
     pub headers: Vec<(String, String)>,
+    /// The URL was replaced on purpose (the old link expired). An unfinished
+    /// download under the same name continues if the file is the same size,
+    /// even though the link is different.
+    pub new_link: bool,
 }
 
 impl DownloadOptions {
@@ -115,6 +125,7 @@ impl DownloadOptions {
             connections: DEFAULT_CONNECTIONS,
             checksum: None,
             headers: Vec::new(),
+            new_link: false,
         }
     }
 }
@@ -150,6 +161,9 @@ pub struct Progress {
     pub active_connections: usize,
     /// Why connections are reconnecting, while they are. Cleared once data flows again.
     pub problem: Option<String>,
+    /// Connections that received data in the last few seconds; the rest of
+    /// `active_connections` are waiting on the server.
+    pub receiving: usize,
     /// Parts not finished yet. Everything outside these ranges is downloaded.
     pub segments: Vec<SegmentProgress>,
 }
@@ -181,6 +195,7 @@ impl DownloadHandle {
             total: segments.size().or(info.total),
             downloaded: segments.downloaded(),
             active_connections: segments.active(),
+            receiving: segments.receiving(RECEIVING_WINDOW),
             segments: segments
                 .iter()
                 .filter(|s| s.written < s.end)
@@ -215,6 +230,9 @@ struct Shared {
     info: Mutex<Progress>,
     /// `info.problem` is set, so the next data that arrives should clear it.
     has_problem: AtomicBool,
+    /// The server refused a connection as one too many (HTTP 429 or 503), so
+    /// no more connections are added.
+    refused: AtomicBool,
 }
 
 impl Shared {
@@ -329,20 +347,51 @@ async fn download(client: &Client, options: &DownloadOptions, shared: &Arc<Share
         shared: shared.clone(),
         stop: stop.clone(),
     });
-    lock(&shared.segments).set_workers(connections);
+    // Start with one connection and double them every RAMP_INTERVAL.
+    lock(&shared.segments).set_workers(1);
     let mut workers = JoinSet::new();
-    for _ in 0..connections {
-        workers.spawn(ctx.clone().run());
-    }
+    workers.spawn(ctx.clone().run());
+    let mut ramp = tokio::time::interval_at(tokio::time::Instant::now() + RAMP_INTERVAL, RAMP_INTERVAL);
+    let mut growing = connections > 1;
     let mut error = None;
-    while let Some(joined) = workers.join_next().await {
-        let result = joined.unwrap_or_else(|e| std::panic::resume_unwind(e.into_panic()));
-        if let Err(e) = result
-            && error.is_none()
-        {
-            log::warn!("{}: stopping all connections: {e}", redact(&ctx.url));
-            error = Some(e);
-            stop.cancel();
+    loop {
+        tokio::select! {
+            joined = workers.join_next() => {
+                let Some(joined) = joined else { break };
+                let result = joined.unwrap_or_else(|e| std::panic::resume_unwind(e.into_panic()));
+                if let Err(e) = result
+                    && error.is_none()
+                {
+                    log::warn!("{}: stopping all connections: {e}", redact(&ctx.url));
+                    error = Some(e);
+                    stop.cancel();
+                }
+            }
+            _ = ramp.tick(), if growing && !stop.is_cancelled() => {
+                if shared.refused.load(Ordering::Relaxed) {
+                    let kept = lock(&shared.segments).workers();
+                    log::info!("{}: the server limits connections; staying at {kept}", redact(&ctx.url));
+                    growing = false;
+                    continue;
+                }
+                let added = {
+                    let mut segments = lock(&shared.segments);
+                    let current = segments.workers();
+                    let wanted = (current * 2).min(connections) - current;
+                    let mut added = 0;
+                    while added < wanted && segments.has_work_for_another() {
+                        segments.add_worker();
+                        added += 1;
+                    }
+                    if segments.workers() >= connections || added < wanted {
+                        growing = false;
+                    }
+                    added
+                };
+                for _ in 0..added {
+                    workers.spawn(ctx.clone().run());
+                }
+            }
         }
     }
     stop.cancel();
@@ -390,7 +439,7 @@ impl Target {
         if info.resumable {
             let (part, state) = (sidecar(&path, "part"), sidecar(&path, "bdl"));
             if let Some(saved) = ResumeState::load(&state).await
-                && saved.matches(&options.url, info)
+                && (saved.matches(&options.url, info) || (options.new_link && saved.same_size(info)))
                 && tokio::fs::metadata(&part).await.is_ok_and(|m| m.len() == saved.size)
             {
                 return Ok(Self {
@@ -535,6 +584,9 @@ impl Worker {
             attempt += 1;
             log::warn!("{url}: bytes {written}-{end}: {err} (attempt {attempt})");
             self.shared.report_problem(err.to_string());
+            if err.is_overloaded() {
+                self.shared.refused.store(true, Ordering::Relaxed);
+            }
             // A server that limits connections answers extra ones with 429 or
             // 503. Drop this connection and let the others finish its segment.
             // Only the last connection keeps retrying.
