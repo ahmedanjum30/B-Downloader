@@ -10,6 +10,7 @@ mod instance;
 mod item;
 mod store;
 mod style;
+mod tray;
 mod view;
 
 use iced::{Size, window};
@@ -17,6 +18,12 @@ use iced::{Size, window};
 use crate::app::App;
 
 fn main() -> iced::Result {
+    // Run by the installer and uninstaller.
+    match std::env::args().nth(1).as_deref() {
+        Some("--register") => return exit_with(browser::register()),
+        Some("--unregister") => return exit_with(browser::unregister()),
+        _ => {}
+    }
     let urls: Vec<String> = std::env::args()
         .skip(1)
         .filter(|a| a.starts_with("http://") || a.starts_with("https://"))
@@ -35,12 +42,19 @@ fn main() -> iced::Result {
         .subscription(App::subscription)
         .default_font(view::FONT)
         .window(window::Settings {
+            // The close button is handled by the app: hide to the tray or exit, per Settings.
+            exit_on_close_request: false,
             size: Size::new(1120.0, 720.0),
             min_size: Some(Size::new(820.0, 520.0)),
+            icon: window::icon::from_rgba(include_bytes!("../assets/icon-64.rgba").to_vec(), 64, 64).ok(),
             ..window::Settings::default()
         })
         .centered()
         .run()
+}
+
+fn exit_with(result: std::io::Result<()>) -> iced::Result {
+    std::process::exit(if result.is_ok() { 0 } else { 1 })
 }
 
 /// The runtime for the app and its downloads. Downloads spend their time

@@ -83,7 +83,30 @@ pub fn register() -> io::Result<()> {
     Ok(())
 }
 
+/// Removes what [`register`] added. Run by the uninstaller.
+#[cfg(windows)]
+pub fn unregister() -> io::Result<()> {
+    use winreg::RegKey;
+    use winreg::enums::HKEY_CURRENT_USER;
+
+    let user = RegKey::predef(HKEY_CURRENT_USER);
+    for (_, hosts) in BROWSERS {
+        if let Ok(key) = user.open_subkey_with_flags(hosts, winreg::enums::KEY_ALL_ACCESS) {
+            let _ = key.delete_subkey_all(HOST_NAME);
+        }
+    }
+    match std::fs::remove_file(crate::store::data_dir().join(format!("{HOST_NAME}.json"))) {
+        Err(e) if e.kind() != io::ErrorKind::NotFound => Err(e),
+        _ => Ok(()),
+    }
+}
+
 #[cfg(not(windows))]
 pub fn register() -> io::Result<()> {
+    Ok(())
+}
+
+#[cfg(not(windows))]
+pub fn unregister() -> io::Result<()> {
     Ok(())
 }

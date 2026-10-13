@@ -10,11 +10,19 @@ use iced::{Subscription, Task, Theme, clipboard, system, time, window};
 
 use crate::item::{Item, State};
 use crate::store::{self, HashKind, Settings, ThemeChoice};
-use crate::{instance, style};
+use crate::tray::{self, Tray, TrayAction};
+use crate::{format, instance, style};
 
 /// Restores and focuses the window.
 fn focus_window() -> Task<Message> {
-    window::latest().and_then(|id| Task::batch([window::minimize(id, false), window::gain_focus(id)]))
+    window::latest().and_then(|id| {
+        Task::batch([
+            // Brings it back if it was closed to the tray.
+            window::set_mode(id, window::Mode::Windowed),
+            window::minimize(id, false),
+            window::gain_focus(id),
+        ])
+    })
 }
 
 /// How often running downloads refresh on screen.
@@ -128,7 +136,14 @@ pub enum Message {
     External(Request),
     SettingsConnections(usize),
     SettingsTheme(ThemeChoice),
+    SettingsCloseToTray(bool),
     SaveSettings,
+
+    /// The window's close button.
+    CloseRequested(window::Id),
+    Tray(TrayAction),
+    /// Downloads are paused and saved; leave.
+    Quit,
 
     BrowseFolder,
     FolderPicked(Option<PathBuf>),
@@ -146,6 +161,9 @@ pub struct App {
     pub modal: Option<Modal>,
     system_dark: bool,
     next_id: u64,
+    tray: Option<Tray>,
+    /// Exit was chosen; downloads are being paused first.
+    exiting: bool,
 }
 
 impl App {
@@ -162,6 +180,8 @@ impl App {
             modal: None,
             system_dark: true,
             next_id,
+            tray: Tray::new(),
+            exiting: false,
         };
         // `BDownloader.exe URL...` starts those downloads right away.
         for url in std::env::args().skip(1).filter(|a| a.starts_with("http://") || a.starts_with("https://")) {
@@ -229,6 +249,8 @@ impl App {
             keyboard::listen().map(Message::Key),
             system::theme_changes().map(Message::SystemTheme),
             Subscription::run(instance::listen),
+            Subscription::run(tray::events),
+            window::close_requests().map(Message::CloseRequested),
         ];
         if self.items.iter().any(|i| i.handle.is_some()) {
             subscriptions.push(time::every(REFRESH).map(|_| Message::Tick));
@@ -438,11 +460,31 @@ impl App {
                     draft.theme = theme;
                 }
             }
+            Message::SettingsCloseToTray(close_to_tray) => {
+                if let Some(Modal::Settings(draft)) = &mut self.modal {
+                    draft.close_to_tray = close_to_tray;
+                }
+            }
             Message::SaveSettings => {
                 if let Some(Modal::Settings(draft)) = self.modal.take() {
                     self.settings = draft;
                     let _ = store::save_settings(&self.settings);
                 }
+            }
+
+            Message::CloseRequested(id) => {
+                // Without a tray icon there'd be no way back to a hidden window.
+                if self.settings.close_to_tray && self.tray.is_some() {
+                    self.modal = None;
+                    return window::set_mode(id, window::Mode::Hidden);
+                }
+                return self.exit();
+            }
+            Message::Tray(TrayAction::Open) => return focus_window(),
+            Message::Tray(TrayAction::Exit) => return self.exit(),
+            Message::Quit => {
+                self.save();
+                return iced::exit();
             }
 
             Message::BrowseFolder => {
@@ -480,6 +522,24 @@ impl App {
         Task::none()
     }
 
+    /// Pauses running downloads, so their last data is written and their
+    /// progress saved, then quits. Gives up waiting after a few seconds.
+    fn exit(&mut self) -> Task<Message> {
+        if self.exiting {
+            return Task::none();
+        }
+        self.exiting = true;
+        let handles: Vec<_> = self.items.iter_mut().filter_map(|item| item.handle.take()).collect();
+        handles.iter().for_each(|handle| handle.pause());
+        Task::perform(
+            async move {
+                let all_paused = iced::futures::future::join_all(handles.into_iter().map(|h| h.wait()));
+                let _ = tokio::time::timeout(Duration::from_secs(5), all_paused).await;
+            },
+            |_| Message::Quit,
+        )
+    }
+
     fn tick(&mut self) -> Task<Message> {
         let mut tasks = Vec::new();
         let mut names_changed = false;
@@ -499,6 +559,14 @@ impl App {
         // The name is needed to resume after a restart.
         if names_changed {
             self.save();
+        }
+        if let Some(tray) = &self.tray {
+            let running: Vec<&Item> = self.items.iter().filter(|i| i.state.is_running()).collect();
+            let speed: f64 = running.iter().map(|i| i.speed.rate()).sum();
+            tray.set_tooltip(&match running.len() {
+                0 => "BDownloader".to_owned(),
+                n => format!("BDownloader\n{n} downloading · {}", format::speed(speed)),
+            });
         }
         Task::batch(tasks)
     }

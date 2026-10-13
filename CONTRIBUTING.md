@@ -31,6 +31,12 @@ The app keeps its download list and settings in `%APPDATA%\BDownloader`. To try 
 $env:BDOWNLOADER_DATA = "$env:TEMP\bdl-dev"; cargo run -p bdownloader -- https://example.com/file.zip
 ```
 
+### Installer
+
+`scripts/build-installer.ps1` builds the release binaries and `dist/BDownloader-Setup-<version>.exe` from `installer/bdownloader.iss`. It needs [Inno Setup 6](https://jrsoftware.org/isinfo.php) (`winget install JRSoftware.InnoSetup`). To test it without clicking through the wizard: `BDownloader-Setup-<version>.exe /VERYSILENT`, and `unins000.exe /VERYSILENT` in the install folder to remove it.
+
+The app icon is drawn by `scripts/app-icon.ps1` into `crates/app/assets`.
+
 ### Browser extension
 
 1. Build the workspace (`cargo build`), so `bdl-host.exe` sits next to `BDownloader.exe`, and start the app once. At startup it registers the bridge with every Chromium browser that has been used on the PC (`HKCU\Software\<browser>\NativeMessagingHosts\com.bdownloader.host`).

@@ -22,6 +22,12 @@ Free for personal and other non-commercial use. See [License](#license).
 - **Native and lightweight.** Written in Rust with the [iced](https://iced.rs) GUI toolkit. No bundled browser engine.
 - **Modern interface** with dark and light themes, live speed and time left, and a progress bar that shows what each connection is downloading.
 
+## Installing
+
+Download `BDownloader-Setup-<version>.exe` from [Releases](https://github.com/ahmedanjum30/BDownloader/releases) and run it. It installs for your user only, so it doesn't need admin rights. Windows may warn that the installer is from an unknown publisher, because it isn't code-signed yet: click **More info → Run anyway**.
+
+To add the browser extension, open **Browser extension** in BDownloader and follow the steps.
+
 ## Building from source
 
 You need [Rust](https://rustup.rs/) 1.99 or newer.

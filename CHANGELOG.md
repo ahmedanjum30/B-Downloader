@@ -6,6 +6,10 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+## [0.1.0] - 2026-10-13
+
+First release.
+
 ### Added
 - Download engine (`bdownloader-core`): files are split into segments and
   downloaded over several connections (8 by default, up to 32) using HTTP
@@ -40,8 +44,20 @@ All notable changes to this project are documented here. The format follows
 - Only one copy of the app runs: opening it again shows the open window,
   and `BDownloader.exe URL` hands the link to it.
 - Cookies from the browser are kept in memory only, never written to disk.
-- Releases on GitHub include the app with the extension folder, and the
-  extension on its own as a zip for the Chrome Web Store and Edge Add-ons.
+- Installer (`BDownloader-Setup-<version>.exe`): installs for the current
+  user without an admin prompt, adds Start menu and optional desktop
+  shortcuts, registers the browser bridge, and removes everything again on
+  uninstall (your download list and settings are kept). Once the extension
+  is on the Chrome Web Store and Edge Add-ons, it can make the browsers offer
+  the extension at their next start.
+- Tray icon: closing the window keeps BDownloader running in the
+  notification area; click the icon to open it, or right-click to exit. A
+  setting makes the close button exit instead. Exiting pauses running
+  downloads first, so they continue where they stopped.
+- App icon and version details on BDownloader.exe.
+- The download list and settings are saved in `%APPDATA%\BDownloader`.
+- Releases on GitHub include the installer, and the extension on its own as
+  a zip for the Chrome Web Store and Edge Add-ons.
   Store listing texts, images and a privacy policy are in `store/` and
   `PRIVACY.md`.
 - A copy of the app started with `BDOWNLOADER_DATA` (for development) runs
@@ -52,6 +68,6 @@ All notable changes to this project are documented here. The format follows
   runs on two worker threads instead of one per CPU core. Idle memory went
   from 167 MB to 24 MB (working set) and the exe from 11.6 MB to 6.8 MB, with
   no change in download speed (28 MB/s over 8 connections, about 1% CPU).
-- The download list and settings are saved in `%APPDATA%\BDownloader`.
 
-[Unreleased]: https://github.com/ahmedanjum30/BDownloader/commits/main
+[Unreleased]: https://github.com/ahmedanjum30/BDownloader/compare/v0.1.0...HEAD
+[0.1.0]: https://github.com/ahmedanjum30/BDownloader/releases/tag/v0.1.0

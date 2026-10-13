@@ -19,28 +19,26 @@ jobs:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
 
-      - name: Build
-        run: cargo build --release --workspace
+      - name: Install Inno Setup
+        run: choco install innosetup --no-progress -y
+
+      - name: Build the installer
+        shell: pwsh
+        run: ./scripts/build-installer.ps1
 
       - name: Package
         shell: pwsh
         run: |
-          $name = "BDownloader-${{ github.ref_name }}-windows-x64"
-          $app = "dist/$name"
-          New-Item -ItemType Directory -Force $app | Out-Null
-          Copy-Item target/release/BDownloader.exe, target/release/bdl-host.exe, README.md, LICENSE, PRIVACY.md $app
-          # The extension folder as loaded with "Load unpacked"; the app shows the steps.
-          Copy-Item extension "$app/extension" -Recurse
-          Compress-Archive -Path $app -DestinationPath "dist/$name.zip"
           # The extension on its own, for the Chrome Web Store and Edge Add-ons.
           ./scripts/package-extension.ps1
-          Get-ChildItem dist -Filter *.zip | ForEach-Object {
+          Get-ChildItem dist -File -Include *.zip, *.exe -Recurse | ForEach-Object {
             "$((Get-FileHash $_.FullName -Algorithm SHA256).Hash.ToLower())  $($_.Name)"
           } | Set-Content dist/SHA256SUMS.txt
 
       - uses: softprops/action-gh-release@v2
         with:
           files: |
-            dist/*.zip
+            dist/BDownloader-Setup-*.exe
+            dist/bdownloader-extension-*.zip
             dist/SHA256SUMS.txt
           generate_release_notes: true

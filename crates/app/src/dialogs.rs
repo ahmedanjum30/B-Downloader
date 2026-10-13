@@ -188,10 +188,21 @@ pub fn settings(draft: &Settings) -> Element<'_, Message> {
     }))
     .spacing(4);
 
+    let on_close = row([(true, "Keep running in the tray"), (false, "Exit BDownloader")].map(|(to_tray, label)| {
+        button(text(label).size(14).width(Fill).center())
+            .padding([8, 12])
+            .width(Fill)
+            .style(style::nav(draft.close_to_tray == to_tray))
+            .on_press(Message::SettingsCloseToTray(to_tray))
+            .into()
+    }))
+    .spacing(4);
+
     let body = column![
         field("Default download folder", folder_picker(&draft.download_dir)),
         field("Connections per download", stepper(draft.connections, Message::SettingsConnections)),
         field("Theme", container(themes).padding(4).style(style::panel)),
+        field("When I close the window", container(on_close).padding(4).style(style::panel)),
     ]
     .spacing(18);
 

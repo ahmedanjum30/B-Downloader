@@ -23,6 +23,8 @@ pub struct Settings {
     pub theme: ThemeChoice,
     /// The browser extension has talked to the app at least once.
     pub extension_connected: bool,
+    /// The window's close button hides it to the tray instead of exiting.
+    pub close_to_tray: bool,
 }
 
 impl Default for Settings {
@@ -32,6 +34,7 @@ impl Default for Settings {
             connections: DEFAULT_CONNECTIONS,
             theme: ThemeChoice::System,
             extension_connected: false,
+            close_to_tray: true,
         }
     }
 }
