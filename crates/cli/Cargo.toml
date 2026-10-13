@@ -1,0 +1,18 @@
+[package]
+name = "bdownloader-cli"
+description = "Command-line front end for the BDownloader engine, for testing it without the GUI"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+authors.workspace = true
+publish = false
+
+[[bin]]
+name = "bdl"
+path = "src/main.rs"
+
+[dependencies]
+bdownloader-core.workspace = true
+tokio = { version = "1.53", features = ["rt-multi-thread", "macros", "signal", "time"] }

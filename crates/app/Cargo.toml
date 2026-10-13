@@ -1,0 +1,18 @@
+[package]
+name = "bdownloader"
+description = "A fast download manager for Windows"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+authors.workspace = true
+readme = "../../README.md"
+
+[[bin]]
+name = "BDownloader"
+path = "src/main.rs"
+
+[dependencies]
+bdownloader-core.workspace = true
+iced = "0.14"
