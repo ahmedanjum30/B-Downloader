@@ -15,4 +15,15 @@ path = "src/main.rs"
 
 [dependencies]
 bdownloader-core.workspace = true
-iced = "0.14"
+bdownloader-ipc.workspace = true
+# `tokio` runs the app's tasks on the same runtime the download engine uses.
+# The software renderer (tiny-skia) instead of the GPU one (wgpu): a list of
+# downloads doesn't need a GPU, and setting up a GPU device costs over 100 MB.
+iced = { version = "0.14", default-features = false, features = ["tiny-skia", "crisp", "web-colors", "tokio", "svg"] }
+rfd = "0.17"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+tokio = { version = "1.53", features = ["rt-multi-thread", "net", "io-util"] }
+
+[target.'cfg(windows)'.dependencies]
+winreg = "0.56"

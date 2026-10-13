@@ -4,7 +4,7 @@ use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex, MutexGuard, PoisonError};
 use std::time::Duration;
 
-use reqwest::header::{self, HeaderValue};
+use reqwest::header::{self, HeaderMap, HeaderValue};
 use reqwest::{Client, Response, StatusCode, Url};
 use tokio::task::JoinSet;
 use tokio_util::sync::CancellationToken;
@@ -45,9 +45,10 @@ impl Engine {
         Ok(Self { client })
     }
 
-    /// Asks the server for the file's size, name and range support without downloading it.
-    pub async fn probe(&self, url: &str) -> Result<ProbeInfo> {
-        http::probe(&self.client, &parse_url(url)?).await
+    /// Asks the server for the file's size, name and range support without
+    /// downloading it. `headers` are sent along, as in [`DownloadOptions::headers`].
+    pub async fn probe(&self, url: &str, headers: &[(String, String)]) -> Result<ProbeInfo> {
+        http::probe(&self.client, &parse_url(url)?, &http::header_map(headers)).await
     }
 
     /// Starts a download in the background. Must be called inside a Tokio runtime.
@@ -74,6 +75,9 @@ pub struct DownloadOptions {
     pub connections: usize,
     /// Verify the finished file against this checksum. Off unless the user asks for it.
     pub checksum: Option<Checksum>,
+    /// Extra request headers, such as the browser's `Cookie`, `Referer` and
+    /// `User-Agent` for downloads handed over by the extension.
+    pub headers: Vec<(String, String)>,
 }
 
 impl DownloadOptions {
@@ -84,6 +88,7 @@ impl DownloadOptions {
             file_name: None,
             connections: DEFAULT_CONNECTIONS,
             checksum: None,
+            headers: Vec::new(),
         }
     }
 }
@@ -145,6 +150,7 @@ impl DownloadHandle {
         let info = lock(&self.shared.info).clone();
         let segments = lock(&self.shared.segments);
         Progress {
+            total: segments.size().or(info.total),
             downloaded: segments.downloaded(),
             active_connections: segments.active(),
             segments: segments
@@ -205,7 +211,8 @@ async fn run(client: Client, options: DownloadOptions, shared: Arc<Shared>, paus
 
 async fn download(client: &Client, options: &DownloadOptions, shared: &Arc<Shared>, pause: &CancellationToken) -> Result<Outcome> {
     let url = parse_url(&options.url)?;
-    let info = http::probe(client, &url).await?;
+    let headers = http::header_map(&options.headers);
+    let info = http::probe(client, &url, &headers).await?;
     let target = Target::resolve(options, &info).await?;
     {
         let mut progress = lock(&shared.info);
@@ -249,6 +256,7 @@ async fn download(client: &Client, options: &DownloadOptions, shared: &Arc<Share
         client: client.clone(),
         url,
         file: file.clone(),
+        headers,
         if_range: if_range_value(&info),
         ranged: info.resumable,
         shared: shared.clone(),
@@ -401,6 +409,7 @@ struct Worker {
     client: Client,
     url: Url,
     file: Arc<File>,
+    headers: HeaderMap,
     if_range: Option<HeaderValue>,
     /// Send range requests. False for servers that don't support them.
     ranged: bool,
@@ -475,7 +484,7 @@ impl Worker {
         if start >= end {
             return Ok(());
         }
-        let mut request = self.client.get(self.url.clone());
+        let mut request = self.client.get(self.url.clone()).headers(self.headers.clone());
         if self.ranged {
             request = request.header(header::RANGE, format!("bytes={start}-{}", end - 1));
             if let Some(validator) = &self.if_range {
@@ -487,6 +496,9 @@ impl Worker {
             response = request.send() => response?,
         };
         check_response(&response, start)?;
+        if !self.ranged {
+            lock(&self.shared.segments).set_single_size(i, response.content_length());
+        }
 
         let mut buf = Vec::with_capacity(WRITE_BUFFER);
         let mut offset = start;

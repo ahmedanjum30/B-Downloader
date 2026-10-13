@@ -25,6 +25,23 @@ cargo run -p bdownloader-cli -- URL      # download URL with the engine (Ctrl+C 
 cargo test --workspace                   # unit tests and end-to-end tests against a local server
 ```
 
+The app keeps its download list and settings in `%APPDATA%\BDownloader`. To try changes without touching your real list, point it at another folder:
+
+```powershell
+$env:BDOWNLOADER_DATA = "$env:TEMP\bdl-dev"; cargo run -p bdownloader -- https://example.com/file.zip
+```
+
+### Browser extension
+
+1. Build the workspace (`cargo build`), so `bdl-host.exe` sits next to `BDownloader.exe`, and start the app once. At startup it registers the bridge with every Chromium browser that has been used on the PC (`HKCU\Software\<browser>\NativeMessagingHosts\com.bdownloader.host`).
+2. Open `chrome://extensions`, turn on Developer mode and load the `extension` folder unpacked. The app's **Browser extension** panel shows the same steps and the folder path.
+
+The `key` in `extension/manifest.json` fixes the unpacked extension's ID (`glehdmgljkbkfnbigknlpjjmfegaagfi`). The bridge only accepts the IDs listed in `EXTENSION_IDS` in `crates/app/src/browser.rs`, so if you change the key, update that list too.
+
+### Publishing the extension
+
+Pushing a version tag (`git tag v0.1.0 && git push --tags`) runs the release workflow, which attaches the app zip and the extension zip to a GitHub release. `scripts/package-extension.ps1` builds the extension zip to upload to the Chrome Web Store and Edge Add-ons, without the development `key` (each store assigns its own ID). After the first upload, add the store's ID to `EXTENSION_IDS`. Listing texts, permission justifications and images are in `store/`.
+
 Please don't benchmark against public speed-test servers in loops. They rate-limit or block IPs that open many connections, which looks like a slow engine but isn't. The end-to-end tests use a local server that can limit speed per connection or refuse extra connections.
 
 On Windows without Visual Studio, use the GNU toolchain (`rustup default stable-gnu`). Some dependencies also need MinGW's `dlltool` and `as`, for example from [WinLibs](https://winlibs.com/) (`winget install BrechtSanders.WinLibs.POSIX.UCRT`). Put its `mingw64\bin` folder first on `PATH`.

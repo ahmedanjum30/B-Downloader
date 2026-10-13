@@ -1,5 +1,5 @@
 [workspace]
-members = ["crates/core", "crates/cli", "crates/app"]
+members = ["crates/core", "crates/ipc", "crates/cli", "crates/host", "crates/app"]
 resolver = "3"
 
 [workspace.package]
@@ -12,6 +12,7 @@ authors = ["Ahmad Anjum"]
 
 [workspace.dependencies]
 bdownloader-core = { path = "crates/core" }
+bdownloader-ipc = { path = "crates/ipc" }
 
 [profile.release]
 opt-level = 3

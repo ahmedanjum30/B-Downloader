@@ -21,6 +21,11 @@ struct Server {
     file_name: Option<&'static str>,
     /// Answer with 429 while more than this many connections are open.
     max_connections: Option<usize>,
+    /// Answer with 403 unless the request has this `Cookie` header (lowercase).
+    require_cookie: Option<&'static str>,
+    /// Add bytes to the body when the request has a `Range` header, like
+    /// pages that echo the request back.
+    echo_range: bool,
     open: AtomicUsize,
 }
 
@@ -41,6 +46,8 @@ impl Server {
             delay: None,
             file_name: None,
             max_connections: None,
+            require_cookie: None,
+            echo_range: false,
             open: AtomicUsize::new(0),
         }
     }
@@ -76,6 +83,14 @@ impl Server {
             return;
         }
         let request = String::from_utf8_lossy(&request).to_ascii_lowercase();
+        if let Some(cookie) = self.require_cookie
+            && !request.lines().any(|l| l.trim() == format!("cookie: {cookie}"))
+        {
+            let _ = socket
+                .write_all(b"HTTP/1.1 403 Forbidden\r\nContent-Length: 0\r\nConnection: close\r\n\r\n")
+                .await;
+            return;
+        }
         let range = request.lines().find_map(|l| l.strip_prefix("range: bytes=")).and_then(|r| {
             let (a, b) = r.trim().split_once('-')?;
             Some((a.parse::<usize>().ok()?, b.parse::<usize>().ok()?))
@@ -93,7 +108,8 @@ impl Server {
             }
             _ => (0, len, "HTTP/1.1 200 OK\r\n".to_owned()),
         };
-        head += &format!("Content-Length: {}\r\nETag: \"v1\"\r\nConnection: close\r\n", end - start);
+        let echo: &[u8] = if self.echo_range && range.is_some() { b"range: echoed" } else { b"" };
+        head += &format!("Content-Length: {}\r\nETag: \"v1\"\r\nConnection: close\r\n", end - start + echo.len());
         if let Some(name) = self.file_name {
             head += &format!("Content-Disposition: attachment; filename=\"{name}\"\r\n");
         }
@@ -109,6 +125,7 @@ impl Server {
                 tokio::time::sleep(delay).await;
             }
         }
+        let _ = socket.write_all(echo).await;
     }
 }
 
@@ -203,6 +220,52 @@ async fn more_connections_are_faster_when_each_is_limited() {
 }
 
 #[tokio::test(flavor = "multi_thread")]
+async fn sends_extra_headers_on_every_request() {
+    let data = test_data(4 * MB);
+    let addr = Server {
+        require_cookie: Some("session=abc"),
+        ..Server::new(data.clone())
+    }
+    .start()
+    .await;
+    let engine = Engine::new().unwrap();
+    let url = format!("http://{addr}/private.bin");
+
+    let dir = tempfile::tempdir().unwrap();
+    let without = engine.start(DownloadOptions::new(&url, dir.path())).wait().await;
+    assert!(matches!(without, Err(Error::Status(403))));
+
+    let mut options = DownloadOptions::new(&url, dir.path());
+    options.headers = vec![("Cookie".into(), "session=abc".into()), ("Range".into(), "bytes=5-".into())];
+    let Outcome::Completed(path) = engine.start(options).wait().await.unwrap() else {
+        panic!("not completed")
+    };
+    assert!(std::fs::read(path).unwrap() == data);
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn size_comes_from_the_response_without_ranges() {
+    // The link check says one size (it sends a Range header that gets echoed), the download another.
+    let data = test_data(200 * 1024);
+    let addr = Server {
+        ranges: false,
+        echo_range: true,
+        ..Server::new(data.clone())
+    }
+    .start()
+    .await;
+    let dir = tempfile::tempdir().unwrap();
+    let outcome = Engine::new()
+        .unwrap()
+        .start(DownloadOptions::new(format!("http://{addr}/echo"), dir.path()))
+        .wait()
+        .await
+        .unwrap();
+    let Outcome::Completed(path) = outcome else { panic!("not completed") };
+    assert!(std::fs::read(path).unwrap() == data);
+}
+
+#[tokio::test(flavor = "multi_thread")]
 async fn server_without_ranges_uses_one_connection() {
     let data = test_data(3 * MB);
     let addr = Server {
@@ -214,7 +277,7 @@ async fn server_without_ranges_uses_one_connection() {
     let dir = tempfile::tempdir().unwrap();
 
     let engine = Engine::new().unwrap();
-    let info = engine.probe(&format!("http://{addr}/a.bin")).await.unwrap();
+    let info = engine.probe(&format!("http://{addr}/a.bin"), &[]).await.unwrap();
     assert!(!info.resumable);
     assert_eq!(info.size, Some(data.len() as u64));
 

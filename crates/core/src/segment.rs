@@ -170,6 +170,21 @@ impl Segments {
         self.list[i].written += len;
     }
 
+    /// Without range support there is one segment, and the response decides
+    /// its size: the server may send a different length than it reported
+    /// when we checked the link (pages that echo the request, for example).
+    pub fn set_single_size(&mut self, i: usize, size: Option<u64>) {
+        if self.splittable {
+            return;
+        }
+        self.list[i].end = size.unwrap_or(UNKNOWN_END);
+        self.size = size;
+    }
+
+    pub fn size(&self) -> Option<u64> {
+        self.size
+    }
+
     /// Called when the server closes the response normally.
     pub fn finish_stream(&mut self, i: usize) -> Result<()> {
         let s = &mut self.list[i];

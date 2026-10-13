@@ -18,8 +18,9 @@ Free for personal and other non-commercial use. See [License](#license).
 - **Download queue** with a limit on how many downloads run at once, and a scheduler.
 - **Speed limits**, for all downloads or for one.
 - **Optional integrity check.** Tick the box to verify the file's MD5 or SHA-256 checksum when it finishes.
-- **Browser integration** for Chrome, Edge and Firefox, so downloads go to BDownloader automatically.
+- **Browser extension** for Chrome, Edge and Brave: downloads you start in the browser go to BDownloader automatically, and links get a "Download with BDownloader" right-click entry. Downloads that need a login work, because the browser's cookies come along (they're never saved to disk).
 - **Native and lightweight.** Written in Rust with the [iced](https://iced.rs) GUI toolkit. No bundled browser engine.
+- **Modern interface** with dark and light themes, live speed and time left, and a progress bar that shows what each connection is downloading.
 
 ## Building from source
 
@@ -38,6 +39,13 @@ The app is at `target/release/BDownloader.exe`. See [CONTRIBUTING.md](CONTRIBUTI
 | `crates/core` | The download engine (`bdownloader-core`). No UI code. |
 | `crates/app` | The desktop app (`BDownloader.exe`), built with iced. |
 | `crates/cli` | `bdl.exe`, a small command-line front end for trying the engine without the GUI. |
+| `crates/host` | `bdl-host.exe`, the bridge the browser extension talks to (Chrome native messaging). |
+| `crates/ipc` | The messages sent to a running app over a named pipe. |
+| `extension` | The browser extension (Manifest V3). |
+
+## Credits
+
+Icons from [Lucide](https://lucide.dev) (ISC license).
 
 ## License
 

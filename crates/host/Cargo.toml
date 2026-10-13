@@ -1,0 +1,18 @@
+[package]
+name = "bdownloader-host"
+description = "Native messaging host that passes downloads from the browser extension to BDownloader"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+authors.workspace = true
+publish = false
+
+[[bin]]
+name = "bdl-host"
+path = "src/main.rs"
+
+[dependencies]
+bdownloader-ipc.workspace = true
+serde_json = "1"

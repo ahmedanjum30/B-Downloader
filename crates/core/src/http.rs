@@ -18,13 +18,29 @@ pub struct ProbeInfo {
     pub file_name: Option<String>,
     pub etag: Option<String>,
     pub last_modified: Option<String>,
+    /// The `Content-Type`, e.g. `application/zip`. `text/html` usually means
+    /// the link opens a web page rather than a file.
+    pub content_type: Option<String>,
+}
+
+impl ProbeInfo {
+    pub fn is_web_page(&self) -> bool {
+        self.content_type
+            .as_deref()
+            .is_some_and(|t| t.trim_start().to_ascii_lowercase().starts_with("text/html"))
+    }
 }
 
 /// Asks for the first byte only. A `206` reply tells us the size and that
 /// ranges work. A `HEAD` request would be cheaper, but many servers answer it
 /// differently from `GET`.
-pub(crate) async fn probe(client: &Client, url: &Url) -> Result<ProbeInfo> {
-    let resp = client.get(url.clone()).header(header::RANGE, "bytes=0-0").send().await?;
+pub(crate) async fn probe(client: &Client, url: &Url, extra: &HeaderMap) -> Result<ProbeInfo> {
+    let resp = client
+        .get(url.clone())
+        .headers(extra.clone())
+        .header(header::RANGE, "bytes=0-0")
+        .send()
+        .await?;
     let headers = resp.headers();
     let content_range = header_str(headers, header::CONTENT_RANGE).and_then(parse_content_range);
     let (size, resumable) = match resp.status() {
@@ -47,7 +63,18 @@ pub(crate) async fn probe(client: &Client, url: &Url) -> Result<ProbeInfo> {
         file_name,
         etag: header_str(headers, header::ETAG).map(str::to_owned),
         last_modified: header_str(headers, header::LAST_MODIFIED).map(str::to_owned),
+        content_type: header_str(headers, header::CONTENT_TYPE).map(str::to_owned),
     })
+}
+
+/// Turns user-supplied headers into a header map, skipping invalid ones and
+/// the ones the engine sets itself.
+pub(crate) fn header_map(headers: &[(String, String)]) -> HeaderMap {
+    headers
+        .iter()
+        .filter_map(|(name, value)| Some((HeaderName::from_bytes(name.trim().as_bytes()).ok()?, value.trim().parse().ok()?)))
+        .filter(|(name, _)| ![header::RANGE, header::IF_RANGE, header::HOST, header::CONTENT_LENGTH].contains(name))
+        .collect()
 }
 
 pub(crate) fn header_str(headers: &HeaderMap, name: HeaderName) -> Option<&str> {
