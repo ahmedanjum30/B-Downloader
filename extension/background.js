@@ -1,9 +1,9 @@
 // Hands downloads to BDownloader through its native messaging host.
 //
-// A download the browser starts is cancelled at once, so it never holds a
-// connection that the server counts against BDownloader, and is offered to
-// the app. If the app can't be reached, the browser downloads it again
-// itself, so nothing is lost.
+// A download the browser starts is cancelled before the browser shows it,
+// so it never holds a connection that the server counts against
+// BDownloader, and is offered to the app. If the app can't be reached, the
+// browser downloads it again itself, so nothing is lost.
 
 const HOST = "com.bdownloader.host";
 const MENU_ID = "bdownloader";
@@ -46,24 +46,38 @@ function hello() {
   send({ type: "hello", browser: navigator.userAgent });
 }
 
-chrome.downloads.onCreated.addListener(async (item) => {
+// Runs while the browser is still choosing the file name, before it shows
+// the download anywhere or asks where to save it. Holding the download here
+// and cancelling it means the browser's own download never appears.
+chrome.downloads.onDeterminingFilename.addListener((item, suggest) => {
   // Our own fallback downloads (below) stay in the browser.
-  if (item.byExtensionId === chrome.runtime.id) return;
+  if (item.byExtensionId === chrome.runtime.id) return false;
   const url = item.finalUrl || item.url;
   // blob:, data: and file: downloads only exist inside the browser.
-  if (!isWebUrl(url) || item.state !== "in_progress") return;
+  if (!isWebUrl(url)) return false;
 
+  takeOver(item, url, suggest);
+  return true; // suggest() is called once the download is cancelled
+});
+
+async function takeOver(item, url, suggest) {
   // Cancel rather than pause: a paused download can keep its connection
   // open, and sites that limit connections count it against BDownloader.
   await chrome.downloads.cancel(item.id).catch(() => {});
   await chrome.downloads.erase({ id: item.id }).catch(() => {});
+  try {
+    suggest();
+  } catch {
+    // Already cancelled; nothing left to release.
+  }
 
+  // By now the browser knows the real file name.
   const name = item.filename ? item.filename.split(/[\\/]/).pop() : null;
   if (!(await handOver(url, item.referrer, name))) {
     // BDownloader isn't available: let the browser download it after all.
     chrome.downloads.download({ url: item.url }).catch(() => {});
   }
-});
+}
 
 chrome.runtime.onInstalled.addListener(() => {
   chrome.contextMenus.removeAll(() => {

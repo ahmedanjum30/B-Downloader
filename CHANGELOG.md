@@ -6,6 +6,14 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+## [0.1.5] - 2026-10-13
+
+### Fixed
+- The browser extension takes over a download before the browser shows it,
+  so the browser's own download bar or bubble no longer flashes up, and an
+  "Ask where to save each file" dialog no longer appears. BDownloader also
+  gets the browser's file name. Restart the browser after updating.
+
 ## [0.1.4] - 2026-10-13
 
 ### Performance
@@ -142,7 +150,8 @@ First release.
   from 167 MB to 24 MB (working set) and the exe from 11.6 MB to 6.8 MB, with
   no change in download speed (28 MB/s over 8 connections, about 1% CPU).
 
-[Unreleased]: https://github.com/ahmedanjum30/BDownloader/compare/v0.1.4...HEAD
+[Unreleased]: https://github.com/ahmedanjum30/BDownloader/compare/v0.1.5...HEAD
+[0.1.5]: https://github.com/ahmedanjum30/BDownloader/compare/v0.1.4...v0.1.5
 [0.1.4]: https://github.com/ahmedanjum30/BDownloader/compare/v0.1.3...v0.1.4
 [0.1.3]: https://github.com/ahmedanjum30/BDownloader/compare/v0.1.2...v0.1.3
 [0.1.2]: https://github.com/ahmedanjum30/BDownloader/compare/v0.1.1...v0.1.2
