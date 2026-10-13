@@ -6,6 +6,15 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+## [0.1.8] - 2026-10-13
+
+### Fixed
+- Large downloads no longer stall about 40 seconds in. Windows filled the
+  file with zeros up to wherever a connection wrote, so on a large file it
+  wrote gigabytes of zeros first (around 1 GB/s of disk activity) and every
+  connection waited and timed out. Downloads are now sparse files: only the
+  real data is written.
+
 ## [0.1.7] - 2026-10-13
 
 ### Changed
@@ -169,7 +178,8 @@ First release.
   from 167 MB to 24 MB (working set) and the exe from 11.6 MB to 6.8 MB, with
   no change in download speed (28 MB/s over 8 connections, about 1% CPU).
 
-[Unreleased]: https://github.com/ahmedanjum30/BDownloader/compare/v0.1.7...HEAD
+[Unreleased]: https://github.com/ahmedanjum30/BDownloader/compare/v0.1.8...HEAD
+[0.1.8]: https://github.com/ahmedanjum30/BDownloader/compare/v0.1.7...v0.1.8
 [0.1.7]: https://github.com/ahmedanjum30/BDownloader/compare/v0.1.6...v0.1.7
 [0.1.6]: https://github.com/ahmedanjum30/BDownloader/compare/v0.1.5...v0.1.6
 [0.1.5]: https://github.com/ahmedanjum30/BDownloader/compare/v0.1.4...v0.1.5

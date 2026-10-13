@@ -78,6 +78,41 @@ pub(crate) fn write_all_at(file: &File, mut buf: &[u8], mut offset: u64) -> io::
     Ok(())
 }
 
+/// Lets the file have unwritten gaps. Without this, NTFS fills the file with
+/// zeros up to wherever a write lands, so on a large download a connection
+/// writing near the end makes Windows write gigabytes of zeros first, and
+/// every write to the file waits on it. Volumes without sparse files (FAT32,
+/// exFAT) return an error, and the download goes on as before.
+#[cfg(windows)]
+pub(crate) fn make_sparse(file: &File) -> io::Result<()> {
+    use std::os::windows::io::AsRawHandle;
+    use windows_sys::Win32::System::IO::DeviceIoControl;
+    use windows_sys::Win32::System::Ioctl::FSCTL_SET_SPARSE;
+
+    let mut returned = 0u32;
+    // SAFETY: the handle is open for writing, and FSCTL_SET_SPARSE without an
+    // input buffer sets the flag; it has no output.
+    let ok = unsafe {
+        DeviceIoControl(
+            file.as_raw_handle(),
+            FSCTL_SET_SPARSE,
+            std::ptr::null(),
+            0,
+            std::ptr::null_mut(),
+            0,
+            &mut returned,
+            std::ptr::null_mut(),
+        )
+    };
+    if ok == 0 { Err(io::Error::last_os_error()) } else { Ok(()) }
+}
+
+/// Other systems' file systems leave gaps unwritten anyway.
+#[cfg(not(windows))]
+pub(crate) fn make_sparse(_file: &File) -> io::Result<()> {
+    Ok(())
+}
+
 #[cfg(windows)]
 fn write_at(file: &File, buf: &[u8], offset: u64) -> io::Result<usize> {
     std::os::windows::fs::FileExt::seek_write(file, buf, offset)
@@ -91,6 +126,30 @@ fn write_at(file: &File, buf: &[u8], offset: u64) -> io::Result<usize> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// A write near the end of a large file mustn't make Windows fill the gap before it.
+    #[cfg(windows)]
+    #[test]
+    fn sparse_file_leaves_gaps_unwritten() {
+        use std::os::windows::ffi::OsStrExt;
+        use windows_sys::Win32::Storage::FileSystem::GetCompressedFileSizeW;
+
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("big.part");
+        let file = File::create(&path).unwrap();
+        make_sparse(&file).unwrap();
+        let size = 4 << 30;
+        file.set_len(size).unwrap();
+        write_all_at(&file, &[1; 4096], size - 4096).unwrap();
+        drop(file);
+
+        let wide: Vec<u16> = path.as_os_str().encode_wide().chain([0]).collect();
+        let mut high = 0u32;
+        // SAFETY: `wide` is a NUL-terminated path and `high` is a valid out pointer.
+        let low = unsafe { GetCompressedFileSizeW(wide.as_ptr(), &mut high) };
+        let on_disk = (u64::from(high) << 32) | u64::from(low);
+        assert!(on_disk < 16 << 20, "{on_disk} bytes on disk");
+    }
 
     #[test]
     fn sanitize_removes_path_tricks() {

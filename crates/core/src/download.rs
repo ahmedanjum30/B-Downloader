@@ -12,7 +12,7 @@ use tokio_util::sync::CancellationToken;
 
 use crate::checksum::Checksum;
 use crate::error::{Error, Result};
-use crate::fsutil::{sanitize_file_name, sidecar, unique_path, write_all_at};
+use crate::fsutil::{make_sparse, sanitize_file_name, sidecar, unique_path, write_all_at};
 use crate::http::{self, ProbeInfo, header_str, parse_content_range};
 use crate::segment::Segments;
 use crate::state::ResumeState;
@@ -478,10 +478,18 @@ async fn open_part_file(target: &Target, info: &ProbeInfo) -> Result<Arc<File>> 
     let (part, resume) = (target.part.clone(), target.resume.is_some());
     let size = info.size.filter(|_| info.resumable);
     let file = tokio::task::spawn_blocking(move || -> io::Result<File> {
-        if resume {
-            return OpenOptions::new().write(true).open(&part);
+        let file = if resume {
+            OpenOptions::new().write(true).open(&part)?
+        } else {
+            OpenOptions::new().write(true).create(true).truncate(true).open(&part)?
+        };
+        // Also for files from older versions, so the rest of them isn't zero-filled.
+        if let Err(e) = make_sparse(&file) {
+            log::debug!("{}: no sparse file: {e}", part.display());
         }
-        let file = OpenOptions::new().write(true).create(true).truncate(true).open(&part)?;
+        if resume {
+            return Ok(file);
+        }
         // Reserve the full size up front so parallel writes never extend the file.
         if let Some(size) = size {
             file.set_len(size)?;
