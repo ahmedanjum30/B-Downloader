@@ -13,16 +13,22 @@ env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
 
 jobs:
-  # The same format, lint and test checks as CI; nothing is published unless they pass.
+  # The same format, lint and test checks as CI. They run alongside the
+  # build; nothing is published unless both succeed.
   checks:
     uses: ./.github/workflows/ci.yml
 
-  release:
-    needs: checks
+  build:
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
+      # Compiled dependencies from CI's release-cache job on main. Tag builds
+      # can't reuse each other's caches, so this one only restores.
+      - uses: Swatinem/rust-cache@v2
+        with:
+          shared-key: release
+          save-if: false
 
       - name: Install Inno Setup
         run: choco install innosetup --no-progress -y
@@ -40,12 +46,27 @@ jobs:
             "$((Get-FileHash $_.FullName -Algorithm SHA256).Hash.ToLower())  $($_.Name)"
           } | Set-Content dist/SHA256SUMS.txt
 
-      - uses: softprops/action-gh-release@v2
+      - uses: actions/upload-artifact@v4
         with:
-          files: |
+          name: release-files
+          path: |
             dist/BDownloader-Setup-*.exe
             dist/bdownloader-extension-*.zip
             dist/SHA256SUMS.txt
+          if-no-files-found: error
+
+  publish:
+    needs: [checks, build]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: release-files
+          path: dist
+
+      - uses: softprops/action-gh-release@v2
+        with:
+          files: dist/*
           # Shown above the generated list of changes.
           body: |
             ## Install

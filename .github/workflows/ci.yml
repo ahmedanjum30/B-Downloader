@@ -43,3 +43,18 @@ jobs:
         run: cargo clippy --workspace --all-targets -- -D warnings
       - name: Test
         run: cargo test --workspace
+
+  # Builds the release profile on main and saves the compiled dependencies,
+  # so release builds (on tags, which can only restore caches from main)
+  # only recompile BDownloader itself. Runs alongside the checks.
+  release-cache:
+    if: github.ref == 'refs/heads/main'
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+        with:
+          shared-key: release
+      - name: Build release
+        run: cargo build --release --workspace
