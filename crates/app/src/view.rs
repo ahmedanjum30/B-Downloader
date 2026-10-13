@@ -6,12 +6,12 @@ use iced::widget::{
 };
 use iced::{Center, Color, Element, Fill, FillPortion, Font, Padding};
 
-use crate::app::{App, Filter, Message, Modal};
-use crate::dialogs;
+use crate::app::{App, Filter, Message, Modal, Update};
 use crate::format;
 use crate::icons::{self, icon};
 use crate::item::{Item, State};
 use crate::style::{self, Colors, Pick};
+use crate::{dialogs, update};
 
 pub const FONT: Font = Font::with_name("Segoe UI");
 pub const SEMIBOLD: Font = Font {
@@ -31,8 +31,8 @@ pub fn view(app: &App) -> Element<'_, Message> {
     match &app.modal {
         None => base.into(),
         Some(Modal::Add(dialog)) => modal(base, dialogs::add(dialog)),
-        Some(Modal::Settings(draft)) => modal(base, dialogs::settings(draft)),
-        Some(Modal::Extension) => modal(base, dialogs::extension(app.settings.extension_connected)),
+        Some(Modal::Settings(draft)) => modal(base, dialogs::settings(draft, app.update.status())),
+        Some(Modal::Extension) => modal(base, dialogs::extension(app.settings.extension_connected, app.copied.as_deref())),
     }
 }
 
@@ -179,7 +179,12 @@ fn main_panel(app: &App) -> Element<'_, Message> {
         .into()
     };
 
-    column![header, list]
+    let mut content = column![header].spacing(24);
+    if let Some(banner) = update_banner(app) {
+        content = content.push(banner);
+    }
+    content
+        .push(list)
         .spacing(24)
         .padding(Padding {
             top: 28.0,
@@ -189,6 +194,53 @@ fn main_panel(app: &App) -> Element<'_, Message> {
         })
         .width(Fill)
         .into()
+}
+
+/// Offers an update. Automatic updates stay silent unless the user started
+/// one by hand or it failed then.
+fn update_banner(app: &App) -> Option<Element<'_, Message>> {
+    if app.update_dismissed {
+        return None;
+    }
+    let small = |label: &'static str, message: Message, primary: bool| -> Element<'_, Message> {
+        button(text(label).size(13).font(SEMIBOLD))
+            .padding([7, 14])
+            .style(if primary { style::primary } else { style::secondary })
+            .on_press(message)
+            .into()
+    };
+    let (line, actions): (String, Vec<Element<'_, Message>>) = match &app.update {
+        Update::Available(release) => (
+            format!("BDownloader {} is available.", release.version),
+            vec![
+                small("What's new", Message::OpenReleasePage, false),
+                small(if update::is_installed() { "Update now" } else { "Download" }, Message::UpdateNow, true),
+            ],
+        ),
+        Update::Downloading { .. } if app.update_manual => (app.update.status(), Vec::new()),
+        Update::Ready { release, .. } if app.update_manual || !app.settings.auto_update => (
+            format!("BDownloader {} is ready. Restart to finish updating.", release.version),
+            vec![
+                small("What's new", Message::OpenReleasePage, false),
+                small("Restart now", Message::UpdateNow, true),
+            ],
+        ),
+        Update::Failed(_) if app.update_manual => (app.update.status(), vec![small("Try again", Message::UpdateNow, false)]),
+        _ => return None,
+    };
+    let mut bar = row![icon(&icons::DOWNLOAD, 18.0, |c| c.accent), text(line).size(14).font(SEMIBOLD).width(Fill)]
+        .spacing(12)
+        .align_y(Center);
+    for action in actions {
+        bar = bar.push(action);
+    }
+    bar = bar.push(
+        button(icon(&icons::CLOSE, 15.0, |c| c.muted))
+            .padding(6)
+            .style(style::icon_button)
+            .on_press(Message::DismissUpdate),
+    );
+    Some(container(bar).padding([10, 14]).width(Fill).style(style::accent_soft(12.0)).into())
 }
 
 fn add_button<'a>() -> Element<'a, Message> {

@@ -17,7 +17,7 @@ use crate::segment::Segments;
 use crate::state::ResumeState;
 
 pub const DEFAULT_CONNECTIONS: usize = 8;
-pub const MAX_CONNECTIONS: usize = 32;
+pub const MAX_CONNECTIONS: usize = 64;
 
 /// Data is collected per connection and written in blocks of this size, so a
 /// fast download makes a few large writes instead of many small ones.
@@ -49,6 +49,23 @@ impl Engine {
     /// downloading it. `headers` are sent along, as in [`DownloadOptions::headers`].
     pub async fn probe(&self, url: &str, headers: &[(String, String)]) -> Result<ProbeInfo> {
         http::probe(&self.client, &parse_url(url)?, &http::header_map(headers)).await
+    }
+
+    /// Fetches a small text resource, such as a JSON API response, refusing
+    /// anything larger than `max_bytes`.
+    pub async fn get_text(&self, url: &str, max_bytes: usize) -> Result<String> {
+        let mut response = self.client.get(parse_url(url)?).send().await?;
+        if !response.status().is_success() {
+            return Err(Error::Status(response.status().as_u16()));
+        }
+        let mut body = Vec::new();
+        while let Some(chunk) = response.chunk().await? {
+            if body.len() + chunk.len() > max_bytes {
+                return Err(io::Error::other("response too large").into());
+            }
+            body.extend_from_slice(&chunk);
+        }
+        String::from_utf8(body).map_err(|e| io::Error::other(e).into())
     }
 
     /// Starts a download in the background. Must be called inside a Tokio runtime.

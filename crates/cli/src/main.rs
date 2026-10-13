@@ -11,7 +11,7 @@ Usage: bdl <URL> [options]
 Options:
   -o, --dir DIR           folder to save into (default: current folder)
   -n, --name NAME         file name to save as (default: from the server)
-  -c, --connections N     parallel connections, 1-32 (default: 8)
+  -c, --connections N     parallel connections, 1-64 (default: 8)
       --sha256 HEX        verify the finished file's SHA-256
       --md5 HEX           verify the finished file's MD5
   -h, --help              show this help

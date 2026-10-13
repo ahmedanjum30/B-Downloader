@@ -2,7 +2,7 @@ use std::ffi::OsString;
 use std::path::PathBuf;
 use std::time::Duration;
 
-use bdownloader_core::{Engine, MAX_CONNECTIONS, Outcome, ProbeInfo};
+use bdownloader_core::{Checksum, DownloadHandle, DownloadOptions, Engine, MAX_CONNECTIONS, Outcome, ProbeInfo};
 use bdownloader_ipc::{AddRequest, Request};
 use iced::keyboard::{self, Key, key::Named};
 use iced::theme::Mode;
@@ -11,6 +11,7 @@ use iced::{Subscription, Task, Theme, clipboard, system, time, window};
 use crate::item::{Item, State};
 use crate::store::{self, HashKind, Settings, ThemeChoice};
 use crate::tray::{self, Tray, TrayAction};
+use crate::update::{self, Relaunch, Release};
 use crate::{format, instance, style};
 
 /// Restores and focuses the window.
@@ -27,6 +28,44 @@ fn focus_window() -> Task<Message> {
 
 /// How often running downloads refresh on screen.
 const REFRESH: Duration = Duration::from_millis(250);
+/// How often to look for a new version while the app runs.
+const UPDATE_CHECK_INTERVAL: Duration = Duration::from_secs(6 * 60 * 60);
+
+/// Where the app is with updates.
+pub enum Update {
+    Idle,
+    Checking,
+    UpToDate,
+    Available(Release),
+    Downloading {
+        release: Release,
+        handle: DownloadHandle,
+    },
+    /// Downloaded and its checksum verified.
+    Ready {
+        release: Release,
+        installer: PathBuf,
+    },
+    Failed(String),
+}
+
+impl Update {
+    pub fn status(&self) -> String {
+        match self {
+            Update::Idle => String::new(),
+            Update::Checking => "Checking for updates…".into(),
+            Update::UpToDate => "You have the latest version.".into(),
+            Update::Available(r) => format!("Version {} is available.", r.version),
+            Update::Downloading { release, handle } => {
+                let p = handle.progress();
+                let percent = p.total.filter(|&t| t > 0).map_or(0, |t| p.downloaded * 100 / t);
+                format!("Downloading version {}… {percent}%", release.version)
+            }
+            Update::Ready { release, .. } => format!("Version {} is ready to install.", release.version),
+            Update::Failed(e) => format!("Update failed: {e}"),
+        }
+    }
+}
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Filter {
@@ -132,12 +171,27 @@ pub enum Message {
 
     OpenSettings,
     OpenExtension,
+    /// Copies the text to the clipboard and shows "Copied" next to it for a moment.
+    Copy(String),
+    CopiedShown(String),
     /// A request from another copy of the app or from the browser extension.
     External(Request),
     SettingsConnections(usize),
     SettingsTheme(ThemeChoice),
     SettingsCloseToTray(bool),
+    SettingsAutoUpdate(bool),
     SaveSettings,
+
+    /// `manual`: from the Check now button, so report "up to date" and errors.
+    CheckForUpdates {
+        manual: bool,
+    },
+    UpdateChecked(Result<Option<Release>, String>),
+    /// Download the update, or install a downloaded one and restart.
+    UpdateNow,
+    UpdateDownloaded(Release, Result<Outcome, String>),
+    DismissUpdate,
+    OpenReleasePage,
 
     /// The window's close button.
     CloseRequested(window::Id),
@@ -164,6 +218,17 @@ pub struct App {
     tray: Option<Tray>,
     /// Exit was chosen; downloads are being paused first.
     exiting: bool,
+    /// The text most recently copied with a copy button, while "Copied" shows.
+    pub copied: Option<String>,
+    pub update: Update,
+    /// The update banner was closed; it comes back when the update moves on.
+    pub update_dismissed: bool,
+    /// The window is hidden in the tray.
+    window_hidden: bool,
+    /// The user started the current update by hand, so show its progress.
+    pub update_manual: bool,
+    /// Run the downloaded installer when quitting, and how to come back.
+    install_on_quit: Option<Relaunch>,
 }
 
 impl App {
@@ -182,12 +247,44 @@ impl App {
             next_id,
             tray: Tray::new(),
             exiting: false,
+            copied: None,
+            update: Update::Idle,
+            update_dismissed: false,
+            window_hidden: false,
+            update_manual: false,
+            install_on_quit: None,
         };
         // `BDownloader.exe URL...` starts those downloads right away.
         for url in std::env::args().skip(1).filter(|a| a.starts_with("http://") || a.starts_with("https://")) {
             app.add(AddRequest::new(url));
         }
-        (app, system::theme().map(Message::SystemTheme))
+        // Downloads that were running when the app restarted for an update.
+        let engine = app.engine.clone();
+        for item in app.items.iter_mut().filter(|i| i.resume) {
+            item.resume = false;
+            item.start(&engine);
+        }
+
+        let mut tasks = vec![
+            system::theme().map(Message::SystemTheme),
+            // Give the app a moment to settle before going online.
+            Task::perform(tokio::time::sleep(Duration::from_secs(5)), |_| Message::CheckForUpdates { manual: false }),
+        ];
+        // Started in the background (after an update): stay in the tray, unless there is none.
+        if std::env::args().any(|a| a == "--background") {
+            if app.tray.is_some() {
+                app.window_hidden = true;
+            } else {
+                tasks.push(focus_window());
+            }
+        }
+        (app, Task::batch(tasks))
+    }
+
+    /// Shows the window, also when it was hidden in the tray.
+    fn show_window(&mut self) -> Task<Message> {
+        self.window_hidden = false;
+        focus_window()
     }
 
     /// Adds a download from another process with the default folder and settings, and starts it.
@@ -251,8 +348,9 @@ impl App {
             Subscription::run(instance::listen),
             Subscription::run(tray::events),
             window::close_requests().map(Message::CloseRequested),
+            time::every(UPDATE_CHECK_INTERVAL).map(|_| Message::CheckForUpdates { manual: false }),
         ];
-        if self.items.iter().any(|i| i.handle.is_some()) {
+        if self.items.iter().any(|i| i.handle.is_some()) || matches!(self.update, Update::Downloading { .. }) {
             subscriptions.push(time::every(REFRESH).map(|_| Message::Tick));
         }
         Subscription::batch(subscriptions)
@@ -300,6 +398,7 @@ impl App {
                     }
                 }
                 self.save();
+                return self.install_if_idle();
             }
             Message::Removed => {}
 
@@ -441,13 +540,27 @@ impl App {
 
             Message::OpenSettings => self.modal = Some(Modal::Settings(self.settings.clone())),
             Message::OpenExtension => self.modal = Some(Modal::Extension),
+            Message::Copy(text) => {
+                self.copied = Some(text.clone());
+                let reset = text.clone();
+                return Task::batch([
+                    clipboard::write(text),
+                    Task::perform(tokio::time::sleep(Duration::from_secs(2)), move |_| Message::CopiedShown(reset.clone())),
+                ]);
+            }
+            Message::CopiedShown(text) => {
+                // A later copy keeps its own "Copied".
+                if self.copied.as_ref() == Some(&text) {
+                    self.copied = None;
+                }
+            }
             Message::External(request) => match request {
-                Request::Show => return focus_window(),
+                Request::Show => return self.show_window(),
                 Request::Hello { .. } => self.extension_connected(),
                 Request::Add(add) => {
                     self.add(add);
                     self.filter = Filter::All;
-                    return focus_window();
+                    return self.show_window();
                 }
             },
             Message::SettingsConnections(n) => {
@@ -465,6 +578,11 @@ impl App {
                     draft.close_to_tray = close_to_tray;
                 }
             }
+            Message::SettingsAutoUpdate(auto_update) => {
+                if let Some(Modal::Settings(draft)) = &mut self.modal {
+                    draft.auto_update = auto_update;
+                }
+            }
             Message::SaveSettings => {
                 if let Some(Modal::Settings(draft)) = self.modal.take() {
                     self.settings = draft;
@@ -472,18 +590,77 @@ impl App {
                 }
             }
 
+            Message::CheckForUpdates { manual } => {
+                if matches!(self.update, Update::Checking | Update::Downloading { .. } | Update::Ready { .. }) {
+                    return Task::none();
+                }
+                self.update_manual = manual;
+                self.update = Update::Checking;
+                return Task::perform(update::check(self.engine.clone()), Message::UpdateChecked);
+            }
+            Message::UpdateChecked(result) => {
+                self.update = match result {
+                    Ok(Some(release)) => {
+                        self.update_dismissed = false;
+                        Update::Available(release)
+                    }
+                    Ok(None) => Update::UpToDate,
+                    Err(e) if self.update_manual => Update::Failed(e),
+                    // Automatic checks fail quietly, e.g. when offline.
+                    Err(_) => Update::Idle,
+                };
+                if self.settings.auto_update && update::is_installed() {
+                    return self.download_update();
+                }
+            }
+            Message::UpdateNow => match &self.update {
+                Update::Available(release) if !update::is_installed() => store::open_file(std::path::Path::new(&release.page)),
+                Update::Available(_) => {
+                    self.update_manual = true;
+                    return self.download_update();
+                }
+                Update::Failed(_) => return self.update(Message::CheckForUpdates { manual: true }),
+                Update::Ready { .. } => {
+                    // Continue what's downloading once the new version starts.
+                    self.items.iter_mut().filter(|i| i.state.is_running()).for_each(|i| i.resume = true);
+                    self.install_on_quit = Some(if self.window_hidden { Relaunch::Tray } else { Relaunch::Window });
+                    return self.exit();
+                }
+                _ => {}
+            },
+            Message::UpdateDownloaded(release, result) => {
+                self.update = match result {
+                    Ok(Outcome::Completed(installer)) => Update::Ready { release, installer },
+                    Ok(Outcome::Paused) => Update::Available(release),
+                    Err(e) => Update::Failed(e),
+                };
+                return self.install_if_idle();
+            }
+            Message::DismissUpdate => self.update_dismissed = true,
+            Message::OpenReleasePage => {
+                if let Update::Available(release) | Update::Ready { release, .. } = &self.update {
+                    store::open_file(std::path::Path::new(&release.page));
+                }
+            }
+
             Message::CloseRequested(id) => {
                 // Without a tray icon there'd be no way back to a hidden window.
                 if self.settings.close_to_tray && self.tray.is_some() {
                     self.modal = None;
-                    return window::set_mode(id, window::Mode::Hidden);
+                    self.window_hidden = true;
+                    return Task::batch([window::set_mode(id, window::Mode::Hidden), self.install_if_idle()]);
                 }
                 return self.exit();
             }
-            Message::Tray(TrayAction::Open) => return focus_window(),
+            Message::Tray(TrayAction::Open) => return self.show_window(),
             Message::Tray(TrayAction::Exit) => return self.exit(),
             Message::Quit => {
                 self.save();
+                // A downloaded update installs on the way out; it was going to install anyway.
+                let relaunch = self.install_on_quit.or(self.settings.auto_update.then_some(Relaunch::No));
+                if let (Some(relaunch), Update::Ready { installer, .. }) = (relaunch, &self.update) {
+                    let _ = update::install(installer, relaunch);
+                }
                 return iced::exit();
             }
 
@@ -518,6 +695,32 @@ impl App {
                 _ => {}
             },
             Message::Key(_) => {}
+        }
+        Task::none()
+    }
+
+    /// Downloads the installer of an available update, checking its SHA-256.
+    fn download_update(&mut self) -> Task<Message> {
+        let Update::Available(release) = &self.update else { return Task::none() };
+        let release = release.clone();
+        let dir = update::download_dir();
+        let mut options = DownloadOptions::new(release.installer_url.clone(), dir);
+        options.file_name = Some(release.installer_name.clone());
+        options.connections = 4;
+        options.checksum = Some(Checksum::Sha256(release.sha256.clone()));
+        let handle = self.engine.start(options);
+        self.update = Update::Downloading { release, handle };
+        Task::none()
+    }
+
+    /// With automatic updates, a downloaded update installs once nothing is
+    /// downloading and the window is in the tray, so it never interrupts. The
+    /// app comes back in the tray. Otherwise it installs when the app exits.
+    fn install_if_idle(&mut self) -> Task<Message> {
+        let idle = !self.items.iter().any(|i| i.state.is_running());
+        if self.settings.auto_update && idle && self.window_hidden && !self.exiting && matches!(self.update, Update::Ready { .. }) {
+            self.install_on_quit = Some(Relaunch::Tray);
+            return self.exit();
         }
         Task::none()
     }
@@ -559,6 +762,15 @@ impl App {
         // The name is needed to resume after a restart.
         if names_changed {
             self.save();
+        }
+        if let Update::Downloading { handle, .. } = &self.update
+            && handle.is_finished()
+            && let Update::Downloading { release, handle } = std::mem::replace(&mut self.update, Update::Checking)
+        {
+            tasks.push(Task::perform(
+                async move { handle.wait().await.map_err(|e| e.to_string()) },
+                move |result| Message::UpdateDownloaded(release.clone(), result),
+            ));
         }
         if let Some(tray) = &self.tray {
             let running: Vec<&Item> = self.items.iter().filter(|i| i.state.is_running()).collect();

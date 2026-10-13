@@ -11,6 +11,7 @@ mod item;
 mod store;
 mod style;
 mod tray;
+mod update;
 mod view;
 
 use iced::{Size, window};
@@ -44,6 +45,8 @@ fn main() -> iced::Result {
         .window(window::Settings {
             // The close button is handled by the app: hide to the tray or exit, per Settings.
             exit_on_close_request: false,
+            // `--background`: started by an update while the app was in the tray.
+            visible: !std::env::args().any(|a| a == "--background"),
             size: Size::new(1120.0, 720.0),
             min_size: Some(Size::new(820.0, 520.0)),
             icon: window::icon::from_rgba(include_bytes!("../assets/icon-64.rgba").to_vec(), 64, 64).ok(),

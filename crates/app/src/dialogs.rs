@@ -3,7 +3,7 @@
 use std::path::Path;
 
 use bdownloader_core::MAX_CONNECTIONS;
-use iced::widget::{button, checkbox, column, container, pick_list, row, space, text, text_input};
+use iced::widget::{button, checkbox, column, container, pick_list, row, slider, space, text, text_input};
 use iced::{Center, Element, Fill};
 
 use crate::app::{AddDialog, Message, Probe};
@@ -54,6 +54,7 @@ fn folder_picker(dir: &Path) -> Element<'_, Message> {
     .into()
 }
 
+/// Number of connections: a slider for big changes, buttons for exact ones.
 fn stepper<'a>(value: usize, on_change: fn(usize) -> Message) -> Element<'a, Message> {
     let step = |handle, enabled: bool, next: usize| {
         button(icon(handle, 15.0, |c| c.text))
@@ -65,8 +66,9 @@ fn stepper<'a>(value: usize, on_change: fn(usize) -> Message) -> Element<'a, Mes
         step(&icons::MINUS, value > 1, value.saturating_sub(1)),
         container(text(value.to_string()).size(15).font(SEMIBOLD)).center_x(44),
         step(&icons::PLUS, value < MAX_CONNECTIONS, value + 1),
+        slider(1..=MAX_CONNECTIONS as u32, value as u32, move |n| on_change(n as usize)).width(Fill),
     ]
-    .spacing(4)
+    .spacing(8)
     .align_y(Center)
     .into()
 }
@@ -172,7 +174,36 @@ pub fn add(dialog: &AddDialog) -> Element<'_, Message> {
     )
 }
 
-pub fn settings(draft: &Settings) -> Element<'_, Message> {
+fn updates<'a>(draft: &Settings, status: String) -> Element<'a, Message> {
+    let mode = row([(true, "Install automatically"), (false, "Ask me first")].map(|(auto, label)| {
+        button(text(label).size(14).width(Fill).center())
+            .padding([8, 12])
+            .width(Fill)
+            .style(style::nav(draft.auto_update == auto))
+            .on_press(Message::SettingsAutoUpdate(auto))
+            .into()
+    }))
+    .spacing(4);
+    let version = format!("Version {}", env!("CARGO_PKG_VERSION"));
+    let status = if status.is_empty() { version } else { format!("{version} · {status}") };
+    column![
+        container(mode).padding(4).style(style::panel),
+        row![
+            muted(status).size(13).width(Fill),
+            button(text("Check now").size(13))
+                .padding([7, 14])
+                .style(style::secondary)
+                .on_press(Message::CheckForUpdates { manual: true }),
+        ]
+        .spacing(12)
+        .align_y(Center),
+        muted("Automatic updates install while nothing is downloading and BDownloader is in the tray.").size(12),
+    ]
+    .spacing(8)
+    .into()
+}
+
+pub fn settings(draft: &Settings, update_status: String) -> Element<'_, Message> {
     let themes = row([
         (ThemeChoice::System, "System"),
         (ThemeChoice::Dark, "Dark"),
@@ -203,13 +234,43 @@ pub fn settings(draft: &Settings) -> Element<'_, Message> {
         field("Connections per download", stepper(draft.connections, Message::SettingsConnections)),
         field("Theme", container(themes).padding(4).style(style::panel)),
         field("When I close the window", container(on_close).padding(4).style(style::panel)),
+        field("Updates", updates(draft, update_status)),
     ]
     .spacing(18);
 
     frame("Settings", body.into(), footer("Save", Some(Message::SaveSettings)))
 }
 
-pub fn extension<'a>(connected: bool) -> Element<'a, Message> {
+/// A value to paste somewhere else, with a button that copies it.
+fn copy_field<'a>(value: String, copied: bool) -> Element<'a, Message> {
+    let label: Element<'a, Message> = if copied {
+        row![
+            icon(&icons::CHECK, 15.0, |c| c.success),
+            colored("Copied", |c| c.success).size(13).font(SEMIBOLD)
+        ]
+        .spacing(6)
+        .align_y(Center)
+        .into()
+    } else {
+        row![icon(&icons::COPY, 15.0, |c| c.muted), muted("Copy").size(13).font(SEMIBOLD)]
+            .spacing(6)
+            .align_y(Center)
+            .into()
+    };
+    // The whole field is the button, so a click anywhere on it copies.
+    button(
+        row![text(value.clone()).size(14).font(SEMIBOLD).width(Fill), label]
+            .spacing(12)
+            .align_y(Center),
+    )
+    .padding([10, 14])
+    .width(Fill)
+    .style(style::secondary)
+    .on_press(Message::Copy(value))
+    .into()
+}
+
+pub fn extension<'a>(connected: bool, copied: Option<&str>) -> Element<'a, Message> {
     let (title, detail, pick): (&str, &str, style::Pick) = if connected {
         ("Connected", "Downloads from your browser come to BDownloader.", |c| c.success)
     } else {
@@ -229,17 +290,20 @@ pub fn extension<'a>(connected: bool) -> Element<'a, Message> {
     .width(Fill)
     .style(style::panel);
 
-    let step = |n: &'a str, line: Element<'a, Message>| {
+    let step = |n: &'a str, line: &'a str| {
         row![
             container(colored(n, |c| c.accent).size(12).font(BOLD))
                 .center(24)
                 .style(style::accent_soft(12.0)),
-            line,
+            text(line).size(14),
         ]
         .spacing(12)
         .align_y(Center)
     };
+    let page = browser::EXTENSIONS_PAGE.to_owned();
     let folder = browser::extension_dir().map_or("the extension folder next to BDownloader.exe".to_owned(), |dir| dir.display().to_string());
+    let page_copied = copied == Some(page.as_str());
+    let folder_copied = copied == Some(folder.as_str());
 
     let body = column![
         status,
@@ -247,20 +311,11 @@ pub fn extension<'a>(connected: bool) -> Element<'a, Message> {
         text("• Downloads you start in the browser go to BDownloader.").size(14),
         text("• Right-click a link and choose Download with BDownloader.").size(14),
         muted("How to add it").size(13).font(SEMIBOLD),
-        step(
-            "1",
-            row![
-                text("In the browser's address bar, open ").size(14),
-                text("chrome://extensions").size(14).font(SEMIBOLD)
-            ]
-            .into()
-        ),
-        step("2", text("Turn on Developer mode (top right).").size(14).into()),
-        step("3", text("Click Load unpacked and choose this folder:").size(14).into()),
-        container(text(folder).size(13).font(SEMIBOLD))
-            .padding(12)
-            .width(Fill)
-            .style(style::panel),
+        step("1", "Copy this address and paste it into the browser's address bar:"),
+        copy_field(page, page_copied),
+        step("2", "Turn on Developer mode (top right)."),
+        step("3", "Click Load unpacked and choose this folder:"),
+        copy_field(folder, folder_copied),
         muted("It shows as connected here once the browser has talked to BDownloader.").size(13),
     ]
     .spacing(12);

@@ -7,6 +7,10 @@ use std::path::PathBuf;
 /// The name the extension uses to reach the bridge.
 pub const HOST_NAME: &str = "com.bdownloader.host";
 
+/// Where "Load unpacked" is. Chrome, Edge and Brave all open this address,
+/// but only when typed or pasted: they refuse it from other programs.
+pub const EXTENSIONS_PAGE: &str = "chrome://extensions";
+
 /// The extension IDs the bridge accepts; it refuses every other extension.
 /// Each store assigns its own ID on the first upload, so add them here once known.
 pub const EXTENSION_IDS: &[&str] = &[

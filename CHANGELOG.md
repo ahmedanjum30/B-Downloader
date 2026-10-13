@@ -6,6 +6,23 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+## [0.1.1] - 2026-10-13
+
+### Added
+- Updates from inside the app. BDownloader checks GitHub for a new version
+  at start and every few hours. By default it downloads the update in the
+  background, checks its SHA-256, and installs it while nothing is
+  downloading and the window is in the tray, then comes back in the tray.
+  Otherwise the update installs when you exit. Settings → Updates can switch
+  to "Ask me first", which shows a banner instead, and has a Check now button.
+- Copy buttons in the Browser extension panel for `chrome://extensions` and
+  the extension folder.
+- Up to 64 connections per download (was 32), with a slider next to the
+  buttons.
+
+Updating from 0.1.0: download and run the new installer once; later
+versions update themselves.
+
 ## [0.1.0] - 2026-10-13
 
 First release.
@@ -69,5 +86,6 @@ First release.
   from 167 MB to 24 MB (working set) and the exe from 11.6 MB to 6.8 MB, with
   no change in download speed (28 MB/s over 8 connections, about 1% CPU).
 
-[Unreleased]: https://github.com/ahmedanjum30/BDownloader/compare/v0.1.0...HEAD
+[Unreleased]: https://github.com/ahmedanjum30/BDownloader/compare/v0.1.1...HEAD
+[0.1.1]: https://github.com/ahmedanjum30/BDownloader/compare/v0.1.0...v0.1.1
 [0.1.0]: https://github.com/ahmedanjum30/BDownloader/releases/tag/v0.1.0

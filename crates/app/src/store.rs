@@ -25,6 +25,9 @@ pub struct Settings {
     pub extension_connected: bool,
     /// The window's close button hides it to the tray instead of exiting.
     pub close_to_tray: bool,
+    /// Download and install updates on their own, while nothing is downloading.
+    /// Otherwise a banner offers each update.
+    pub auto_update: bool,
 }
 
 impl Default for Settings {
@@ -35,6 +38,7 @@ impl Default for Settings {
             theme: ThemeChoice::System,
             extension_connected: false,
             close_to_tray: true,
+            auto_update: true,
         }
     }
 }
@@ -94,6 +98,9 @@ pub struct SavedDownload {
     /// Referer and user agent from the browser. Cookies are never saved.
     #[serde(default)]
     pub headers: Vec<(String, String)>,
+    /// It was running when the app restarted for an update; continue it.
+    #[serde(default)]
+    pub resume: bool,
 }
 
 /// `BDOWNLOADER_DATA` overrides the folder, so development builds can use a

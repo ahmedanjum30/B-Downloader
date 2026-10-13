@@ -38,6 +38,8 @@ pub struct Item {
     pub checksum: Option<(HashKind, String)>,
     /// Request headers from the browser (cookies, referrer, user agent).
     pub headers: Vec<(String, String)>,
+    /// Continue this download when the app starts again (set before an update restart).
+    pub resume: bool,
 
     pub handle: Option<DownloadHandle>,
     pub speed: Speed,
@@ -58,6 +60,7 @@ impl Item {
             connections,
             checksum,
             headers: Vec::new(),
+            resume: false,
             handle: None,
             speed: Speed::default(),
             segments: Vec::new(),
@@ -76,6 +79,7 @@ impl Item {
             downloaded: saved.downloaded,
             state,
             headers: saved.headers,
+            resume: saved.resume,
             ..Self::new(saved.id, saved.url, saved.dir, saved.file_name, saved.connections, saved.checksum)
         }
     }
@@ -105,6 +109,7 @@ impl Item {
                 .filter(|(name, _)| !name.eq_ignore_ascii_case("cookie"))
                 .cloned()
                 .collect(),
+            resume: self.resume,
         }
     }
 

@@ -78,6 +78,15 @@ Root: HKCU; Subkey: "Software\Microsoft\Edge\Extensions\{#EdgeStoreId}"; ValueTy
 ; Lets the browser extension reach the app, even before the app is first opened.
 Filename: "{app}\BDownloader.exe"; Parameters: "--register"; Flags: runhidden
 Filename: "{app}\BDownloader.exe"; Description: "{cm:LaunchProgram,BDownloader}"; Flags: nowait postinstall skipifsilent
+; Updates started from the app (/UPDATE=1 or 2) bring it back afterwards; 2 means in the tray.
+Filename: "{app}\BDownloader.exe"; Flags: nowait; Check: UpdateMode('1')
+Filename: "{app}\BDownloader.exe"; Parameters: "--background"; Flags: nowait; Check: UpdateMode('2')
+
+[Code]
+function UpdateMode(Mode: String): Boolean;
+begin
+  Result := ExpandConstant('{param:UPDATE|0}') = Mode;
+end;
 
 [UninstallRun]
 ; The app may be running hidden in the tray; stop it so its files can be removed.
