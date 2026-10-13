@@ -6,6 +6,8 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+## [0.1.3] - 2026-10-13
+
 ### Changed
 - Connections start at one and double every second (1, 2, 4, 8, ...) up to
   the number you chose, and stop growing as soon as the server refuses one.
@@ -127,7 +129,8 @@ First release.
   from 167 MB to 24 MB (working set) and the exe from 11.6 MB to 6.8 MB, with
   no change in download speed (28 MB/s over 8 connections, about 1% CPU).
 
-[Unreleased]: https://github.com/ahmedanjum30/BDownloader/compare/v0.1.2...HEAD
+[Unreleased]: https://github.com/ahmedanjum30/BDownloader/compare/v0.1.3...HEAD
+[0.1.3]: https://github.com/ahmedanjum30/BDownloader/compare/v0.1.2...v0.1.3
 [0.1.2]: https://github.com/ahmedanjum30/BDownloader/compare/v0.1.1...v0.1.2
 [0.1.1]: https://github.com/ahmedanjum30/BDownloader/compare/v0.1.0...v0.1.1
 [0.1.0]: https://github.com/ahmedanjum30/BDownloader/releases/tag/v0.1.0
