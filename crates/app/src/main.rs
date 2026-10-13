@@ -9,6 +9,7 @@ mod icons;
 mod instance;
 mod item;
 mod logging;
+mod memory;
 mod store;
 mod style;
 mod tray;

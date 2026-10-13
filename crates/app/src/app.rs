@@ -13,7 +13,12 @@ use crate::item::{Item, State};
 use crate::store::{self, HashKind, Settings, ThemeChoice};
 use crate::tray::{self, Tray, TrayAction};
 use crate::update::{self, Relaunch, Release};
-use crate::{format, instance, style};
+use crate::{format, instance, memory, style};
+
+/// Trims memory once the window and the last download have settled.
+fn trim_memory_soon() -> Task<Message> {
+    Task::perform(tokio::time::sleep(Duration::from_secs(3)), |_| Message::TrimMemory)
+}
 
 /// Restores and focuses the window.
 fn focus_window() -> Task<Message> {
@@ -206,6 +211,8 @@ impl RefreshDialog {
 pub enum Message {
     Tick,
     Finished(u64, Result<Outcome, String>),
+    /// Gives unused memory back to Windows if the app is still idle.
+    TrimMemory,
     Removed,
 
     Filter(Filter),
@@ -347,6 +354,7 @@ impl App {
             system::theme().map(Message::SystemTheme),
             // Give the app a moment to settle before going online.
             Task::perform(tokio::time::sleep(Duration::from_secs(5)), |_| Message::CheckForUpdates { manual: false }),
+            trim_memory_soon(),
         ];
         // Started in the background (after an update): stay in the tray, unless there is none.
         if std::env::args().any(|a| a == "--background") {
@@ -503,7 +511,12 @@ impl App {
                     }
                 }
                 self.save();
-                return self.install_if_idle();
+                return Task::batch([self.install_if_idle(), trim_memory_soon()]);
+            }
+            Message::TrimMemory => {
+                if !self.items.iter().any(|i| i.handle.is_some()) && !matches!(self.update, Update::Downloading { .. }) {
+                    memory::trim();
+                }
             }
             Message::Removed => {}
 
@@ -862,7 +875,7 @@ impl App {
                 if self.settings.close_to_tray && self.tray.is_some() {
                     self.modal = None;
                     self.window_hidden = true;
-                    return Task::batch([window::set_mode(id, window::Mode::Hidden), self.install_if_idle()]);
+                    return Task::batch([window::set_mode(id, window::Mode::Hidden), self.install_if_idle(), trim_memory_soon()]);
                 }
                 return self.exit();
             }

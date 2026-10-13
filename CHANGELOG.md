@@ -6,6 +6,13 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+## [0.1.7] - 2026-10-13
+
+### Changed
+- Uses much less memory while idle: once nothing is downloading, or the
+  window is closed to the tray, the app gives its unused memory back to
+  Windows (about 9 MB in the tray, down from about 50 MB after downloads).
+
 ## [0.1.6] - 2026-10-13
 
 ### Fixed
@@ -162,7 +169,8 @@ First release.
   from 167 MB to 24 MB (working set) and the exe from 11.6 MB to 6.8 MB, with
   no change in download speed (28 MB/s over 8 connections, about 1% CPU).
 
-[Unreleased]: https://github.com/ahmedanjum30/BDownloader/compare/v0.1.6...HEAD
+[Unreleased]: https://github.com/ahmedanjum30/BDownloader/compare/v0.1.7...HEAD
+[0.1.7]: https://github.com/ahmedanjum30/BDownloader/compare/v0.1.6...v0.1.7
 [0.1.6]: https://github.com/ahmedanjum30/BDownloader/compare/v0.1.5...v0.1.6
 [0.1.5]: https://github.com/ahmedanjum30/BDownloader/compare/v0.1.4...v0.1.5
 [0.1.4]: https://github.com/ahmedanjum30/BDownloader/compare/v0.1.3...v0.1.4
