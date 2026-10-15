@@ -455,12 +455,18 @@ async fn a_long_video_downloads_over_several_connections() {
     .await;
     let dir = tempfile::tempdir().unwrap();
 
-    let outcome = Engine::new()
+    let handle = Engine::new()
         .unwrap()
-        .start(options(dir.path(), source(addr, Some(vf), Some(af), 120_000)))
-        .wait()
-        .await
-        .unwrap();
+        .start(options(dir.path(), source(addr, Some(vf), Some(af), 120_000)));
+    // Segments that two connections both get must not make progress go backwards.
+    let mut last = 0;
+    while !handle.is_finished() {
+        let downloaded = handle.progress().downloaded;
+        assert!(downloaded >= last, "progress went back from {last} to {downloaded}");
+        last = downloaded;
+        tokio::time::sleep(Duration::from_millis(1)).await;
+    }
+    let outcome = handle.wait().await.unwrap();
 
     let path = dir.path().join("My clip.mp4");
     assert_eq!(outcome, Outcome::Completed(path.clone()));

@@ -179,6 +179,10 @@ struct Incoming {
     start_ms: u64,
     duration_ms: u64,
     data: Vec<u8>,
+    /// This session claimed the segment. Another session's copy, or one
+    /// already saved, is dropped, and its bytes don't count as progress (they
+    /// would show the download going backwards when dropped).
+    claimed: bool,
 }
 
 /// What the player's captured request holds that every request needs.
@@ -256,8 +260,8 @@ struct Job {
     stats: Mutex<Stats>,
     /// One save of the state file at a time.
     saving: tokio::sync::Mutex<()>,
-    /// Segments a session is writing, so two never write the same one: (itag, number, init).
-    writing: Mutex<BTreeSet<(u32, u32, bool)>>,
+    /// Segments a session is receiving, so two never take the same one: (itag, number, init).
+    receiving: Mutex<BTreeSet<(u32, u32, bool)>>,
 }
 
 impl Job {
@@ -329,7 +333,7 @@ pub(crate) async fn download(
         stop: pause.child_token(),
         stats: Mutex::new(Stats::default()),
         saving: tokio::sync::Mutex::new(()),
-        writing: Mutex::new(BTreeSet::new()),
+        receiving: Mutex::new(BTreeSet::new()),
     });
     // What an earlier attempt saved, as far as its files are still there.
     let tracks: Vec<TrackState> = job
@@ -651,12 +655,10 @@ async fn exchange(job: &Job, session: &mut Session, body: &[u8]) -> Result<u64> 
             pending.extend_from_slice(&chunk);
             received += chunk.len() as u64;
             let (parts, used) = ump_parts(&pending);
-            let before = in_flight;
             for (kind, payload) in parts {
                 saved += take_part(job, session, kind, payload, &mut incoming, &mut in_flight)?;
             }
             pending.drain(..used);
-            with_progress(&job.shared, |p| p.in_flight = (p.in_flight + in_flight).saturating_sub(before));
             let wait = engine.limiter.delay(chunk.len() as u64);
             if !wait.is_zero() {
                 tokio::select! {
@@ -668,7 +670,10 @@ async fn exchange(job: &Job, session: &mut Session, body: &[u8]) -> Result<u64> 
         Ok(())
     }
     .await;
-    with_progress(&job.shared, |p| p.in_flight = p.in_flight.saturating_sub(in_flight));
+    // Segments cut off by the end of the answer (or a pause) come again later.
+    for part in incoming.values() {
+        release(job, part, &mut in_flight);
+    }
     // The speed this response came at, smoothed, as the player would estimate it.
     let seconds = received_at.elapsed().as_secs_f64();
     if seconds > 0.2 && received > 0 {
@@ -705,32 +710,47 @@ fn take_part(job: &Job, session: &mut Session, kind: u64, payload: &[u8], incomi
                     "an ad was playing when the video was picked up; play the video past the ad and download it again".into(),
                 ));
             }
-            incoming.insert(
-                header.varint(1).unwrap_or(0) as u8,
-                Incoming {
-                    itag: header.varint(3).unwrap_or(0) as u32,
-                    segment: header.varint(9).unwrap_or(0) as u32,
-                    init: header.varint(8) == Some(1),
-                    start_ms: header.varint(11).unwrap_or(0),
-                    duration_ms: header.varint(12).unwrap_or(0),
-                    data: Vec::new(),
-                },
-            );
+            let mut part = Incoming {
+                itag: header.varint(3).unwrap_or(0) as u32,
+                segment: header.varint(9).unwrap_or(0) as u32,
+                init: header.varint(8) == Some(1),
+                start_ms: header.varint(11).unwrap_or(0),
+                duration_ms: header.varint(12).unwrap_or(0),
+                data: Vec::new(),
+                claimed: false,
+            };
+            part.claimed = claim(job, &part);
+            // A part replacing one of the same id that never ended gives up its claim.
+            if let Some(old) = incoming.insert(header.varint(1).unwrap_or(0) as u8, part) {
+                release(job, &old, in_flight);
+            }
         }
         MEDIA => {
             if let Some((&id, data)) = payload.split_first()
                 && let Some(part) = incoming.get_mut(&id)
+                && part.claimed
             {
                 part.data.extend_from_slice(data);
                 *in_flight += data.len() as u64;
+                with_progress(&job.shared, |p| p.in_flight += data.len() as u64);
             }
         }
         MEDIA_END => {
             if let Some(&id) = payload.first()
                 && let Some(part) = incoming.remove(&id)
+                && part.claimed
             {
-                *in_flight = in_flight.saturating_sub(part.data.len() as u64);
-                return save_part(job, part);
+                let bytes = part.data.len() as u64;
+                let saved = save_part(job, &part);
+                lock(&job.receiving).remove(&(part.itag, part.segment, part.init));
+                *in_flight = in_flight.saturating_sub(bytes);
+                // From on its way to done in one step, so the total never dips.
+                let done = *saved.as_ref().unwrap_or(&0);
+                with_progress(&job.shared, |p| {
+                    p.in_flight = p.in_flight.saturating_sub(bytes);
+                    p.done_bytes += done;
+                });
+                return saved;
             }
         }
         FORMAT_INITIALIZATION_METADATA => {
@@ -813,32 +833,43 @@ fn take_part(job: &Job, session: &mut Session, kind: u64, payload: &[u8], incomi
     Ok(0)
 }
 
-/// Saves a completed segment (or initialization segment) as its own file,
-/// unless another session already did.
-fn save_part(job: &Job, part: Incoming) -> Result<u64> {
-    let bytes = part.data.len() as u64;
-    {
-        let tracks = lock(&job.tracks);
-        let Some(track) = tracks.iter().find(|t| t.itag == part.itag) else {
-            return Ok(0);
-        };
-        if (part.init && track.init) || (!part.init && track.segments.contains_key(&part.segment)) || (!part.init && part.segment == 0) {
-            return Ok(0);
-        }
-        // Another session may be saving the same segment right now.
-        if !lock(&job.writing).insert((part.itag, part.segment, part.init)) {
-            return Ok(0);
-        }
+/// Claims a segment that's starting to arrive for this session, unless it's
+/// saved already or another session is receiving it.
+fn claim(job: &Job, part: &Incoming) -> bool {
+    let tracks = lock(&job.tracks);
+    let Some(track) = tracks.iter().find(|t| t.itag == part.itag) else {
+        return false;
+    };
+    let saved = if part.init {
+        track.init
+    } else {
+        part.segment == 0 || track.segments.contains_key(&part.segment)
+    };
+    !saved && lock(&job.receiving).insert((part.itag, part.segment, part.init))
+}
+
+/// Gives up the claim on a segment that won't be completed, and takes back
+/// its bytes from the progress.
+fn release(job: &Job, part: &Incoming, in_flight: &mut u64) {
+    if part.claimed {
+        let bytes = part.data.len() as u64;
+        *in_flight = in_flight.saturating_sub(bytes);
+        with_progress(&job.shared, |p| p.in_flight = p.in_flight.saturating_sub(bytes));
+        lock(&job.receiving).remove(&(part.itag, part.segment, part.init));
     }
+}
+
+/// Saves a completed segment (or initialization segment) this session
+/// claimed as its own file.
+fn save_part(job: &Job, part: &Incoming) -> Result<u64> {
+    let bytes = part.data.len() as u64;
     let path = if part.init {
         job.init_path(part.itag)
     } else {
         job.segment_path(part.itag, part.segment)
     };
-    let written = write_atomically(&path, &part.data);
+    write_atomically(&path, &part.data)?;
     let mut tracks = lock(&job.tracks);
-    lock(&job.writing).remove(&(part.itag, part.segment, part.init));
-    written?;
     if let Some(track) = tracks.iter_mut().find(|t| t.itag == part.itag) {
         if part.init {
             track.init = true;
@@ -854,8 +885,6 @@ fn save_part(job: &Job, part: Incoming) -> Result<u64> {
             );
         }
     }
-    drop(tracks);
-    with_progress(&job.shared, |p| p.done_bytes += bytes);
     Ok(bytes)
 }
 

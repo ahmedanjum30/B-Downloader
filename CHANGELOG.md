@@ -6,6 +6,13 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+## [1.0.4] - 2026-10-16
+
+### Fixed
+- A YouTube download's progress no longer goes back now and then (like
+  3%, 4%, 3%). Where two connections got the same part of the video, both
+  counted it, and the copy that was dropped was taken off again.
+
 ## [1.0.3] - 2026-10-15
 
 ### Added
@@ -296,7 +303,8 @@ First release.
   from 167 MB to 24 MB (working set) and the exe from 11.6 MB to 6.8 MB, with
   no change in download speed (28 MB/s over 8 connections, about 1% CPU).
 
-[Unreleased]: https://github.com/ahmedanjum30/BDownloader/compare/v1.0.3...HEAD
+[Unreleased]: https://github.com/ahmedanjum30/BDownloader/compare/v1.0.4...HEAD
+[1.0.4]: https://github.com/ahmedanjum30/BDownloader/compare/v1.0.3...v1.0.4
 [1.0.3]: https://github.com/ahmedanjum30/BDownloader/compare/v1.0.2...v1.0.3
 [1.0.2]: https://github.com/ahmedanjum30/BDownloader/compare/v1.0.1...v1.0.2
 [1.0.1]: https://github.com/ahmedanjum30/BDownloader/compare/v1.0.0...v1.0.1

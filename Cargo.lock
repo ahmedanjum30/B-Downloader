@@ -82,7 +82,7 @@ checksum = "ac07cdecf99051d9a5238b80f35af32cdeba5b336e55d957b318b50137e18da5"
 
 [[package]]
 name = "bdownloader"
-version = "1.0.3"
+version = "1.0.4"
 dependencies = [
  "bdownloader-core",
  "bdownloader-ipc",
@@ -101,7 +101,7 @@ dependencies = [
 
 [[package]]
 name = "bdownloader-cli"
-version = "1.0.3"
+version = "1.0.4"
 dependencies = [
  "bdownloader-core",
  "tokio",
@@ -109,7 +109,7 @@ dependencies = [
 
 [[package]]
 name = "bdownloader-core"
-version = "1.0.3"
+version = "1.0.4"
 dependencies = [
  "aes",
  "log",
@@ -128,7 +128,7 @@ dependencies = [
 
 [[package]]
 name = "bdownloader-host"
-version = "1.0.3"
+version = "1.0.4"
 dependencies = [
  "bdownloader-ipc",
  "serde_json",
@@ -136,7 +136,7 @@ dependencies = [
 
 [[package]]
 name = "bdownloader-ipc"
-version = "1.0.3"
+version = "1.0.4"
 dependencies = [
  "serde",
  "serde_json",
