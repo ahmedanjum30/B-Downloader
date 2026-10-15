@@ -101,48 +101,46 @@ pub fn add(dialog: &AddDialog, existing: Option<(u64, u64)>) -> Element<'_, Mess
 
     let mut body = column![field("Link", url)].spacing(18);
 
-    let probe: Option<Element<'_, Message>> = match &dialog.probe {
-        Probe::Idle => None,
-        Probe::Checking => Some(muted("Checking link…").size(13).into()),
-        Probe::Failed(error) => Some(colored(error.as_str(), |c| c.danger).size(13).into()),
-        Probe::Ready(info) => {
-            let name = if dialog.file_name.is_empty() {
-                "download"
-            } else {
-                dialog.file_name.as_str()
-            };
-            let extension = name
-                .rsplit_once('.')
-                .filter(|(stem, ext)| !stem.is_empty() && (1..=5).contains(&ext.len()))
-                .map_or("FILE".to_owned(), |(_, ext)| ext.to_ascii_uppercase());
-            let (extension, size) = if info.is_stream() {
-                ("VIDEO".to_owned(), "Video stream".to_owned())
-            } else {
-                (extension, info.size.map_or("Unknown size".to_owned(), format::size))
-            };
-            let (support, pick): (&str, style::Pick) = if info.is_stream() {
-                ("Downloads in parts · can resume", |c| c.success)
-            } else if info.is_web_page() {
-                ("This link opens a web page, not a file", |c| c.warning)
-            } else if info.resumable {
-                ("Multiple connections · can resume", |c| c.success)
-            } else {
-                ("Single connection · can't resume", |c| c.warning)
-            };
-            Some(
-                container(
-                    row![
-                        file_badge(extension),
-                        column![text(size).size(15).font(SEMIBOLD), colored(support, pick).size(13)].spacing(3)
-                    ]
-                    .spacing(14)
-                    .align_y(Center),
-                )
-                .padding(12)
-                .width(Fill)
-                .style(style::panel)
-                .into(),
-            )
+    let probe: Option<Element<'_, Message>> = if let Some(source) = &dialog.youtube {
+        let total: Option<u64> = source.video.iter().chain(&source.audio).map(|f| f.content_length).sum();
+        let size = total.map_or("YouTube video".to_owned(), |t| format!("YouTube video · {}", format::size(t)));
+        let (badge, support) = if source.video.is_some() {
+            ("MP4", "Picture and sound joined into one file · can resume")
+        } else {
+            ("M4A", "Sound only · can resume")
+        };
+        Some(summary(badge.to_owned(), size, support, |c| c.success))
+    } else {
+        match &dialog.probe {
+            Probe::Idle => None,
+            Probe::Checking => Some(muted("Checking link…").size(13).into()),
+            Probe::Failed(error) => Some(colored(error.as_str(), |c| c.danger).size(13).into()),
+            Probe::Ready(info) => {
+                let name = if dialog.file_name.is_empty() {
+                    "download"
+                } else {
+                    dialog.file_name.as_str()
+                };
+                let extension = name
+                    .rsplit_once('.')
+                    .filter(|(stem, ext)| !stem.is_empty() && (1..=5).contains(&ext.len()))
+                    .map_or("FILE".to_owned(), |(_, ext)| ext.to_ascii_uppercase());
+                let (extension, size) = if info.is_stream() {
+                    ("VIDEO".to_owned(), "Video stream".to_owned())
+                } else {
+                    (extension, info.size.map_or("Unknown size".to_owned(), format::size))
+                };
+                let (support, pick): (&str, style::Pick) = if info.is_stream() {
+                    ("Downloads in parts · can resume", |c| c.success)
+                } else if info.is_web_page() {
+                    ("This link opens a web page, not a file", |c| c.warning)
+                } else if info.resumable {
+                    ("Multiple connections · can resume", |c| c.success)
+                } else {
+                    ("Single connection · can't resume", |c| c.warning)
+                };
+                Some(summary(extension, size, support, pick))
+            }
         }
     };
     if let Some(probe) = probe {
@@ -525,4 +523,20 @@ pub fn remove(item: &Item, delete_file: bool) -> Element<'_, Message> {
     .spacing(10);
 
     frame("Remove download", body.into(), footer.into())
+}
+
+/// What's about to be downloaded: a file-type badge, the size and how it downloads.
+fn summary<'a>(badge: String, size: String, support: &'a str, pick: style::Pick) -> Element<'a, Message> {
+    container(
+        row![
+            file_badge(badge),
+            column![text(size).size(15).font(SEMIBOLD), colored(support, pick).size(13)].spacing(3)
+        ]
+        .spacing(14)
+        .align_y(Center),
+    )
+    .padding(12)
+    .width(Fill)
+    .style(style::panel)
+    .into()
 }

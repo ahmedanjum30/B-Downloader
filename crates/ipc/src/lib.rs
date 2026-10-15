@@ -51,6 +51,34 @@ pub struct AddRequest {
     /// the browser leave this out, so the app asks where to save them first.
     #[serde(default)]
     pub start: bool,
+    /// A YouTube video, captured from its player by the extension.
+    #[serde(default)]
+    pub youtube: Option<Box<YoutubeRequest>>,
+}
+
+/// What the extension captured from YouTube's player: its streaming address
+/// and one of its requests, with the formats chosen.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct YoutubeRequest {
+    pub video_id: String,
+    pub url: String,
+    /// The player's request, base64.
+    pub request: String,
+    #[serde(default)]
+    pub video: Option<YoutubeFormatInfo>,
+    #[serde(default)]
+    pub audio: Option<YoutubeFormatInfo>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct YoutubeFormatInfo {
+    pub itag: u32,
+    pub last_modified: String,
+    #[serde(default)]
+    pub xtags: Option<String>,
+    pub mime_type: String,
+    #[serde(default)]
+    pub content_length: Option<u64>,
 }
 
 impl AddRequest {
@@ -62,6 +90,7 @@ impl AddRequest {
             cookies: None,
             user_agent: None,
             origin: None,
+            youtube: None,
             start: false,
         }
     }

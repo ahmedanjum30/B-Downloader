@@ -43,7 +43,7 @@ async function load(tabId) {
 
 async function save(tabId, state) {
   await chrome.storage.session.set({ [`tab:${tabId}`]: state });
-  const count = state.videos.filter((v) => !state.hidden.includes(v.url)).length;
+  const count = state.videos.filter((v) => !state.hidden.includes(v.url)).length + (state.youtube ? 1 : 0);
   chrome.action.setBadgeText({ tabId, text: count ? String(count) : "" }).catch(() => {});
   chrome.action.setBadgeBackgroundColor({ tabId, color: "#6c63ff" }).catch(() => {});
   // The bars on the page's videos appear once there's something to download.
@@ -414,6 +414,7 @@ chrome.webNavigation.onCommitted.addListener((details) => {
     state.hidden = [];
     state.chunks = false;
     state.inline = false;
+    delete state.youtube;
   });
 });
 
@@ -430,7 +431,10 @@ async function videosFor(tabId) {
   const shown = state.videos.filter((v) => !state.hidden.includes(v.url));
   const streams = shown.filter((v) => v.kind === "stream").reverse();
   const files = shown.filter((v) => v.kind !== "stream").sort((a, b) => (b.size || 0) - (a.size || 0));
-  return [...streams, ...files];
+  // A YouTube video, once its player's request was captured; its formats are
+  // chosen on the video itself.
+  const youtube = state.youtube ? [{ kind: "youtube", url: "youtube", found: state.youtube.at }] : [];
+  return [...youtube, ...streams, ...files];
 }
 
 // The page's title, cleaned up to serve as a file name.

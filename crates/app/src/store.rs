@@ -114,6 +114,10 @@ pub struct SavedDownload {
     /// It was running when the app restarted for an update; continue it.
     #[serde(default)]
     pub resume: bool,
+    /// A YouTube video: what the extension captured from its player, so a
+    /// paused download can continue after a restart.
+    #[serde(default)]
+    pub youtube: Option<bdownloader_core::YoutubeSource>,
 }
 
 /// `BDOWNLOADER_DATA` overrides the folder, so development builds can use a

@@ -9,18 +9,22 @@
 
 Free for personal and other non-commercial use. See [License](#license).
 
-> **Status:** early development. Nothing is released yet.
+**[Download the latest version](https://github.com/ahmedanjum30/BDownloader/releases/latest)** for Windows 10 and 11.
 
-## Planned features
+## Features
 
-- **Multi-connection downloads.** Each file is split into segments that download in parallel. When a segment finishes, it takes over part of the slowest remaining one.
-- **Pause and resume**, including after closing the app or a crash.
-- **Download queue** with a limit on how many downloads run at once, and a scheduler.
-- **Speed limits**, for all downloads or for one.
-- **Optional integrity check.** Tick the box to verify the file's MD5 or SHA-256 checksum when it finishes.
-- **Browser extension** for Chrome, Edge and Brave: downloads you start in the browser go to BDownloader automatically, and links get a "Download with BDownloader" right-click entry. Downloads that need a login work, because the browser's cookies come along (they're never saved to disk).
-- **Native and lightweight.** Written in Rust with the [iced](https://iced.rs) GUI toolkit. No bundled browser engine.
+- **Multi-connection downloads.** Each file is split into parts that download in parallel, starting with one connection and adding more while the server keeps up. When a part finishes, its connection takes over half of the biggest remaining one, so no connection sits idle.
+- **Pause and resume**, including after closing the app, a crash or a restart. Expired links can be refreshed and the download continues where it stopped.
+- **Browser extension** for Chrome and Edge: downloads you start in the browser go to BDownloader, and links get a "Download with BDownloader" right-click entry. Downloads that need a login work, because the browser's cookies come along (they're never saved to disk).
+- **Video downloads.** A "Download this video" bar appears on videos in web pages, like IDM's: video files and HLS streams (`.m3u8`), including encrypted (AES-128) ones, downloaded over several connections.
+- **YouTube**, on youtube.com and in YouTube players embedded in other sites: pick any quality up to 4K, or sound only. Picture and sound are joined into one MP4. No extra programs needed.
+- **Speed limit** for all downloads together, from the top bar; it applies at once.
+- **Optional integrity check.** Verify a finished file's MD5 or SHA-256 checksum.
+- **Stays out of the way.** Runs in the tray, uses little memory while idle, and updates itself.
+- **Native and lightweight.** Written in Rust with the [iced](https://iced.rs) GUI toolkit; the installer is under 5 MB. No bundled browser engine.
 - **Modern interface** with dark and light themes, live speed and time left, and a progress bar that shows what each connection is downloading.
+
+**Coming later:** a download queue with a scheduler, and per-download speed limits.
 
 ## Installing
 

@@ -84,6 +84,7 @@ pub(crate) async fn download(
         done_parts: parts - pending.len() as u64,
         done_bytes,
         in_flight: 0,
+        known_total: None,
     });
     let connections = options.connections.clamp(1, MAX_STREAM_CONNECTIONS).min(pending.len().max(1));
     {

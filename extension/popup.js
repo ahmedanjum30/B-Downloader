@@ -24,6 +24,7 @@ function duration(seconds) {
 }
 
 function describe(video) {
+  if (video.kind === "youtube") return "YouTube video · best quality (choose others on the video)";
   if (video.kind === "stream") {
     const kind = video.format ? `${video.format} file` : "Video stream";
     return [kind, video.quality, duration(video.duration)].filter(Boolean).join(" · ");

@@ -17,6 +17,9 @@ mod hls;
 mod http;
 mod limit;
 mod m3u8;
+mod mp4mux;
+mod proto;
+mod sabr;
 mod segment;
 mod state;
 
@@ -26,3 +29,4 @@ pub use download::{
 };
 pub use error::{Error, Result};
 pub use http::ProbeInfo;
+pub use sabr::{YoutubeFormat, YoutubeSource};

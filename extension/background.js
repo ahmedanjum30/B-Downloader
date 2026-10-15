@@ -5,7 +5,7 @@
 // BDownloader, and is offered to the app. If the app can't be reached, the
 // browser downloads it again itself, so nothing is lost.
 
-importScripts("videos.js");
+importScripts("videos.js", "yt-capture.js");
 
 const HOST = "com.bdownloader.host";
 const MENU_ID = "bdownloader";
@@ -155,6 +155,29 @@ chrome.runtime.onMessage.addListener((message, sender, reply) => {
       const video = (await videosFor(tabId)).find((v) => v.url === (message.video && message.video.url));
       if (!video) return reply(false);
       reply(await handOver(video.url, video.referer || sender.tab.url, await videoName(tabId, video), video.origin));
+    })().catch(() => reply(false));
+    return true;
+  }
+  // YouTube: whether the player's playback was captured, the qualities to
+  // offer for the video the page describes, and a choice made.
+  if (message.type === "youtube-ready" && tabId !== undefined) {
+    youtubeReady(tabId, message.cpn).then(reply, () => reply(false));
+    return true;
+  }
+  if (message.type === "youtube-choices") {
+    reply(message.info && message.info.formats ? youtubeChoices(message.info) : []);
+    return false;
+  }
+  if (message.type === "download-youtube" && tabId !== undefined) {
+    sendYoutube(tabId, message.info, message.choice).then(reply, () => reply(false));
+    return true;
+  }
+  if (message.type === "download" && message.video && message.video.kind === "youtube") {
+    // From the popup: the best quality.
+    (async () => {
+      const info = await youtubeInfo(message.tabId);
+      const choice = info && info.formats ? youtubeChoices(info)[0] : null;
+      reply(choice ? await sendYoutube(message.tabId, info, choice) : false);
     })().catch(() => reply(false));
     return true;
   }

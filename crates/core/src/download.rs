@@ -16,6 +16,7 @@ use crate::fsutil::{make_sparse, sanitize_file_name, sidecar, unique_path, write
 use crate::hls;
 use crate::http::{self, ProbeInfo, header_str, parse_content_range};
 use crate::limit::Limiter;
+use crate::sabr::{self, YoutubeSource};
 use crate::segment::Segments;
 use crate::state::ResumeState;
 
@@ -27,6 +28,9 @@ pub const MAX_CONNECTIONS: usize = 64;
 const WRITE_BUFFER: usize = 1024 * 1024;
 /// Attempts per segment in a row without progress before the download fails.
 pub(crate) const MAX_RETRIES: u32 = 5;
+/// Retries of a connection the server turned away as one too many (429 or
+/// 503) before it gives up and leaves its part to the others.
+const OVERLOAD_RETRIES: u32 = 3;
 const SAVE_INTERVAL: Duration = Duration::from_secs(2);
 /// A download starts with one connection and doubles them (1, 2, 4, 8, ...)
 /// at this interval, up to the number asked for, while the server accepts
@@ -154,6 +158,9 @@ pub struct DownloadOptions {
     /// download under the same name continues if the file is the same size,
     /// even though the link is different.
     pub new_link: bool,
+    /// A YouTube video captured by the browser extension: downloaded over
+    /// YouTube's own streaming protocol instead of from `url`.
+    pub youtube: Option<YoutubeSource>,
 }
 
 impl DownloadOptions {
@@ -166,6 +173,7 @@ impl DownloadOptions {
             checksum: None,
             headers: Vec::new(),
             new_link: false,
+            youtube: None,
         }
     }
 }
@@ -278,12 +286,17 @@ pub(crate) struct StreamProgress {
     pub done_bytes: u64,
     /// Bytes of parts still downloading.
     pub in_flight: u64,
+    /// The total size, when the server said it up front (YouTube does).
+    pub known_total: Option<u64>,
 }
 
 impl StreamProgress {
     /// The parts' sizes are only known once downloaded, so the total is
     /// estimated from the average part so far.
     fn estimated_total(&self) -> Option<u64> {
+        if self.known_total.is_some() {
+            return self.known_total;
+        }
         match self.done_parts {
             0 => None,
             n if n == self.parts => Some(self.done_bytes),
@@ -359,6 +372,9 @@ async fn run(engine: Engine, options: DownloadOptions, shared: Arc<Shared>, paus
 }
 
 async fn download(engine: &Engine, options: &DownloadOptions, shared: &Arc<Shared>, pause: &CancellationToken) -> Result<Outcome> {
+    if let Some(source) = &options.youtube {
+        return sabr::download(engine, options, shared, pause, source).await;
+    }
     let url = parse_url(&options.url)?;
     let headers = http::header_map(&options.headers);
     let info = engine.stalled(http::probe(&engine.client, &url, &headers)).await?;
@@ -668,13 +684,16 @@ impl Worker {
             attempt += 1;
             log::warn!("{url}: bytes {written}-{end}: {err} (attempt {attempt})");
             self.shared.report_problem(err.to_string());
-            if err.is_overloaded() {
+            // A server that limits connections answers extra ones with 429 or
+            // 503. It may only be busy for a moment, so the connection tries
+            // again a few times; then it drops out, lets the others finish
+            // its segment, and no more connections are added. Only the last
+            // connection keeps retrying.
+            let refused = err.is_overloaded() && attempt > OVERLOAD_RETRIES;
+            if refused {
                 self.shared.refused.store(true, Ordering::Relaxed);
             }
-            // A server that limits connections answers extra ones with 429 or
-            // 503. Drop this connection and let the others finish its segment.
-            // Only the last connection keeps retrying.
-            if (err.is_overloaded() || attempt > MAX_RETRIES) && lock(&self.shared.segments).leave(i) {
+            if (refused || attempt > MAX_RETRIES) && lock(&self.shared.segments).leave(i) {
                 log::info!("{url}: a connection gave its part to the others");
                 return Ok(Ended::Left);
             }

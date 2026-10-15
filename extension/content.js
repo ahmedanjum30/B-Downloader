@@ -65,6 +65,7 @@
         .menu button { display: block; width: 100%; box-sizing: border-box; padding: 6px 16px; font-weight: 400; font-size: 12.5px;
                        line-height: 18px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
         .menu .all { font-weight: 600; }
+        .menu .heading { padding: 6px 16px 4px; font-size: 12.5px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 420px; }
         .menu hr { border: 0; border-top: 1px solid rgba(255,255,255,.15); margin: 4px 0; }
         .ok { background: #1f9d55 !important; }
         .bad { background: #c0392b !important; }
@@ -281,7 +282,12 @@
       return;
     }
     if (!connected()) return flash(false, "Reload this page");
-    const { videos = [], title = "" } = (await ask({ type: "videos-here" }).catch(() => null)) || {};
+    const answer = (await ask({ type: "videos-here" }).catch(() => null)) || {};
+    const title = answer.title || "";
+    // A YouTube video is offered by the player's own frame, which knows its formats.
+    let videos = answer.videos || [];
+    if (onYoutube && videos.some((v) => v.kind === "youtube")) return youtubeMenu();
+    videos = videos.filter((v) => v.kind !== "youtube");
     if (videos.length === 0) return;
     if (videos.length === 1) return send(videos);
     // A video playing a plain file the extension found: that's the one wanted.
@@ -296,11 +302,84 @@
     menu.style.display = "block";
   }
 
-  chrome.runtime.onMessage.addListener((message) => {
+  // --- YouTube ---------------------------------------------------------------
+
+  const onYoutube = /(^|\.)youtube(-nocookie)?\.com$/.test(location.hostname);
+
+  // YouTube's player streams from a worker the extension can't tie to this
+  // tab, so this frame asks whether its player's playback has been picked up.
+  if (onYoutube) {
+    const check = async () => {
+      if (!connected()) return;
+      const info = await youtubeInfo();
+      if (info && info.cpn) await ask({ type: "youtube-ready", cpn: info.cpn }).catch(() => {});
+    };
+    setInterval(check, 3000);
+    setTimeout(check, 500);
+  }
+
+  // The video's title, length and formats, from yt-page.js in this page.
+  let nextAsk = 0;
+  function youtubeInfo() {
+    const id = ++nextAsk;
+    return new Promise((resolve) => {
+      const timer = setTimeout(() => {
+        window.removeEventListener("message", listen);
+        resolve(null);
+      }, 1500);
+      function listen(event) {
+        if (event.source !== window || !event.data || event.data.bdownloader !== "yt-info" || event.data.id !== id) return;
+        clearTimeout(timer);
+        window.removeEventListener("message", listen);
+        resolve(event.data.info);
+      }
+      window.addEventListener("message", listen);
+      window.postMessage({ bdownloader: "yt-ask", id }, "*");
+    });
+  }
+
+  // "1080p60 MP4, 10 min 35 sec, 254 MB", one line per quality, like IDM.
+  async function youtubeMenu() {
+    const info = await youtubeInfo();
+    if (!info) return flash(false, "Play the video first");
+    if (info.live) return flash(false, "Live streams can't be downloaded");
+    const choices = (await ask({ type: "youtube-choices", info }).catch(() => [])) || [];
+    if (choices.length === 0) return flash(false, "No downloadable format");
+    const label = (choice) => {
+      const size = [choice.video, choice.audio].reduce((sum, f) => sum + ((f && f.contentLength) || 0), 0);
+      const kind = choice.video ? `${choice.video.qualityLabel || choice.height + "p"} MP4` : "Sound only (M4A)";
+      return [kind, length(info.lengthSeconds), size ? `${(size / 1048576).toFixed(0)} MB` : null].filter(Boolean).join("  ·  ");
+    };
+    // The title once on top, then one short line per quality, so long titles
+    // don't push what tells the qualities apart out of sight.
+    const heading = document.createElement("div");
+    heading.className = "heading";
+    heading.textContent = info.title;
+    menu.replaceChildren(
+      heading,
+      document.createElement("hr"),
+      ...choices.map((choice) =>
+        menuItem(label(choice), async () => {
+          menu.style.display = "none";
+          const ok = await ask({ type: "download-youtube", info, choice }).catch(() => false);
+          flash(Boolean(ok), ok ? null : "Play the video for a few seconds, then try again");
+        }),
+      ),
+    );
+    menu.style.display = "block";
+  }
+
+  chrome.runtime.onMessage.addListener((message, sender, reply) => {
     if (message.type === "videos-count") {
       count = message.count;
       place();
     }
+    // The popup downloads a YouTube video from here, where its formats are known.
+    if (message.type === "youtube-info" && onYoutube) {
+      youtubeInfo().then(reply);
+      return true;
+    }
+    return false;
   });
 
   ask({ type: "videos-count" })

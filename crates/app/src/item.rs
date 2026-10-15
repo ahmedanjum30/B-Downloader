@@ -4,7 +4,8 @@
 use std::path::PathBuf;
 use std::time::{Duration, Instant};
 
-use bdownloader_core::{DownloadHandle, DownloadOptions, Engine, SegmentProgress, Status};
+use bdownloader_core::{DownloadHandle, DownloadOptions, Engine, SegmentProgress, Status, YoutubeFormat, YoutubeSource};
+use bdownloader_ipc::{YoutubeFormatInfo, YoutubeRequest};
 
 use crate::store::{HashKind, SavedDownload, SavedState};
 
@@ -53,6 +54,9 @@ pub struct Item {
     pub new_link: bool,
     /// Waiting for the browser to send a fresh link for this download.
     pub awaiting_link: bool,
+    /// A YouTube video captured from its player: downloaded over YouTube's
+    /// own streaming protocol.
+    pub youtube: Option<YoutubeSource>,
 }
 
 impl Item {
@@ -77,6 +81,7 @@ impl Item {
             receiving: 0,
             new_link: false,
             awaiting_link: false,
+            youtube: None,
         }
     }
 
@@ -92,6 +97,7 @@ impl Item {
             state,
             headers: saved.headers,
             resume: saved.resume,
+            youtube: saved.youtube,
             ..Self::new(saved.id, saved.url, saved.dir, saved.file_name, saved.connections, saved.checksum)
         }
     }
@@ -122,6 +128,7 @@ impl Item {
                 .cloned()
                 .collect(),
             resume: self.resume,
+            youtube: self.youtube.clone(),
         }
     }
 
@@ -137,6 +144,7 @@ impl Item {
             checksum: self.checksum.clone().map(|(kind, hex)| kind.checksum(hex)),
             headers: self.headers.clone(),
             new_link: std::mem::take(&mut self.new_link),
+            youtube: self.youtube.clone(),
         };
         self.awaiting_link = false;
         self.handle = Some(engine.start(options));
@@ -251,5 +259,23 @@ impl Speed {
         };
         let secs = t1.duration_since(t0).as_secs_f64();
         if secs < 0.5 { 0.0 } else { b1.saturating_sub(b0) as f64 / secs }
+    }
+}
+
+/// The engine's form of a YouTube video the extension sent.
+pub fn youtube_source(request: YoutubeRequest) -> YoutubeSource {
+    let format = |f: YoutubeFormatInfo| YoutubeFormat {
+        itag: f.itag,
+        last_modified: f.last_modified,
+        xtags: f.xtags,
+        mime_type: f.mime_type,
+        content_length: f.content_length,
+    };
+    YoutubeSource {
+        video_id: request.video_id,
+        url: request.url,
+        request: request.request,
+        video: request.video.map(format),
+        audio: request.audio.map(format),
     }
 }

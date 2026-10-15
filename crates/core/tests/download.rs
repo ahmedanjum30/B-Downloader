@@ -35,6 +35,9 @@ struct Server {
     /// Answer every range request with this status, like servers that
     /// refuse them although a plain request works.
     refuse_ranges: Option<u16>,
+    /// Answer range requests with 429 until then, like a server that is
+    /// busy for a moment.
+    busy_until: Option<std::time::Instant>,
     streaming: AtomicUsize,
     open: AtomicUsize,
 }
@@ -61,6 +64,7 @@ impl Server {
             stall_after: None,
             stream_limit: None,
             refuse_ranges: None,
+            busy_until: None,
             streaming: AtomicUsize::new(0),
             open: AtomicUsize::new(0),
         }
@@ -110,6 +114,18 @@ impl Server {
             Some((a.parse::<usize>().ok()?, b.parse::<usize>().ok()?))
         });
 
+        if self.busy_until.is_some_and(|t| std::time::Instant::now() < t) && range.is_some_and(|(a, b)| b > a) {
+            let _ = socket
+                .write_all(
+                    b"HTTP/1.1 429 Too Many Requests
+Content-Length: 0
+Connection: close
+
+",
+                )
+                .await;
+            return;
+        }
         if let (Some(status), Some(_)) = (self.refuse_ranges, range) {
             let _ = socket
                 .write_all(
@@ -616,4 +632,32 @@ async fn servers_that_refuse_ranges_download_over_one_connection() {
         panic!("not completed")
     };
     assert!(std::fs::read(path).unwrap() == data);
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn a_server_busy_for_a_moment_still_gets_more_connections() {
+    // Every range request is refused for the first second; retries outlast it.
+    let data = test_data(16 * MB);
+    let addr = Server {
+        busy_until: Some(std::time::Instant::now() + Duration::from_millis(1200)),
+        delay: Some(Duration::from_millis(2)),
+        ..Server::new(data.clone())
+    }
+    .start()
+    .await;
+    let dir = tempfile::tempdir().unwrap();
+    let mut options = DownloadOptions::new(format!("http://{addr}/busy.bin"), dir.path());
+    options.connections = 8;
+
+    let handle = Engine::new().unwrap().start(options);
+    let mut most = 0;
+    while !handle.is_finished() {
+        most = most.max(handle.progress().active_connections);
+        tokio::time::sleep(Duration::from_millis(20)).await;
+    }
+    let Outcome::Completed(path) = handle.wait().await.unwrap() else {
+        panic!("not completed")
+    };
+    assert!(std::fs::read(path).unwrap() == data);
+    assert!(most >= 4, "stayed at {most} connection(s) after the server was busy for a moment");
 }

@@ -6,7 +6,17 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+## [1.0.0] - 2026-10-15
+
 ### Added
+- Download YouTube videos, on youtube.com and from YouTube players embedded
+  in other sites. Play the video for a few seconds and a "Download this
+  video" bar appears on it, listing every quality (up to 4K) with its size,
+  plus sound only. Picture and sound are joined into one regular MP4 that
+  any player can open, named with its quality, e.g. "Title (1080p60).mp4".
+  YouTube's own player does the parts only a browser can (proving it's a
+  real browser), so no other programs are needed. Live streams aren't
+  supported.
 - Download videos from web pages. The browser extension finds the videos a
   page plays: video files (MP4, WebM, ...) and HLS streams (`.m3u8`).
   - A "Download this video" bar appears on the video, like IDM. It follows
@@ -25,8 +35,16 @@ All notable changes to this project are documented here. The format follows
 - Downloads from servers that refuse requests for part of a file (some
   answer them with 403 or 404) no longer fail; they download over one
   connection.
+- The tray icon's tooltip no longer keeps showing "1 downloading" and a
+  speed after the last download finished.
+- Removing an unfinished video stream or YouTube download also deletes its
+  folder of parts.
 
 ### Changed
+- When a server turns away an extra connection ("too many requests", 429 or
+  503), that connection now tries again three times before leaving its
+  part to the others. A server that's only busy for a moment no longer
+  keeps the download at fewer connections.
 - The extension sends the Referer and Origin the page's player used, since
   many video servers only answer their own player.
 
@@ -226,7 +244,8 @@ First release.
   from 167 MB to 24 MB (working set) and the exe from 11.6 MB to 6.8 MB, with
   no change in download speed (28 MB/s over 8 connections, about 1% CPU).
 
-[Unreleased]: https://github.com/ahmedanjum30/BDownloader/compare/v0.1.10...HEAD
+[Unreleased]: https://github.com/ahmedanjum30/BDownloader/compare/v1.0.0...HEAD
+[1.0.0]: https://github.com/ahmedanjum30/BDownloader/compare/v0.1.10...v1.0.0
 [0.1.10]: https://github.com/ahmedanjum30/BDownloader/compare/v0.1.9...v0.1.10
 [0.1.9]: https://github.com/ahmedanjum30/BDownloader/compare/v0.1.8...v0.1.9
 [0.1.8]: https://github.com/ahmedanjum30/BDownloader/compare/v0.1.7...v0.1.8
