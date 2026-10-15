@@ -99,7 +99,7 @@ impl Browser {
 /// the first upload; empty until then. Also set in `installer/bdownloader.iss`,
 /// which has the browsers offer the extension at their next start.
 pub const CHROME_STORE_ID: &str = "";
-pub const EDGE_STORE_ID: &str = "";
+pub const EDGE_STORE_ID: &str = "kfbjnlpmchkeaphhdeidpdpcomoohdfa";
 
 /// The extension IDs the bridge accepts; it refuses every other extension.
 pub const EXTENSION_IDS: &[&str] = &[

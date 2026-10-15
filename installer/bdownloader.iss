@@ -16,7 +16,7 @@
 ; the browser offers to add the extension the next time it starts (like IDM).
 ; Browsers only allow this for extensions published on their store.
 #define ChromeStoreId ""
-#define EdgeStoreId ""
+#define EdgeStoreId "kfbjnlpmchkeaphhdeidpdpcomoohdfa"
 
 [Setup]
 ; Never change AppId: Windows uses it to find the existing installation on updates.
