@@ -1,9 +1,10 @@
 //! End-to-end tests of YouTube downloads (SABR) against a small local server
 //! that answers like YouTube's streaming servers.
 
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::net::SocketAddr;
 use std::sync::Arc;
+use std::sync::Mutex;
 use std::sync::atomic::{AtomicU32, Ordering};
 use std::time::Duration;
 
@@ -201,9 +202,18 @@ struct Youtube {
     /// Pause before each answer, to make downloads slow enough to pause.
     delay: Option<Duration>,
     requests: AtomicU32,
+    /// Requests that started a session (the first of each connection).
+    sessions: AtomicU32,
+    /// How often each segment (itag, number) was sent.
+    sent: Mutex<HashMap<(u32, u64), u32>>,
 }
 
 impl Youtube {
+    /// Segments sent more than once.
+    fn resent(&self) -> u32 {
+        self.sent.lock().unwrap().values().map(|n| n - 1).sum()
+    }
+
     async fn start(self) -> (SocketAddr, Arc<Self>) {
         let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
         let addr = listener.local_addr().unwrap();
@@ -242,6 +252,9 @@ impl Youtube {
                 Ok(n) => data.extend_from_slice(&buf[..n]),
             }
         }
+        if head.contains("rn=1 ") {
+            self.sessions.fetch_add(1, Ordering::SeqCst);
+        }
         let answer = self.answer(&data[body_start..body_start + length]);
         if let Some(delay) = self.delay {
             tokio::time::sleep(delay).await;
@@ -267,8 +280,8 @@ impl Youtube {
         field_varint(&mut status, 1, 1);
         ump(&mut out, 58, &status);
 
-        // What the client says it has, and which formats it wants.
-        let mut have: HashMap<u64, u64> = HashMap::new();
+        // What the client says it has, where it is, and which formats it wants.
+        let mut have: HashSet<(u64, u64)> = HashSet::new();
         for (n, _, bytes) in &request {
             if *n == 3 {
                 let range = decode(bytes);
@@ -277,9 +290,13 @@ impl Youtube {
                     .find(|f| f.0 == 1)
                     .map(|f| decode(&f.2).iter().find(|g| g.0 == 1).unwrap().1)
                     .unwrap();
-                have.insert(itag, range.iter().find(|f| f.0 == 5).unwrap().1);
+                let first = range.iter().find(|f| f.0 == 4).unwrap().1;
+                let last = range.iter().find(|f| f.0 == 5).unwrap().1;
+                have.extend((first..=last).map(|seg| (itag, seg)));
             }
         }
+        let abr = &request.iter().find(|f| f.0 == 1).unwrap().2;
+        let position = decode(abr).iter().find(|f| f.0 == 28).map_or(0, |f| f.1);
         let initialized: Vec<u64> = request.iter().filter(|f| f.0 == 2).map(|f| decode(&f.2)[0].1).collect();
         let wanted: Vec<u64> = request.iter().filter(|f| f.0 == 16 || f.0 == 17).map(|f| decode(&f.2)[0].1).collect();
 
@@ -316,9 +333,14 @@ impl Youtube {
             if !initialized.contains(&u64::from(track.itag)) {
                 send(0, true, 0, &track.init);
             }
-            // The next three segments after what the client has.
-            let from = have.get(&u64::from(track.itag)).copied().unwrap_or(0);
-            for seg in from + 1..=(from + 3).min(track.segments.len() as u64) {
+            // The next three segments from the position that the client doesn't have.
+            let itag = u64::from(track.itag);
+            let next: Vec<u64> = (position / track.segment_ms + 1..=track.segments.len() as u64)
+                .filter(|seg| !have.contains(&(itag, *seg)))
+                .take(3)
+                .collect();
+            for seg in next {
+                *self.sent.lock().unwrap().entry((track.itag, seg)).or_default() += 1;
                 send(seg, false, (seg - 1) * track.segment_ms, &track.segments[seg as usize - 1]);
             }
         }
@@ -330,7 +352,7 @@ impl Youtube {
 }
 
 /// What the extension would capture: the player's request and its address.
-fn source(addr: SocketAddr, video: Option<YoutubeFormat>, audio: Option<YoutubeFormat>) -> YoutubeSource {
+fn source(addr: SocketAddr, video: Option<YoutubeFormat>, audio: Option<YoutubeFormat>, duration_ms: u64) -> YoutubeSource {
     let mut abr = Vec::new();
     field_varint(&mut abr, 28, 0);
     let mut context = Vec::new();
@@ -346,6 +368,7 @@ fn source(addr: SocketAddr, video: Option<YoutubeFormat>, audio: Option<YoutubeF
         request: base64(&request),
         video,
         audio,
+        duration_ms: Some(duration_ms),
     }
 }
 
@@ -363,6 +386,8 @@ fn server(tracks: Vec<TrackData>) -> Youtube {
         reject_after: None,
         delay: None,
         requests: AtomicU32::new(0),
+        sessions: AtomicU32::new(0),
+        sent: Mutex::new(HashMap::new()),
     }
 }
 
@@ -386,12 +411,12 @@ async fn downloads_video_and_sound_into_one_mp4() {
     let audio = TrackData::new(140, 44_100, 7, 3000, 200);
     let media_bytes: usize = [&video, &audio].iter().flat_map(|t| &t.segments).map(|s| boxes(s)[1].1.len()).sum();
     let (vf, af) = (video.format("video/mp4"), audio.format("audio/mp4"));
-    let (addr, _) = server(vec![video, audio]).start().await;
+    let (addr, server) = server(vec![video, audio]).start().await;
     let dir = tempfile::tempdir().unwrap();
 
     let outcome = Engine::new()
         .unwrap()
-        .start(options(dir.path(), source(addr, Some(vf), Some(af))))
+        .start(options(dir.path(), source(addr, Some(vf), Some(af), 21_000)))
         .wait()
         .await
         .unwrap();
@@ -411,6 +436,42 @@ async fn downloads_video_and_sound_into_one_mp4() {
     let joined: usize = top.iter().filter(|b| &b.0 == b"mdat").map(|b| b.1.len()).sum();
     assert_eq!(joined, media_bytes, "all media data arrived");
     assert!(!dir.path().join("My clip.mp4.parts").exists(), "parts folder left behind");
+    assert_eq!(server.sessions.load(Ordering::SeqCst), 1, "too short to split");
+    assert_eq!(server.resent(), 0);
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn a_long_video_downloads_over_several_connections() {
+    // Two minutes: six stretches of 20 s.
+    let video = TrackData::new(136, 90_000, 60, 2000, 10);
+    let audio = TrackData::new(140, 44_100, 40, 3000, 200);
+    let media_bytes: usize = [&video, &audio].iter().flat_map(|t| &t.segments).map(|s| boxes(s)[1].1.len()).sum();
+    let (vf, af) = (video.format("video/mp4"), audio.format("audio/mp4"));
+    let (addr, server) = Youtube {
+        delay: Some(Duration::from_millis(20)),
+        ..server(vec![video, audio])
+    }
+    .start()
+    .await;
+    let dir = tempfile::tempdir().unwrap();
+
+    let outcome = Engine::new()
+        .unwrap()
+        .start(options(dir.path(), source(addr, Some(vf), Some(af), 120_000)))
+        .wait()
+        .await
+        .unwrap();
+
+    let path = dir.path().join("My clip.mp4");
+    assert_eq!(outcome, Outcome::Completed(path.clone()));
+    let data = std::fs::read(&path).unwrap();
+    let joined: usize = boxes(&data).iter().filter(|b| &b.0 == b"mdat").map(|b| b.1.len()).sum();
+    assert_eq!(joined, media_bytes, "all media data arrived");
+    let sessions = server.sessions.load(Ordering::SeqCst);
+    assert!(sessions >= 6, "{sessions} sessions");
+    // Where stretches meet, the server sends a few segments ahead that the next
+    // connection also gets: a few per boundary, no more.
+    assert!(server.resent() <= 5 * 6, "{} segments sent twice", server.resent());
 }
 
 #[tokio::test(flavor = "multi_thread")]
@@ -426,7 +487,7 @@ async fn a_paused_youtube_download_continues_where_it_stopped() {
     .await;
     let dir = tempfile::tempdir().unwrap();
     let engine = Engine::new().unwrap();
-    let src = source(addr, Some(vf), Some(af));
+    let src = source(addr, Some(vf), Some(af), 60_000);
 
     let handle = engine.start(options(dir.path(), src.clone()));
     while server.requests.load(Ordering::SeqCst) < 3 {
@@ -434,17 +495,16 @@ async fn a_paused_youtube_download_continues_where_it_stopped() {
     }
     handle.pause();
     assert_eq!(handle.wait().await.unwrap(), Outcome::Paused);
-    let before = server.requests.load(Ordering::SeqCst);
     assert!(dir.path().join("My clip.mp4.parts").is_dir());
 
     let mut opts = options(dir.path(), src);
     opts.file_name = Some("My clip.mp4".into());
     let outcome = engine.start(opts).wait().await.unwrap();
     assert_eq!(outcome, Outcome::Completed(dir.path().join("My clip.mp4")));
-    // Ten segments per request across both tracks: about 10 requests in all,
-    // so continuing must not have started over.
-    let total = server.requests.load(Ordering::SeqCst);
-    assert!(total - before <= 10, "{} requests after continuing", total - before);
+    // Continuing must not have started over: only what was on its way when
+    // paused (three segments per track per connection) and the overlap where
+    // stretches meet come again, out of 50.
+    assert!(server.resent() <= 3 * 6 + 2 * 6, "{} segments sent twice", server.resent());
 }
 
 #[tokio::test(flavor = "multi_thread")]
@@ -456,7 +516,7 @@ async fn sound_only_is_saved_as_m4a_unchanged() {
 
     let outcome = Engine::new()
         .unwrap()
-        .start(options(dir.path(), source(addr, None, Some(af))))
+        .start(options(dir.path(), source(addr, None, Some(af), 15_000)))
         .wait()
         .await
         .unwrap();
@@ -481,7 +541,7 @@ async fn a_refused_session_is_an_error_not_a_hang() {
 
     let result = Engine::new()
         .unwrap()
-        .start(options(dir.path(), source(addr, Some(vf), Some(af))))
+        .start(options(dir.path(), source(addr, Some(vf), Some(af), 60_000)))
         .wait()
         .await;
     assert!(matches!(result, Err(Error::Unsupported(_))), "{result:?}");
@@ -502,7 +562,7 @@ async fn a_capture_from_an_ad_is_refused() {
 
     let result = Engine::new()
         .unwrap()
-        .start(options(dir.path(), source(addr, Some(vf), Some(af))))
+        .start(options(dir.path(), source(addr, Some(vf), Some(af), 60_000)))
         .wait()
         .await;
     let Err(Error::Unsupported(message)) = result else {
@@ -541,6 +601,10 @@ async fn live_youtube_capture() {
         request: capture["body"].as_str().unwrap().into(),
         video: Some(format(136)),
         audio: Some(format(140)),
+        duration_ms: player["videoDetails"]["lengthSeconds"]
+            .as_str()
+            .and_then(|s| s.parse::<u64>().ok())
+            .map(|s| s * 1000),
     };
     let dir = std::path::PathBuf::from(std::env::var("BDL_YT_OUT").unwrap());
     let mut opts = DownloadOptions::new("https://www.youtube.com/watch", &dir);

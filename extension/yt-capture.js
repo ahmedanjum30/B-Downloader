@@ -186,6 +186,7 @@ async function sendYoutube(tabId, info, choice) {
       request: capture.request,
       video: ytFormat(choice.video),
       audio: ytFormat(choice.audio),
+      duration_ms: info.lengthSeconds ? info.lengthSeconds * 1000 : null,
     },
   });
 }

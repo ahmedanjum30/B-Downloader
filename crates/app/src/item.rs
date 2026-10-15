@@ -277,5 +277,6 @@ pub fn youtube_source(request: YoutubeRequest) -> YoutubeSource {
         request: request.request,
         video: request.video.map(format),
         audio: request.audio.map(format),
+        duration_ms: request.duration_ms,
     }
 }

@@ -242,6 +242,8 @@ impl DownloadHandle {
             return Progress {
                 total: stream.estimated_total(),
                 downloaded: stream.done_bytes + stream.in_flight,
+                // Streams don't track when each connection last got data.
+                receiving: info.active_connections,
                 ..info
             };
         }

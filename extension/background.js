@@ -5,7 +5,9 @@
 // BDownloader, and is offered to the app. If the app can't be reached, the
 // browser downloads it again itself, so nothing is lost.
 
-importScripts("videos.js", "yt-capture.js");
+// Chromium browsers run this as a service worker that loads the rest itself;
+// Firefox loads all three from its manifest, in order.
+if (typeof importScripts === "function") importScripts("videos.js", "yt-capture.js");
 
 const HOST = "com.bdownloader.host";
 const MENU_ID = "bdownloader";
@@ -52,16 +54,27 @@ function hello() {
 // Runs while the browser is still choosing the file name, before it shows
 // the download anywhere or asks where to save it. Holding the download here
 // and cancelling it means the browser's own download never appears.
-chrome.downloads.onDeterminingFilename.addListener((item, suggest) => {
-  // Our own fallback downloads (below) stay in the browser.
-  if (item.byExtensionId === chrome.runtime.id) return false;
-  const url = item.finalUrl || item.url;
-  // blob:, data: and file: downloads only exist inside the browser.
-  if (!isWebUrl(url)) return false;
+if (chrome.downloads.onDeterminingFilename) {
+  chrome.downloads.onDeterminingFilename.addListener((item, suggest) => {
+    // Our own fallback downloads (below) stay in the browser.
+    if (item.byExtensionId === chrome.runtime.id) return false;
+    const url = item.finalUrl || item.url;
+    // blob:, data: and file: downloads only exist inside the browser.
+    if (!isWebUrl(url)) return false;
 
-  takeOver(item, url, suggest);
-  return true; // suggest() is called once the download is cancelled
-});
+    takeOver(item, url, suggest);
+    return true; // suggest() is called once the download is cancelled
+  });
+} else {
+  // Firefox can't hold a download before it starts, so it's cancelled as
+  // soon as it appears; the browser's download list may show it briefly.
+  chrome.downloads.onCreated.addListener((item) => {
+    if (item.byExtensionId === chrome.runtime.id) return;
+    const url = item.finalUrl || item.url;
+    if (!isWebUrl(url)) return;
+    takeOver(item, url, () => {});
+  });
+}
 
 async function takeOver(item, url, suggest) {
   // Cancel rather than pause: a paused download can keep its connection

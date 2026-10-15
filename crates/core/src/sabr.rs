@@ -7,21 +7,25 @@
 //! browser, which only YouTube's page can make. So the browser extension
 //! captures one of the player's own requests, and this module repeats it,
 //! each time with the position moved on, until the whole video and its sound
-//! have arrived. They come as two separate MP4 files, which are then joined
-//! into one.
+//! have arrived.
 //!
-//! Progress is kept in a folder next to the video (`video.mp4.parts`), so a
-//! paused download continues where it stopped.
+//! Like several viewers watching different parts at once, the video is split
+//! into stretches that separate sessions fetch at the same time. Each
+//! segment is saved as its own file in a folder next to the video
+//! (`video.mp4.parts`), so sessions can finish in any order and a paused
+//! download continues with what's missing. At the end, each track's segments
+//! are put together and the picture and sound joined into one MP4.
 
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 use std::io::{self, Write};
 use std::path::{Path, PathBuf};
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
 use reqwest::header;
 use reqwest::{StatusCode, Url};
 use serde::{Deserialize, Serialize};
+use tokio::task::JoinSet;
 use tokio_util::sync::CancellationToken;
 
 use crate::download::{DownloadOptions, Engine, MAX_RETRIES, Outcome, Shared, Status, StreamProgress, lock, redact};
@@ -43,6 +47,9 @@ pub struct YoutubeSource {
     pub video: Option<YoutubeFormat>,
     /// The sound to download; `None` for a video without sound.
     pub audio: Option<YoutubeFormat>,
+    /// The video's length, to split it between several connections.
+    #[serde(default)]
+    pub duration_ms: Option<u64>,
 }
 
 /// One of the formats YouTube offers for a video.
@@ -71,52 +78,87 @@ const SABR_CONTEXT_UPDATE: u64 = 57;
 const STREAM_PROTECTION_STATUS: u64 = 58;
 const SABR_CONTEXT_SENDING_POLICY: u64 = 59;
 
-/// Requests in a row that bring nothing new before giving up.
+/// Requests in a row that bring nothing new before a session gives up.
 const MAX_IDLE_REQUESTS: u32 = 4;
-/// YouTube's protection check refusing the session this often means the
+/// YouTube's protection check refusing a session this often means the
 /// captured token is no good (expired, or from another browser session).
 const MAX_PROTECTION_REJECTIONS: u32 = 3;
+/// Most sessions at once, and the least of the video each one gets.
+const MAX_SESSIONS: usize = 8;
+const MIN_STRETCH_MS: u64 = 20_000;
 const STATE_FILE: &str = "youtube.json";
+
+/// A segment saved in the parts folder.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+struct Segment {
+    start_ms: u64,
+    duration_ms: u64,
+    bytes: u64,
+}
+
+impl Segment {
+    fn end_ms(&self) -> u64 {
+        self.start_ms + self.duration_ms
+    }
+}
+
+/// What's downloaded of one track (picture or sound).
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+struct TrackState {
+    itag: u32,
+    /// The initialization segment is saved.
+    init: bool,
+    init_bytes: u64,
+    /// The video's last segment, once YouTube said.
+    last_segment: u32,
+    segments: BTreeMap<u32, Segment>,
+}
+
+impl TrackState {
+    fn done(&self) -> bool {
+        self.init && self.last_segment > 0 && (1..=self.last_segment).all(|n| self.segments.contains_key(&n))
+    }
+
+    fn bytes(&self) -> u64 {
+        self.init_bytes + self.segments.values().map(|s| s.bytes).sum::<u64>()
+    }
+
+    /// Runs of consecutive segments: (first, last, start ms, end ms).
+    fn runs(&self) -> Vec<(u32, u32, u64, u64)> {
+        let mut runs: Vec<(u32, u32, u64, u64)> = Vec::new();
+        for (&n, segment) in &self.segments {
+            match runs.last_mut() {
+                Some(run) if run.1 + 1 == n => {
+                    run.1 = n;
+                    run.3 = segment.end_ms();
+                }
+                _ => runs.push((n, n, segment.start_ms, segment.end_ms())),
+            }
+        }
+        runs
+    }
+
+    /// Where downloading this track from `position` would really start:
+    /// past a run of saved segments that covers `position`.
+    fn continue_from(&self, position: u64) -> u64 {
+        self.runs()
+            .into_iter()
+            .find(|&(_, _, start, end)| start <= position && position < end)
+            .map_or(position, |run| run.3)
+    }
+
+    /// Past the end of the track, once its length is known.
+    fn ended_by(&self, position: u64) -> bool {
+        self.last_segment > 0 && self.segments.get(&self.last_segment).is_some_and(|s| position >= s.end_ms())
+    }
+}
 
 /// What's on disk, for continuing later.
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
 struct SavedState {
     video_id: String,
     itags: Vec<u32>,
-    tracks: Vec<SavedTrack>,
-}
-
-#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
-struct SavedTrack {
-    itag: u32,
-    /// The initialization segment is written.
-    init: bool,
-    /// Segments 1..=this are written, in order.
-    segments: u32,
-    /// Where the written segments end in the video, in milliseconds.
-    end_ms: u64,
-    /// Bytes written to the track's file.
-    bytes: u64,
-    /// The video's last segment, once YouTube said.
-    last_segment: u32,
-}
-
-struct Track {
-    format: YoutubeFormat,
-    file: PathBuf,
-    saved: SavedTrack,
-    /// Segments that arrived ahead of one still missing: number -> (start ms, length ms, bytes).
-    waiting: BTreeMap<u32, (u64, u64, Vec<u8>)>,
-}
-
-impl Track {
-    fn done(&self) -> bool {
-        self.saved.last_segment > 0 && self.saved.segments >= self.saved.last_segment
-    }
-
-    fn format_id(&self) -> Message {
-        format_id(&self.format)
-    }
+    tracks: Vec<TrackState>,
 }
 
 fn format_id(format: &YoutubeFormat) -> Message {
@@ -162,23 +204,18 @@ impl Template {
     }
 }
 
-/// The session's changing parts, which YouTube updates as it goes.
+/// One session's changing parts, which YouTube updates as it goes.
 struct Session {
     request_number: u64,
     playback_cookie: Option<Vec<u8>>,
     /// Context values YouTube asked to have sent back: type -> value.
     contexts: BTreeMap<u64, Vec<u8>>,
-    active_contexts: std::collections::BTreeSet<u64>,
+    active_contexts: BTreeSet<u64>,
     backoff: Duration,
     rejections: u32,
-    /// When the download (this run of it) started.
     started: Instant,
     /// Measured speed, in bits per second, as the player reports it.
     bandwidth: f64,
-    /// Time spent waiting because YouTube asked to.
-    waited: Duration,
-    bytes: u64,
-    requests: u64,
 }
 
 impl Session {
@@ -187,15 +224,67 @@ impl Session {
             request_number: 0,
             playback_cookie: None,
             contexts: BTreeMap::new(),
-            active_contexts: std::collections::BTreeSet::new(),
+            active_contexts: BTreeSet::new(),
             backoff: Duration::ZERO,
             rejections: 0,
             started: Instant::now(),
             bandwidth: 0.0,
-            waited: Duration::ZERO,
-            bytes: 0,
-            requests: 0,
         }
+    }
+}
+
+/// Totals across sessions, for the log.
+#[derive(Default)]
+struct Stats {
+    requests: u64,
+    bytes: u64,
+    waited: Duration,
+}
+
+/// Shared by all sessions of a download.
+struct Job {
+    engine: Engine,
+    source: YoutubeSource,
+    template: Template,
+    formats: Vec<YoutubeFormat>,
+    parts_dir: PathBuf,
+    /// The streaming address; YouTube may move it to another server.
+    url: Mutex<Url>,
+    tracks: Mutex<Vec<TrackState>>,
+    shared: Arc<Shared>,
+    stop: CancellationToken,
+    stats: Mutex<Stats>,
+    /// One save of the state file at a time.
+    saving: tokio::sync::Mutex<()>,
+    /// Segments a session is writing, so two never write the same one: (itag, number, init).
+    writing: Mutex<BTreeSet<(u32, u32, bool)>>,
+}
+
+impl Job {
+    fn done(&self) -> bool {
+        lock(&self.tracks).iter().all(TrackState::done)
+    }
+
+    fn segment_path(&self, itag: u32, number: u32) -> PathBuf {
+        self.parts_dir.join(format!("{itag}-{number:06}.part"))
+    }
+
+    fn init_path(&self, itag: u32) -> PathBuf {
+        self.parts_dir.join(format!("{itag}-init.part"))
+    }
+
+    async fn save_state(&self) -> Result<()> {
+        let _one_at_a_time = self.saving.lock().await;
+        let state = SavedState {
+            video_id: self.source.video_id.clone(),
+            itags: self.formats.iter().map(|f| f.itag).collect(),
+            tracks: lock(&self.tracks).clone(),
+        };
+        let json = serde_json::to_vec(&state).map_err(io::Error::other)?;
+        let tmp = self.parts_dir.join(format!("{STATE_FILE}.tmp"));
+        tokio::fs::write(&tmp, json).await?;
+        tokio::fs::rename(&tmp, self.parts_dir.join(STATE_FILE)).await?;
+        Ok(())
     }
 }
 
@@ -207,8 +296,8 @@ pub(crate) async fn download(
     source: &YoutubeSource,
 ) -> Result<Outcome> {
     let template = Template::parse(&source.request)?;
-    let mut url = Url::parse(&source.url).map_err(|e| Error::InvalidUrl(format!("{}: {e}", source.url)))?;
-    let formats: Vec<&YoutubeFormat> = source.video.iter().chain(&source.audio).collect();
+    let url = Url::parse(&source.url).map_err(|e| Error::InvalidUrl(format!("{}: {e}", source.url)))?;
+    let formats: Vec<YoutubeFormat> = source.video.iter().chain(&source.audio).cloned().collect();
     if formats.is_empty() {
         return Err(Error::Unsupported("no format was chosen".into()));
     }
@@ -228,31 +317,48 @@ pub(crate) async fn download(
     let parts_dir = sidecar(&path, "parts");
     tokio::fs::create_dir_all(&parts_dir).await?;
 
-    let mut tracks: Vec<Track> = formats
+    let job = Arc::new(Job {
+        engine: engine.clone(),
+        source: source.clone(),
+        template,
+        tracks: Mutex::new(Vec::new()),
+        formats,
+        parts_dir,
+        url: Mutex::new(url.clone()),
+        shared: shared.clone(),
+        stop: pause.child_token(),
+        stats: Mutex::new(Stats::default()),
+        saving: tokio::sync::Mutex::new(()),
+        writing: Mutex::new(BTreeSet::new()),
+    });
+    // What an earlier attempt saved, as far as its files are still there.
+    let tracks: Vec<TrackState> = job
+        .formats
         .iter()
         .map(|format| {
-            let previous = saved.as_ref().and_then(|s| s.tracks.iter().find(|t| t.itag == format.itag)).cloned();
-            Track {
-                format: (*format).clone(),
-                file: parts_dir.join(format!("{}.part", format.itag)),
-                saved: previous.unwrap_or(SavedTrack {
+            let mut track = saved
+                .as_ref()
+                .and_then(|s| s.tracks.iter().find(|t| t.itag == format.itag))
+                .cloned()
+                .unwrap_or(TrackState {
                     itag: format.itag,
-                    ..SavedTrack::default()
-                }),
-                waiting: BTreeMap::new(),
+                    ..TrackState::default()
+                });
+            track
+                .segments
+                .retain(|&n, s| file_len(&job.segment_path(format.itag, n)) == Some(s.bytes));
+            if track.init && file_len(&job.init_path(format.itag)) != Some(track.init_bytes) {
+                track.init = false;
+                track.init_bytes = 0;
             }
+            track
         })
         .collect();
-    // Anything written after the last saved state is redone.
-    for track in &tracks {
-        let file = std::fs::OpenOptions::new().create(true).write(true).truncate(false).open(&track.file)?;
-        file.set_len(track.saved.bytes)?;
-    }
+    let done_bytes: u64 = tracks.iter().map(TrackState::bytes).sum();
+    *lock(&job.tracks) = tracks;
 
-    let total: Option<u64> = formats.iter().map(|f| f.content_length).sum();
-    let done_bytes: u64 = tracks.iter().map(|t| t.saved.bytes).sum();
     *lock(&shared.stream) = Some(StreamProgress {
-        known_total: total,
+        known_total: job.formats.iter().map(|f| f.content_length).sum(),
         done_bytes,
         ..StreamProgress::default()
     });
@@ -261,84 +367,52 @@ pub(crate) async fn download(
         progress.path = Some(path.clone());
         progress.resumable = true;
         progress.status = Status::Downloading;
-        progress.active_connections = 1;
     }
+
+    // The video split into stretches, one session each.
+    let sessions = match source.duration_ms {
+        Some(duration) if duration > 0 => {
+            let by_length = usize::try_from(duration / MIN_STRETCH_MS).unwrap_or(usize::MAX).max(1);
+            options.connections.clamp(1, MAX_SESSIONS).min(by_length)
+        }
+        _ => 1,
+    };
+    let duration = source.duration_ms.unwrap_or(0);
     log::info!(
-        "{}: YouTube video {}, formats {itags:?}, {}",
+        "{}: YouTube video {}, formats {itags:?}, {sessions} connection(s), {}",
         redact(&url),
         source.video_id,
         if saved.is_some() { "resuming" } else { "new" }
     );
 
-    let mut session = Session::new();
-    let mut idle = 0;
-    let mut attempt = 0;
-    let result = loop {
-        if tracks.iter().all(Track::done) {
-            break Ok(());
-        }
-        if pause.is_cancelled() {
-            break Ok(());
-        }
-        session.request_number += 1;
-        // The current address (YouTube may move the stream), numbered like the player numbers its requests.
-        let mut request_url = url.clone();
-        let query: Vec<(String, String)> = url.query_pairs().into_owned().filter(|(k, _)| k != "rn").collect();
-        request_url
-            .query_pairs_mut()
-            .clear()
-            .extend_pairs(query)
-            .append_pair("rn", &session.request_number.to_string());
-
-        let body = build_request(&template, &tracks, &session, source);
-        let before: u64 = tracks.iter().map(|t| t.saved.bytes).sum();
-        let outcome = exchange(engine, shared, pause, &request_url, &mut url, &body, &mut tracks, &mut session, source).await;
-        save_state(&parts_dir, source, &itags, &tracks).await?;
-        match outcome {
-            Ok(()) => attempt = 0,
-            Err(e) if pause.is_cancelled() => break Err(e),
-            Err(e) if e.is_retryable() && attempt < MAX_RETRIES => {
-                attempt += 1;
-                log::warn!("{}: {e} (attempt {attempt})", redact(&url));
-                shared.report_problem(e.to_string());
-                let backoff = Duration::from_secs(1 << (attempt - 1).min(4));
-                tokio::select! {
-                    _ = pause.cancelled() => {}
-                    _ = tokio::time::sleep(backoff) => {}
-                }
-                continue;
-            }
-            Err(e) => break Err(e),
-        }
-        let after: u64 = tracks.iter().map(|t| t.saved.bytes).sum();
-        if after == before {
-            idle += 1;
-            if idle >= MAX_IDLE_REQUESTS {
-                break Err(Error::Incomplete);
-            }
-        } else {
-            idle = 0;
-        }
-        if !session.backoff.is_zero() {
-            session.waited += session.backoff;
-            tokio::select! {
-                _ = pause.cancelled() => {}
-                _ = tokio::time::sleep(session.backoff) => {}
-            }
-        }
-    };
+    let started = Instant::now();
+    let mut result = run_sessions(
+        &job,
+        (0..sessions)
+            .map(|i| (duration * i as u64 / sessions as u64, stretch_end(duration, i, sessions)))
+            .collect(),
+    )
+    .await;
+    // Whatever a session that gave up left behind, one more pass fills in.
+    if result.is_ok() && !job.done() && !pause.is_cancelled() {
+        result = run_sessions(&job, vec![(0, u64::MAX)]).await;
+    }
     lock(&shared.info).active_connections = 0;
-    let seconds = session.started.elapsed().as_secs_f64().max(0.001);
-    log::info!(
-        "{}: {} requests, {:.1} MB in {seconds:.1} s ({:.1} MB/s), {:.1} s waiting on YouTube's pacing",
-        redact(&url),
-        session.requests,
-        session.bytes as f64 / 1_048_576.0,
-        session.bytes as f64 / 1_048_576.0 / seconds,
-        session.waited.as_secs_f64()
-    );
+    {
+        let stats = lock(&job.stats);
+        let seconds = started.elapsed().as_secs_f64().max(0.001);
+        log::info!(
+            "{}: {sessions} connection(s), {} requests, {:.1} MB in {seconds:.1} s ({:.1} MB/s), {:.1} s waiting on YouTube's pacing",
+            redact(&url),
+            stats.requests,
+            stats.bytes as f64 / 1_048_576.0,
+            stats.bytes as f64 / 1_048_576.0 / seconds,
+            stats.waited.as_secs_f64()
+        );
+    }
+    job.save_state().await?;
     result?;
-    if !tracks.iter().all(Track::done) {
+    if !job.done() {
         return if pause.is_cancelled() {
             Ok(Outcome::Paused)
         } else {
@@ -346,18 +420,114 @@ pub(crate) async fn download(
         };
     }
 
-    let files: Vec<PathBuf> = tracks.iter().map(|t| t.file.clone()).collect();
-    let path = tokio::task::spawn_blocking(move || finish(&files, &parts_dir, &path))
+    let tracks = lock(&job.tracks).clone();
+    let finishing = job.clone();
+    let path = tokio::task::spawn_blocking(move || finish(&finishing, &tracks, &path))
         .await
         .map_err(io::Error::other)??;
     lock(&shared.info).path = Some(path.clone());
     Ok(Outcome::Completed(path))
 }
 
-/// The next request: the captured one, with the formats wanted, what's
-/// already here, and where to continue from.
-fn build_request(template: &Template, tracks: &[Track], session: &Session, source: &YoutubeSource) -> Vec<u8> {
-    let position = tracks.iter().map(|t| t.saved.end_ms).min().unwrap_or(0);
+/// The last stretch runs to the end, whatever the reported length.
+fn stretch_end(duration: u64, index: usize, count: usize) -> u64 {
+    if index + 1 == count {
+        u64::MAX
+    } else {
+        duration * (index as u64 + 1) / count as u64
+    }
+}
+
+/// Runs a session for each `(from, to)` stretch at once. The first error
+/// stops them all.
+async fn run_sessions(job: &Arc<Job>, stretches: Vec<(u64, u64)>) -> Result<()> {
+    let mut sessions = JoinSet::new();
+    for (index, (from, to)) in stretches.into_iter().enumerate() {
+        sessions.spawn(run_session(job.clone(), index, from, to));
+    }
+    lock(&job.shared.info).active_connections = sessions.len();
+    let mut result = Ok(());
+    while let Some(joined) = sessions.join_next().await {
+        let outcome = joined.unwrap_or_else(|e| std::panic::resume_unwind(e.into_panic()));
+        lock(&job.shared.info).active_connections = sessions.len();
+        if let Err(e) = outcome
+            && result.is_ok()
+        {
+            log::warn!("{}: stopping all connections: {e}", redact(&lock(&job.url)));
+            job.stop.cancel();
+            result = Err(e);
+        }
+    }
+    result
+}
+
+/// Downloads the stretch from `from` to `to` (as far as it isn't already
+/// there), then stops.
+async fn run_session(job: Arc<Job>, index: usize, from: u64, to: u64) -> Result<()> {
+    let mut session = Session::new();
+    let mut idle = 0;
+    let mut attempt = 0;
+    loop {
+        if job.stop.is_cancelled() || job.done() {
+            return Ok(());
+        }
+        // Skip what's already saved; this stretch ends where the next begins.
+        let position = {
+            let tracks = lock(&job.tracks);
+            if tracks.iter().all(|t| t.done() || t.ended_by(from)) {
+                return Ok(());
+            }
+            tracks.iter().map(|t| t.continue_from(from)).min().unwrap_or(from)
+        };
+        if position >= to {
+            return Ok(());
+        }
+
+        session.request_number += 1;
+        let body = build_request(&job, &session, position);
+        let outcome = exchange(&job, &mut session, &body).await;
+        job.save_state().await?;
+        match outcome {
+            Ok(0) => {
+                idle += 1;
+                if idle >= MAX_IDLE_REQUESTS {
+                    // Another pass (or another session) gets the rest.
+                    log::info!("{}: connection {index} got nothing more at {position} ms", redact(&lock(&job.url)));
+                    return Ok(());
+                }
+            }
+            Ok(_) => {
+                idle = 0;
+                attempt = 0;
+            }
+            Err(_) if job.stop.is_cancelled() => return Ok(()),
+            Err(e) if e.is_retryable() && attempt < MAX_RETRIES => {
+                attempt += 1;
+                log::warn!("{}: connection {index}: {e} (attempt {attempt})", redact(&lock(&job.url)));
+                job.shared.report_problem(e.to_string());
+                let backoff = Duration::from_secs(1 << (attempt - 1).min(4));
+                tokio::select! {
+                    _ = job.stop.cancelled() => return Ok(()),
+                    _ = tokio::time::sleep(backoff) => {}
+                }
+                continue;
+            }
+            Err(e) => return Err(e),
+        }
+        if !session.backoff.is_zero() {
+            lock(&job.stats).waited += session.backoff;
+            tokio::select! {
+                _ = job.stop.cancelled() => return Ok(()),
+                _ = tokio::time::sleep(session.backoff) => {}
+            }
+        }
+    }
+}
+
+/// The next request: the captured one, with the formats wanted, everything
+/// already saved, and where to continue from.
+fn build_request(job: &Job, session: &Session, position: u64) -> Vec<u8> {
+    let template = &job.template;
     let mut abr = template.abr_state.clone();
     // How long this "viewer" has been watching, and how fast its connection is.
     // YouTube decides how far ahead to send from these; the captured values
@@ -373,28 +543,35 @@ fn build_request(template: &Template, tracks: &[Track], session: &Session, sourc
 
     let mut request = Message::default();
     request.push_message(1, &abr);
-    for track in tracks.iter().filter(|t| t.saved.init) {
-        request.push_message(2, &track.format_id());
-    }
-    for track in tracks.iter().filter(|t| t.saved.segments > 0) {
-        let saved = &track.saved;
-        let mut time_range = Message::default();
-        time_range.push_varint(1, 0).push_varint(2, saved.end_ms).push_varint(3, 1000);
-        let mut range = Message::default();
-        range
-            .push_message(1, &track.format_id())
-            .push_varint(2, 0)
-            .push_varint(3, saved.end_ms)
-            .push_varint(4, 1)
-            .push_varint(5, u64::from(saved.segments))
-            .push_message(6, &time_range);
-        request.push_message(3, &range);
+    {
+        let tracks = lock(&job.tracks);
+        for (track, format) in tracks.iter().zip(&job.formats) {
+            if track.init {
+                request.push_message(2, &format_id(format));
+            }
+        }
+        // Everything saved, by any session, so nothing comes twice.
+        for (track, format) in tracks.iter().zip(&job.formats) {
+            for (first, last, start, end) in track.runs() {
+                let mut time_range = Message::default();
+                time_range.push_varint(1, start).push_varint(2, end - start).push_varint(3, 1000);
+                let mut range = Message::default();
+                range
+                    .push_message(1, &format_id(format))
+                    .push_varint(2, start)
+                    .push_varint(3, end - start)
+                    .push_varint(4, u64::from(first))
+                    .push_varint(5, u64::from(last))
+                    .push_message(6, &time_range);
+                request.push_message(3, &range);
+            }
+        }
     }
     request.push_bytes(5, template.ustreamer_config.clone());
-    if let Some(audio) = &source.audio {
+    if let Some(audio) = &job.source.audio {
         request.push_message(16, &format_id(audio));
     }
-    if let Some(video) = &source.video {
+    if let Some(video) = &job.source.video {
         request.push_message(17, &format_id(video));
     }
     let mut context = Message::default();
@@ -418,29 +595,32 @@ fn build_request(template: &Template, tracks: &[Track], session: &Session, sourc
     request.encode()
 }
 
-/// Sends one request and takes in what comes back.
-#[allow(clippy::too_many_arguments)]
-async fn exchange(
-    engine: &Engine,
-    shared: &Shared,
-    pause: &CancellationToken,
-    request_url: &Url,
-    url: &mut Url,
-    body: &[u8],
-    tracks: &mut [Track],
-    session: &mut Session,
-    source: &YoutubeSource,
-) -> Result<()> {
+/// Sends one request and saves what comes back. Returns the bytes of new
+/// media saved.
+async fn exchange(job: &Job, session: &mut Session, body: &[u8]) -> Result<u64> {
+    // The current address, numbered like the player numbers its requests.
+    let request_url = {
+        let url = lock(&job.url);
+        let mut numbered = url.clone();
+        let query: Vec<(String, String)> = url.query_pairs().into_owned().filter(|(k, _)| k != "rn").collect();
+        numbered
+            .query_pairs_mut()
+            .clear()
+            .extend_pairs(query)
+            .append_pair("rn", &session.request_number.to_string());
+        numbered
+    };
+    let engine = &job.engine;
     let request = engine
         .client
-        .post(request_url.clone())
+        .post(request_url)
         .header(header::CONTENT_TYPE, "application/x-protobuf")
         .header(header::ACCEPT, "application/vnd.yt-ump")
         .header(header::ORIGIN, "https://www.youtube.com")
         .header(header::REFERER, "https://www.youtube.com/")
         .body(body.to_vec());
     let mut response = tokio::select! {
-        _ = pause.cancelled() => return Ok(()),
+        _ = job.stop.cancelled() => return Ok(0),
         response = engine.stalled(request.send()) => response?,
     };
     match response.status() {
@@ -456,29 +636,31 @@ async fn exchange(
     session.backoff = Duration::ZERO;
     let received_at = Instant::now();
     let mut received = 0u64;
+    let mut saved = 0u64;
     let mut pending: Vec<u8> = Vec::new();
     let mut incoming: BTreeMap<u8, Incoming> = BTreeMap::new();
     let mut in_flight = 0u64;
     let result: Result<()> = async {
         loop {
             let chunk = tokio::select! {
-                _ = pause.cancelled() => return Ok(()),
+                _ = job.stop.cancelled() => return Ok(()),
                 chunk = engine.stalled(response.chunk()) => chunk?,
             };
             let Some(chunk) = chunk else { break };
-            shared.clear_problem();
+            job.shared.clear_problem();
             pending.extend_from_slice(&chunk);
             received += chunk.len() as u64;
             let (parts, used) = ump_parts(&pending);
+            let before = in_flight;
             for (kind, payload) in parts {
-                take_part(kind, payload, url, tracks, session, source, &mut incoming, &mut in_flight, shared)?;
+                saved += take_part(job, session, kind, payload, &mut incoming, &mut in_flight)?;
             }
             pending.drain(..used);
-            with_progress(shared, |p| p.in_flight = in_flight);
+            with_progress(&job.shared, |p| p.in_flight = (p.in_flight + in_flight).saturating_sub(before));
             let wait = engine.limiter.delay(chunk.len() as u64);
             if !wait.is_zero() {
                 tokio::select! {
-                    _ = pause.cancelled() => return Ok(()),
+                    _ = job.stop.cancelled() => return Ok(()),
                     _ = tokio::time::sleep(wait) => {}
                 }
             }
@@ -486,7 +668,7 @@ async fn exchange(
         Ok(())
     }
     .await;
-    with_progress(shared, |p| p.in_flight = 0);
+    with_progress(&job.shared, |p| p.in_flight = p.in_flight.saturating_sub(in_flight));
     // The speed this response came at, smoothed, as the player would estimate it.
     let seconds = received_at.elapsed().as_secs_f64();
     if seconds > 0.2 && received > 0 {
@@ -497,46 +679,36 @@ async fn exchange(
             0.7 * session.bandwidth + 0.3 * bits_per_second
         };
     }
-    session.bytes += received;
-    session.requests += 1;
-    // Whatever arrived complete is kept, also when the response broke off.
-    write_ready(tracks, shared)?;
+    {
+        let mut stats = lock(&job.stats);
+        stats.bytes += received;
+        stats.requests += 1;
+    }
     if session.rejections >= MAX_PROTECTION_REJECTIONS {
         return Err(Error::Unsupported(
             "YouTube no longer accepts this session; play the video for a few seconds and download it again".into(),
         ));
     }
-    result
+    result.map(|()| saved)
 }
 
-#[allow(clippy::too_many_arguments)]
-fn take_part(
-    kind: u64,
-    payload: &[u8],
-    url: &mut Url,
-    tracks: &mut [Track],
-    session: &mut Session,
-    source: &YoutubeSource,
-    incoming: &mut BTreeMap<u8, Incoming>,
-    in_flight: &mut u64,
-    shared: &Shared,
-) -> Result<()> {
+/// Handles one part of YouTube's answer. Returns the bytes of a segment
+/// saved by it, if it completed one.
+fn take_part(job: &Job, session: &mut Session, kind: u64, payload: &[u8], incoming: &mut BTreeMap<u8, Incoming>, in_flight: &mut u64) -> Result<u64> {
     match kind {
         MEDIA_HEADER => {
             let header = Message::decode(payload)?;
             if let Some(id) = header.string(2)
-                && id != source.video_id
+                && id != job.source.video_id
             {
                 return Err(Error::Unsupported(
                     "an ad was playing when the video was picked up; play the video past the ad and download it again".into(),
                 ));
             }
-            let id = header.varint(1).unwrap_or(0) as u8;
-            let itag = header.varint(3).unwrap_or(0) as u32;
             incoming.insert(
-                id,
+                header.varint(1).unwrap_or(0) as u8,
                 Incoming {
-                    itag,
+                    itag: header.varint(3).unwrap_or(0) as u32,
                     segment: header.varint(9).unwrap_or(0) as u32,
                     init: header.varint(8) == Some(1),
                     start_ms: header.varint(11).unwrap_or(0),
@@ -558,25 +730,14 @@ fn take_part(
                 && let Some(part) = incoming.remove(&id)
             {
                 *in_flight = in_flight.saturating_sub(part.data.len() as u64);
-                if let Some(track) = tracks.iter_mut().find(|t| t.format.itag == part.itag) {
-                    if part.init {
-                        if !track.saved.init {
-                            append(&track.file, &part.data)?;
-                            track.saved.init = true;
-                            track.saved.bytes += part.data.len() as u64;
-                            with_progress(shared, |p| p.done_bytes += part.data.len() as u64);
-                        }
-                    } else if part.segment > track.saved.segments {
-                        track.waiting.insert(part.segment, (part.start_ms, part.duration_ms, part.data));
-                    }
-                }
+                return save_part(job, part);
             }
         }
         FORMAT_INITIALIZATION_METADATA => {
             let meta = Message::decode(payload)?;
             let itag = meta.message(2).and_then(|f| f.varint(1)).unwrap_or(0) as u32;
-            if let Some(track) = tracks.iter_mut().find(|t| t.format.itag == itag) {
-                track.saved.last_segment = meta.varint(4).unwrap_or(0) as u32;
+            if let Some(track) = lock(&job.tracks).iter_mut().find(|t| t.itag == itag) {
+                track.last_segment = meta.varint(4).unwrap_or(0) as u32;
             }
         }
         NEXT_REQUEST_POLICY => {
@@ -621,7 +782,8 @@ fn take_part(
             if let Some(next) = Message::decode(payload)?.string(1)
                 && let Ok(next) = Url::parse(&next)
             {
-                log::info!("{}: YouTube moved the stream to {}", redact(url), next.host_str().unwrap_or("?"));
+                let mut url = lock(&job.url);
+                log::info!("{}: YouTube moved the stream to {}", redact(&url), next.host_str().unwrap_or("?"));
                 *url = next;
             }
         }
@@ -648,34 +810,64 @@ fn take_part(
         }
         _ => {}
     }
-    Ok(())
+    Ok(0)
 }
 
-/// Appends segments that are next in line to their track's file.
-fn write_ready(tracks: &mut [Track], shared: &Shared) -> Result<()> {
-    for track in tracks {
-        while let Some(entry) = track.waiting.first_entry() {
-            let segment = *entry.key();
-            if segment <= track.saved.segments {
-                entry.remove();
-                continue;
-            }
-            if segment != track.saved.segments + 1 {
-                break;
-            }
-            let (start, duration, data) = entry.remove();
-            append(&track.file, &data)?;
-            track.saved.segments = segment;
-            track.saved.end_ms = start + duration;
-            track.saved.bytes += data.len() as u64;
-            with_progress(shared, |p| p.done_bytes += data.len() as u64);
+/// Saves a completed segment (or initialization segment) as its own file,
+/// unless another session already did.
+fn save_part(job: &Job, part: Incoming) -> Result<u64> {
+    let bytes = part.data.len() as u64;
+    {
+        let tracks = lock(&job.tracks);
+        let Some(track) = tracks.iter().find(|t| t.itag == part.itag) else {
+            return Ok(0);
+        };
+        if (part.init && track.init) || (!part.init && track.segments.contains_key(&part.segment)) || (!part.init && part.segment == 0) {
+            return Ok(0);
+        }
+        // Another session may be saving the same segment right now.
+        if !lock(&job.writing).insert((part.itag, part.segment, part.init)) {
+            return Ok(0);
         }
     }
-    Ok(())
+    let path = if part.init {
+        job.init_path(part.itag)
+    } else {
+        job.segment_path(part.itag, part.segment)
+    };
+    let written = write_atomically(&path, &part.data);
+    let mut tracks = lock(&job.tracks);
+    lock(&job.writing).remove(&(part.itag, part.segment, part.init));
+    written?;
+    if let Some(track) = tracks.iter_mut().find(|t| t.itag == part.itag) {
+        if part.init {
+            track.init = true;
+            track.init_bytes = bytes;
+        } else {
+            track.segments.insert(
+                part.segment,
+                Segment {
+                    start_ms: part.start_ms,
+                    duration_ms: part.duration_ms,
+                    bytes,
+                },
+            );
+        }
+    }
+    drop(tracks);
+    with_progress(&job.shared, |p| p.done_bytes += bytes);
+    Ok(bytes)
 }
 
-fn append(path: &Path, data: &[u8]) -> io::Result<()> {
-    std::fs::OpenOptions::new().append(true).open(path)?.write_all(data)
+/// Writes to a temporary name first, so a part file only exists once it's complete.
+fn write_atomically(path: &Path, data: &[u8]) -> io::Result<()> {
+    let tmp = path.with_extension("tmp");
+    std::fs::File::create(&tmp)?.write_all(data)?;
+    std::fs::rename(&tmp, path)
+}
+
+fn file_len(path: &Path) -> Option<u64> {
+    std::fs::metadata(path).ok().map(|m| m.len())
 }
 
 fn with_progress(shared: &Shared, update: impl FnOnce(&mut StreamProgress)) {
@@ -689,24 +881,22 @@ async fn load_state(parts_dir: &Path) -> Option<SavedState> {
     serde_json::from_slice(&bytes).ok()
 }
 
-async fn save_state(parts_dir: &Path, source: &YoutubeSource, itags: &[u32], tracks: &[Track]) -> Result<()> {
-    let state = SavedState {
-        video_id: source.video_id.clone(),
-        itags: itags.to_vec(),
-        tracks: tracks.iter().map(|t| t.saved.clone()).collect(),
-    };
-    let json = serde_json::to_vec(&state).map_err(io::Error::other)?;
-    let tmp = parts_dir.join(format!("{STATE_FILE}.tmp"));
-    tokio::fs::write(&tmp, json).await?;
-    tokio::fs::rename(&tmp, parts_dir.join(STATE_FILE)).await?;
-    Ok(())
-}
-
-/// Joins the picture and the sound into the video, or keeps the sound alone,
-/// and removes the parts folder.
-fn finish(files: &[PathBuf], parts_dir: &Path, path: &Path) -> io::Result<PathBuf> {
+/// Puts each track's segments together in order, joins the picture and the
+/// sound into the video (or keeps the sound alone), and removes the parts folder.
+fn finish(job: &Job, tracks: &[TrackState], path: &Path) -> io::Result<PathBuf> {
+    let mut files = Vec::new();
+    for track in tracks {
+        let file = job.parts_dir.join(format!("{}.part", track.itag));
+        let mut out = io::BufWriter::with_capacity(1024 * 1024, std::fs::File::create(&file)?);
+        let inputs = std::iter::once(job.init_path(track.itag)).chain((1..=track.last_segment).map(|n| job.segment_path(track.itag, n)));
+        for input in inputs {
+            io::copy(&mut std::fs::File::open(input)?, &mut out)?;
+        }
+        out.flush()?;
+        files.push(file);
+    }
     let path = unique_path(path, Path::exists);
-    match files {
+    match files.as_slice() {
         [video, audio] => {
             let joined = sidecar(&path, "joining");
             mp4mux::join(video, audio, &joined)?;
@@ -715,7 +905,7 @@ fn finish(files: &[PathBuf], parts_dir: &Path, path: &Path) -> io::Result<PathBu
         [only] => std::fs::rename(only, &path)?,
         _ => return Err(io::Error::other("nothing to save")),
     }
-    std::fs::remove_dir_all(parts_dir)?;
+    std::fs::remove_dir_all(&job.parts_dir)?;
     Ok(path)
 }
 
@@ -772,5 +962,39 @@ mod tests {
         assert_eq!(video_name(Some("Big Buck Bunny"), "aqz", "mp4"), "Big Buck Bunny.mp4");
         assert_eq!(video_name(Some("song.mp4"), "aqz", "m4a"), "song.m4a");
         assert_eq!(video_name(None, "aqz-KE-bpKQ", "mp4"), "aqz-KE-bpKQ.mp4");
+    }
+
+    fn track(segments: &[(u32, u64)]) -> TrackState {
+        TrackState {
+            itag: 1,
+            init: true,
+            init_bytes: 1,
+            last_segment: 6,
+            segments: segments
+                .iter()
+                .map(|&(n, start)| {
+                    (
+                        n,
+                        Segment {
+                            start_ms: start,
+                            duration_ms: 5000,
+                            bytes: 10,
+                        },
+                    )
+                })
+                .collect(),
+        }
+    }
+
+    #[test]
+    fn saved_runs_are_skipped() {
+        // Segments 1-2 and 4-5 (5 s each) are saved; 3 and 6 are missing.
+        let t = track(&[(1, 0), (2, 5000), (4, 15_000), (5, 20_000)]);
+        assert_eq!(t.runs(), [(1, 2, 0, 10_000), (4, 5, 15_000, 25_000)]);
+        assert_eq!(t.continue_from(0), 10_000);
+        assert_eq!(t.continue_from(12_000), 12_000);
+        assert_eq!(t.continue_from(16_000), 25_000);
+        assert!(!t.done());
+        assert!(track(&[(1, 0), (2, 5000), (3, 10_000), (4, 15_000), (5, 20_000), (6, 25_000)]).done());
     }
 }

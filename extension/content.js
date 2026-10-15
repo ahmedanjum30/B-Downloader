@@ -111,9 +111,11 @@
     found.push(...root.querySelectorAll("video"));
     for (const el of root.querySelectorAll("*")) {
       let shadow = el.shadowRoot;
-      if (!shadow && chrome.dom && chrome.dom.openOrClosedShadowRoot) {
+      if (!shadow) {
         try {
-          shadow = chrome.dom.openOrClosedShadowRoot(el);
+          // Chromium: chrome.dom; Firefox: a method on the element itself.
+          if (chrome.dom && chrome.dom.openOrClosedShadowRoot) shadow = chrome.dom.openOrClosedShadowRoot(el);
+          else if (typeof el.openOrClosedShadowRoot === "function") shadow = el.openOrClosedShadowRoot();
         } catch {
           shadow = null;
         }

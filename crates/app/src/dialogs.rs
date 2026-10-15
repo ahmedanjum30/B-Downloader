@@ -7,7 +7,7 @@ use iced::widget::{button, checkbox, column, container, pick_list, row, scrollab
 use iced::{Center, Element, Fill, Shrink};
 
 use crate::app::{AddDialog, Message, Probe, RefreshDialog};
-use crate::browser;
+use crate::browser::Browser;
 use crate::format;
 use crate::icons::{self, icon};
 use crate::item::{Item, State};
@@ -308,11 +308,11 @@ fn copy_field<'a>(value: String, copied: bool) -> Element<'a, Message> {
     .into()
 }
 
-pub fn extension<'a>(connected: bool, copied: Option<&str>) -> Element<'a, Message> {
+pub fn extension<'a>(browser: Browser, connected: bool, copied: Option<&str>) -> Element<'a, Message> {
     let (title, detail, pick): (&str, &str, style::Pick) = if connected {
         ("Connected", "Downloads from your browser come to BDownloader.", |c| c.success)
     } else {
-        ("Not connected", "Add the extension to Chrome, Edge or Brave.", |c| c.muted)
+        ("Not connected", "Add the extension to your browser.", |c| c.muted)
     };
     let status = container(
         row![
@@ -328,35 +328,67 @@ pub fn extension<'a>(connected: bool, copied: Option<&str>) -> Element<'a, Messa
     .width(Fill)
     .style(style::panel);
 
+    // One tab per browser; the steps below are for the chosen one.
+    let tabs = row(Browser::ALL.map(|b| {
+        button(text(b.name()).size(13).width(Fill).center())
+            .padding([7, 4])
+            .width(Fill)
+            .style(style::nav(b == browser))
+            .on_press(Message::ExtensionBrowser(b))
+            .into()
+    }))
+    .spacing(4);
+
     let step = |n: &'a str, line: &'a str| {
         row![
             container(colored(n, |c| c.accent).size(12).font(BOLD))
                 .center(24)
                 .style(style::accent_soft(12.0)),
-            text(line).size(14),
+            text(line).size(14).width(Fill),
         ]
         .spacing(12)
         .align_y(Center)
     };
-    let page = browser::EXTENSIONS_PAGE.to_owned();
-    let folder = browser::extension_dir().map_or("the extension folder next to BDownloader.exe".to_owned(), |dir| dir.display().to_string());
-    let page_copied = copied == Some(page.as_str());
-    let folder_copied = copied == Some(folder.as_str());
-
-    let body = column![
+    let mut body = column![
         status,
         muted("What it does").size(13).font(SEMIBOLD),
         text("• Downloads you start in the browser go to BDownloader.").size(14),
         text("• Right-click a link and choose Download with BDownloader.").size(14),
+        text("• Videos, YouTube too, get a Download this video bar.").size(14),
         muted("How to add it").size(13).font(SEMIBOLD),
-        step("1", "Copy this address and paste it into the browser's address bar:"),
-        copy_field(page, page_copied),
-        step("2", "Turn on Developer mode (top right)."),
-        step("3", "Click Load unpacked and choose this folder:"),
-        copy_field(folder, folder_copied),
-        muted("It shows as connected here once the browser has talked to BDownloader.").size(13),
+        container(tabs).padding(4).style(style::panel),
     ]
     .spacing(12);
+    body = if browser == Browser::Firefox {
+        // Signed by Mozilla, so Firefox installs it like any add-on and keeps it.
+        let file = crate::browser::firefox_addon().map_or("bdownloader-firefox.xpi next to BDownloader.exe".to_owned(), |f| f.display().to_string());
+        let file_copied = copied == Some(file.as_str());
+        body.push(
+            row![
+                button(text("Add to Firefox").size(14))
+                    .padding([10, 18])
+                    .style(style::primary)
+                    .on_press(Message::AddToFirefox),
+                text("Firefox opens and asks whether to add BDownloader: click Add.").size(14).width(Fill),
+            ]
+            .spacing(14)
+            .align_y(Center),
+        )
+        .push(muted("Firefox didn't open? Drag this file into a Firefox window:").size(13))
+        .push(copy_field(file, file_copied))
+    } else {
+        let page = browser.extensions_page().to_owned();
+        let folder =
+            crate::browser::extension_dir().map_or("the extension folder next to BDownloader.exe".to_owned(), |dir| dir.display().to_string());
+        let page_copied = copied == Some(page.as_str());
+        let folder_copied = copied == Some(folder.as_str());
+        body.push(step("1", "Copy this address and paste it into the browser's address bar:"))
+            .push(copy_field(page, page_copied))
+            .push(step("2", browser.developer_mode()))
+            .push(step("3", "Click Load unpacked and choose this folder:"))
+            .push(copy_field(folder, folder_copied))
+    };
+    body = body.push(muted("It shows as connected here once the browser has talked to BDownloader.").size(13));
 
     let footer = row![
         space().width(Fill),

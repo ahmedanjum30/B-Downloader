@@ -15,7 +15,7 @@ Free for personal and other non-commercial use. See [License](#license).
 
 - **Multi-connection downloads.** Each file is split into parts that download in parallel, starting with one connection and adding more while the server keeps up. When a part finishes, its connection takes over half of the biggest remaining one, so no connection sits idle.
 - **Pause and resume**, including after closing the app, a crash or a restart. Expired links can be refreshed and the download continues where it stopped.
-- **Browser extension** for Chrome and Edge: downloads you start in the browser go to BDownloader, and links get a "Download with BDownloader" right-click entry. Downloads that need a login work, because the browser's cookies come along (they're never saved to disk).
+- **Browser extension** for Chrome, Edge, Brave, Opera, Vivaldi and Firefox: downloads you start in the browser go to BDownloader, and links get a "Download with BDownloader" right-click entry. Downloads that need a login work, because the browser's cookies come along (they're never saved to disk).
 - **Video downloads.** A "Download this video" bar appears on videos in web pages, like IDM's: video files and HLS streams (`.m3u8`), including encrypted (AES-128) ones, downloaded over several connections.
 - **YouTube**, on youtube.com and in YouTube players embedded in other sites: pick any quality up to 4K, or sound only. Picture and sound are joined into one MP4. No extra programs needed.
 - **Speed limit** for all downloads together, from the top bar; it applies at once.

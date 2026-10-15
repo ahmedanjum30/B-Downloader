@@ -68,6 +68,9 @@ pub struct YoutubeRequest {
     pub video: Option<YoutubeFormatInfo>,
     #[serde(default)]
     pub audio: Option<YoutubeFormatInfo>,
+    /// The video's length in milliseconds.
+    #[serde(default)]
+    pub duration_ms: Option<u64>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]

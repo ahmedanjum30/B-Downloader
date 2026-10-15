@@ -36,13 +36,17 @@ jobs:
       - name: Build the installer
         shell: pwsh
         run: ./scripts/build-installer.ps1
+        env:
+          # Mozilla signs the Firefox add-on (scripts/sign-firefox.ps1).
+          AMO_JWT_ISSUER: ${{ secrets.AMO_JWT_ISSUER }}
+          AMO_JWT_SECRET: ${{ secrets.AMO_JWT_SECRET }}
 
       - name: Package
         shell: pwsh
         run: |
           # The extension on its own, for the Chrome Web Store and Edge Add-ons.
           ./scripts/package-extension.ps1
-          Get-ChildItem dist -File -Include *.zip, *.exe -Recurse | ForEach-Object {
+          Get-ChildItem dist -File -Include *.zip, *.exe, bdownloader-firefox-*.xpi -Exclude *-unsigned.xpi -Recurse | ForEach-Object {
             "$((Get-FileHash $_.FullName -Algorithm SHA256).Hash.ToLower())  $($_.Name)"
           } | Set-Content dist/SHA256SUMS.txt
 
@@ -52,6 +56,11 @@ jobs:
           path: |
             dist/BDownloader-Setup-*.exe
             dist/bdownloader-extension-*.zip
+            # The signed Firefox add-on, and the file installed copies check
+            # for updates (its update_url leads to the latest release's copy).
+            dist/bdownloader-firefox-*.xpi
+            !dist/*-unsigned.xpi
+            dist/firefox-updates.json
             dist/SHA256SUMS.txt
           if-no-files-found: error
 
@@ -75,5 +84,5 @@ jobs:
 
             > **Windows says "Windows protected your PC"?** Click **More info**, then **Run anyway**. BDownloader isn't code-signed yet, so Windows doesn't know the publisher. The installer is the one built by this repository's release workflow; you can check it against `SHA256SUMS.txt`.
 
-            The extension zip is for the Chrome Web Store and Edge Add-ons. To add the extension yourself, open **Browser extension** in BDownloader.
+            To add the browser extension, open **Browser extension** in BDownloader; Firefox takes one click there. The extension zip is for the Chrome Web Store and Edge Add-ons.
           generate_release_notes: true

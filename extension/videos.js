@@ -169,21 +169,25 @@ async function describePlaylist(url, source, nested = false) {
 const sentHeaders = new Map();
 const REQUEST_TYPES = ["media", "xmlhttprequest", "other", "object"];
 
-chrome.webRequest.onSendHeaders.addListener(
-  (details) => {
-    if (details.tabId < 0) return;
-    const get = (name) => {
-      const h = (details.requestHeaders || []).find((h) => h.name.toLowerCase() === name);
-      return h ? h.value : null;
-    };
-    const sent = { referer: get("referer"), origin: get("origin") };
-    if (!sent.referer && !sent.origin) return;
-    sentHeaders.set(details.requestId, sent);
-    if (sentHeaders.size > 500) sentHeaders.delete(sentHeaders.keys().next().value);
-  },
-  { urls: ["<all_urls>"], types: REQUEST_TYPES },
-  ["requestHeaders", "extraHeaders"],
-);
+function rememberSentHeaders(details) {
+  if (details.tabId < 0) return;
+  const get = (name) => {
+    const h = (details.requestHeaders || []).find((h) => h.name.toLowerCase() === name);
+    return h ? h.value : null;
+  };
+  const sent = { referer: get("referer"), origin: get("origin") };
+  if (!sent.referer && !sent.origin) return;
+  sentHeaders.set(details.requestId, sent);
+  if (sentHeaders.size > 500) sentHeaders.delete(sentHeaders.keys().next().value);
+}
+
+// Chromium browsers only show Referer and Origin with "extraHeaders";
+// Firefox shows them anyway and refuses that option.
+try {
+  chrome.webRequest.onSendHeaders.addListener(rememberSentHeaders, { urls: ["<all_urls>"], types: REQUEST_TYPES }, ["requestHeaders", "extraHeaders"]);
+} catch {
+  chrome.webRequest.onSendHeaders.addListener(rememberSentHeaders, { urls: ["<all_urls>"], types: REQUEST_TYPES }, ["requestHeaders"]);
+}
 
 // Where a request came from: what the player sent, or else the frame that made it.
 function requestSource(details) {

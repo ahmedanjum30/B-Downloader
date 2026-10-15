@@ -43,7 +43,10 @@ pub fn view(app: &App) -> Element<'_, Message> {
             Some(item) => modal(base, dialogs::remove(item, *delete_file)),
             None => base.into(),
         },
-        Some(Modal::Extension) => modal(base, dialogs::extension(app.settings.extension_connected, app.copied.as_deref())),
+        Some(Modal::Extension(browser)) => modal(
+            base,
+            dialogs::extension(*browser, app.settings.extension_connected, app.copied.as_deref()),
+        ),
     }
 }
 
@@ -466,7 +469,8 @@ fn downloading_text(item: &Item) -> String {
     }
     // Connections that are open but get no data are worth knowing about.
     match (item.active_connections, item.receiving) {
-        (0 | 1, _) => {}
+        (0, _) => {}
+        (1, _) => parts.push("1 connection".to_owned()),
         (open, receiving) if receiving < open => parts.push(format!("{open} connections · {receiving} receiving")),
         (open, _) => parts.push(format!("{open} connections")),
     }

@@ -28,7 +28,7 @@ use crate::item::{Item, State};
 use crate::store::{self, HashKind, Settings, ThemeChoice};
 use crate::tray::{self, Tray, TrayAction};
 use crate::update::{self, Relaunch, Release};
-use crate::{format, instance, memory, style};
+use crate::{browser, format, instance, memory, style};
 
 /// Trims memory once the window and the last download have settled.
 fn trim_memory_soon() -> Task<Message> {
@@ -86,7 +86,8 @@ impl Filter {
 pub enum Modal {
     Add(Box<AddDialog>),
     Settings(Settings),
-    Extension,
+    /// The steps shown are for this browser.
+    Extension(browser::Browser),
     Refresh(Box<RefreshDialog>),
     /// `delete_file`: also move a finished download's file to the Recycle Bin.
     Remove {
@@ -131,6 +132,9 @@ pub enum Message {
 
     OpenSettings,
     OpenExtension,
+    /// Show the Browser extension steps for this browser.
+    ExtensionBrowser(browser::Browser),
+    AddToFirefox,
     /// Copies the text to the clipboard and shows "Copied" next to it for a moment.
     Copy(String),
     CopiedShown(String),
@@ -438,7 +442,17 @@ impl App {
 
             Message::Filter(filter) => self.filter = filter,
             Message::Search(search) => self.search = search,
-            Message::OpenExtension => self.modal = Some(Modal::Extension),
+            Message::OpenExtension => self.modal = Some(Modal::Extension(browser::Browser::Chrome)),
+            Message::ExtensionBrowser(chosen) => {
+                if let Some(Modal::Extension(browser)) = &mut self.modal {
+                    *browser = chosen;
+                }
+            }
+            Message::AddToFirefox => {
+                if let Err(e) = browser::add_to_firefox() {
+                    log::warn!("opening the add-on in Firefox: {e}");
+                }
+            }
             Message::Copy(text) => {
                 self.copied = Some(text.clone());
                 let reset = text.clone();

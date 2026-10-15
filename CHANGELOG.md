@@ -6,6 +6,22 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+## [1.0.1] - 2026-10-15
+
+### Added
+- YouTube videos download over several connections at once, like other
+  downloads: the video is split into stretches that separate connections
+  fetch side by side (up to the connections setting, at least 20 seconds
+  each). Pausing and resuming keeps what each connection got.
+- The browser extension works in Firefox, Brave, Opera and Vivaldi too. The
+  Browser extension window has a tab with the steps for each browser.
+- Firefox takes one click: Add to Firefox opens the add-on, signed by
+  Mozilla, and Firefox keeps it and updates it by itself from then on.
+
+### Changed
+- A download's details always show its number of connections, also when
+  it's just one.
+
 ## [1.0.0] - 2026-10-15
 
 ### Added
@@ -244,7 +260,8 @@ First release.
   from 167 MB to 24 MB (working set) and the exe from 11.6 MB to 6.8 MB, with
   no change in download speed (28 MB/s over 8 connections, about 1% CPU).
 
-[Unreleased]: https://github.com/ahmedanjum30/BDownloader/compare/v1.0.0...HEAD
+[Unreleased]: https://github.com/ahmedanjum30/BDownloader/compare/v1.0.1...HEAD
+[1.0.1]: https://github.com/ahmedanjum30/BDownloader/compare/v1.0.0...v1.0.1
 [1.0.0]: https://github.com/ahmedanjum30/BDownloader/compare/v0.1.10...v1.0.0
 [0.1.10]: https://github.com/ahmedanjum30/BDownloader/compare/v0.1.9...v0.1.10
 [0.1.9]: https://github.com/ahmedanjum30/BDownloader/compare/v0.1.8...v0.1.9
