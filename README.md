@@ -21,7 +21,7 @@ Free for personal and other non-commercial use. See [License](#license).
 - **Speed limit** for all downloads together, from the top bar; it applies at once.
 - **Optional integrity check.** Verify a finished file's MD5 or SHA-256 checksum.
 - **Stays out of the way.** Runs in the tray, uses little memory while idle, and updates itself.
-- **Native and lightweight.** Written in Rust with the [iced](https://iced.rs) GUI toolkit; the installer is about 6 MB. No bundled browser engine.
+- **Native and lightweight.** Written in Rust with the [iced](https://iced.rs) GUI toolkit; the installer is under 5 MB. No bundled browser engine.
 - **Modern interface** with dark and light themes, live speed and time left, and a progress bar that shows what each connection is downloading.
 
 **Coming later:** a download queue with a scheduler, and per-download speed limits.
