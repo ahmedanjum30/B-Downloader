@@ -129,12 +129,14 @@ impl App {
     }
 
     /// With automatic updates, a downloaded update installs once nothing is
-    /// downloading and the window is in the tray, so it never interrupts. The
-    /// app comes back in the tray. Otherwise it installs when the app exits.
+    /// downloading and no dialog is open, so it never interrupts. The app
+    /// restarts as it was: with its window, or in the tray. Otherwise it
+    /// installs when the app exits.
     pub(super) fn install_if_idle(&mut self) -> Task<Message> {
-        let idle = !self.items.iter().any(|i| i.state.is_running());
-        if self.settings.auto_update && idle && self.window_hidden && !self.exiting && matches!(self.update, Update::Ready { .. }) {
-            self.install_on_quit = Some(Relaunch::Tray);
+        let idle = !self.items.iter().any(|i| i.state.is_running()) && self.modal.is_none() && self.covered.is_empty() && self.pending.is_empty();
+        if self.settings.auto_update && idle && !self.exiting && matches!(self.update, Update::Ready { .. }) {
+            log::info!("installing the update now that nothing is downloading");
+            self.install_on_quit = Some(if self.window_hidden { Relaunch::Tray } else { Relaunch::Window });
             return self.exit();
         }
         Task::none()

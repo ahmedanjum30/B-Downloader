@@ -306,8 +306,38 @@ fn browser_dir(settings: &Settings, chosen: Option<&str>) -> PathBuf {
         key(a) == key(b)
     };
     chosen
-        .map(PathBuf::from)
+        // A file at the top of a drive leaves just "D:", which Windows reads
+        // as the current folder on D:, not its root.
+        .map(|dir| {
+            if dir.len() == 2 && dir.ends_with(':') {
+                PathBuf::from(format!("{dir}\\"))
+            } else {
+                PathBuf::from(dir)
+            }
+        })
         .filter(|dir| dir.is_absolute() && dir.is_dir())
         .filter(|dir| !same(dir, &store::default_download_dir()))
         .unwrap_or_else(|| settings.download_dir.clone())
+}
+
+#[cfg(all(test, windows))]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn the_browsers_folder_is_used_unless_its_the_usual_downloads() {
+        let settings = Settings {
+            download_dir: PathBuf::from(r"C:\Elsewhere"),
+            ..Settings::default()
+        };
+        let temp = std::env::temp_dir();
+        assert_eq!(browser_dir(&settings, temp.to_str()), temp);
+        // A file at the top of a drive.
+        let drive = &temp.to_str().unwrap()[..2];
+        assert_eq!(browser_dir(&settings, Some(drive)), PathBuf::from(format!("{drive}\\")));
+        let downloads = store::default_download_dir();
+        assert_eq!(browser_dir(&settings, downloads.to_str()), settings.download_dir);
+        assert_eq!(browser_dir(&settings, None), settings.download_dir);
+        assert_eq!(browser_dir(&settings, Some("relative")), settings.download_dir);
+    }
 }

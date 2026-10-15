@@ -216,6 +216,8 @@ pub struct App {
     install_on_quit: Option<Relaunch>,
     /// Downloads from the browser waiting for their confirmation dialog.
     pending: VecDeque<AddRequest>,
+    /// Dialogs covered by a newer one, which come back as it closes (last on top).
+    covered: Vec<Modal>,
     /// The speed limit field in Settings, as typed.
     pub speed_limit_text: String,
     /// The window's width, so the layout can adapt to it.
@@ -248,6 +250,7 @@ impl App {
             update_manual: false,
             install_on_quit: None,
             pending: VecDeque::new(),
+            covered: Vec::new(),
             speed_limit_text,
             width: crate::WINDOW_SIZE.width,
         };
@@ -364,6 +367,28 @@ impl App {
             }
             self.modal = Some(Modal::Add(Box::new(AddDialog::from_request(&self.settings, request))));
             return Task::batch([task, self.probe()]);
+        }
+        // The dialog underneath comes back. A link check that finished while
+        // it was covered went unseen, so it runs again.
+        if self.modal.is_none()
+            && !self.exiting
+            && let Some(covered) = self.covered.pop()
+        {
+            let recheck = match &covered {
+                Modal::Add(dialog) => matches!(dialog.probe, Probe::Checking).then_some(false),
+                Modal::Refresh(dialog) => matches!(dialog.probe, Probe::Checking).then_some(true),
+                _ => None,
+            };
+            self.modal = Some(covered);
+            return match recheck {
+                Some(false) => Task::batch([task, self.probe()]),
+                Some(true) => Task::batch([task, self.refresh_probe()]),
+                None => task,
+            };
+        }
+        // A ready update waits for idle moments, such as a dialog closing.
+        if matches!(self.update, Update::Ready { .. }) && !self.exiting {
+            return Task::batch([task, self.install_if_idle()]);
         }
         task
     }
@@ -496,7 +521,11 @@ impl App {
                 }
                 Request::Add(add) => {
                     if add.is_valid() {
-                        log::info!("download from the browser, waiting for confirmation");
+                        log::info!("download from the browser, waiting for confirmation (browser's folder: {:?})", add.dir);
+                        // The newest download's dialog goes on top of what's open.
+                        if let Some(open) = self.modal.take() {
+                            self.covered.push(open);
+                        }
                         self.pending.push_back(add);
                     }
                     return self.show_window();

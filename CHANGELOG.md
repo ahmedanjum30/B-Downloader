@@ -6,6 +6,25 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+## [1.0.3] - 2026-10-15
+
+### Added
+- The browser extension is coming to the Edge Add-ons store. The Browser
+  extension window gets an Add to Edge button, and Edge offers the
+  extension when it starts.
+
+### Changed
+- Automatic updates install as soon as nothing is downloading and no
+  dialog is open, also while the window is showing; BDownloader restarts
+  as it was. Before, they waited until the window was in the tray.
+- A download from the browser opens its dialog on top of one that's
+  already open, instead of waiting behind it; the one underneath comes
+  back when it's closed.
+
+### Fixed
+- Firefox: a download saved at the top of a drive (like `D:\`) now goes to
+  that drive, instead of BDownloader's own download folder.
+
 ## [1.0.2] - 2026-10-15
 
 ### Added
@@ -277,7 +296,8 @@ First release.
   from 167 MB to 24 MB (working set) and the exe from 11.6 MB to 6.8 MB, with
   no change in download speed (28 MB/s over 8 connections, about 1% CPU).
 
-[Unreleased]: https://github.com/ahmedanjum30/BDownloader/compare/v1.0.2...HEAD
+[Unreleased]: https://github.com/ahmedanjum30/BDownloader/compare/v1.0.3...HEAD
+[1.0.3]: https://github.com/ahmedanjum30/BDownloader/compare/v1.0.2...v1.0.3
 [1.0.2]: https://github.com/ahmedanjum30/BDownloader/compare/v1.0.1...v1.0.2
 [1.0.1]: https://github.com/ahmedanjum30/BDownloader/compare/v1.0.0...v1.0.1
 [1.0.0]: https://github.com/ahmedanjum30/BDownloader/compare/v0.1.10...v1.0.0

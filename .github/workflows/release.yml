@@ -86,3 +86,25 @@ jobs:
 
             To add the browser extension, open **Browser extension** in BDownloader; Firefox takes one click there. The extension zip is for the Chrome Web Store and Edge Add-ons.
           generate_release_notes: true
+
+  # A changed extension goes to Edge Add-ons for review; Edge then updates it
+  # by itself. Skipped when the extension is unchanged or the secrets aren't set.
+  edge:
+    needs: publish
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # The tags, to compare with the previous release's extension.
+          fetch-depth: 0
+      - uses: actions/download-artifact@v4
+        with:
+          name: release-files
+          path: dist
+      - name: Submit to Edge Add-ons
+        shell: pwsh
+        run: ./scripts/publish-edge.ps1
+        env:
+          EDGE_CLIENT_ID: ${{ secrets.EDGE_CLIENT_ID }}
+          EDGE_API_KEY: ${{ secrets.EDGE_API_KEY }}
+          EDGE_PRODUCT_ID: ${{ secrets.EDGE_PRODUCT_ID }}
