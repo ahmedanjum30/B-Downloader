@@ -2,7 +2,12 @@
 #
 #   powershell -ExecutionPolicy Bypass -File scripts\build-installer.ps1
 #
+# -Quick builds with the `quick` profile instead: seconds instead of minutes
+# after a change, for installers to test locally. Releases use the default.
+#
 # Needs Inno Setup 6 (winget install JRSoftware.InnoSetup).
+
+param([switch]$Quick)
 
 $ErrorActionPreference = 'Stop'
 $root = Split-Path $PSScriptRoot -Parent
@@ -19,9 +24,10 @@ $version = (Select-String -Path (Join-Path $root 'Cargo.toml') -Pattern '^versio
 
 Push-Location $root
 try {
-    cargo build --release --workspace
+    $buildProfile = if ($Quick) { 'quick' } else { 'release' }
+    cargo build --profile $buildProfile --workspace
     if ($LASTEXITCODE -ne 0) { throw 'cargo build failed' }
-    & $iscc /Qp "/DAppVersion=$version" "/DBinDir=$root\target\release" (Join-Path $root 'installer\bdownloader.iss')
+    & $iscc /Qp "/DAppVersion=$version" "/DBinDir=$root\target\$buildProfile" (Join-Path $root 'installer\bdownloader.iss')
     if ($LASTEXITCODE -ne 0) { throw 'Inno Setup failed' }
 } finally {
     Pop-Location

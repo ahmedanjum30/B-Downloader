@@ -33,7 +33,7 @@ $env:BDOWNLOADER_DATA = "$env:TEMP\bdl-dev"; cargo run -p bdownloader -- https:/
 
 ### Installer
 
-`scripts/build-installer.ps1` builds the release binaries and `dist/BDownloader-Setup-<version>.exe` from `installer/bdownloader.iss`. It needs [Inno Setup 6](https://jrsoftware.org/isinfo.php) (`winget install JRSoftware.InnoSetup`). To test it without clicking through the wizard: `BDownloader-Setup-<version>.exe /VERYSILENT`, and `unins000.exe /VERYSILENT` in the install folder to remove it.
+`scripts/build-installer.ps1` builds the release binaries and `dist/BDownloader-Setup-<version>.exe` from `installer/bdownloader.iss`. For a test installer, `-Quick` uses the `quick` profile: it rebuilds in seconds after a change instead of about two minutes, for a somewhat bigger `.exe`. Releases always use the full release profile. It needs [Inno Setup 6](https://jrsoftware.org/isinfo.php) (`winget install JRSoftware.InnoSetup`). To test it without clicking through the wizard: `BDownloader-Setup-<version>.exe /VERYSILENT`, and `unins000.exe /VERYSILENT` in the install folder to remove it.
 
 The app icon is drawn by `scripts/app-icon.ps1` into `crates/app/assets`.
 
