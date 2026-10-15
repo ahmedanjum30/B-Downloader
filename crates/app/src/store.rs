@@ -28,6 +28,10 @@ pub struct Settings {
     /// Download and install updates on their own, while nothing is downloading.
     /// Otherwise a banner offers each update.
     pub auto_update: bool,
+    /// Cap the combined speed of all downloads at `speed_limit_mb`.
+    pub limit_speed: bool,
+    /// MB/s. Kept while the limit is off, so turning it back on restores it.
+    pub speed_limit_mb: f64,
 }
 
 impl Default for Settings {
@@ -39,7 +43,16 @@ impl Default for Settings {
             extension_connected: false,
             close_to_tray: true,
             auto_update: true,
+            limit_speed: false,
+            speed_limit_mb: 5.0,
         }
+    }
+}
+
+impl Settings {
+    /// The limit for the engine, in bytes per second.
+    pub fn speed_limit(&self) -> Option<u64> {
+        (self.limit_speed && self.speed_limit_mb > 0.0).then_some((self.speed_limit_mb * 1024.0 * 1024.0) as u64)
     }
 }
 

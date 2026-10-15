@@ -534,3 +534,49 @@ async fn uses_server_file_name_and_never_overwrites() {
     assert_eq!(outcome, Outcome::Completed(dir.path().join("report final (1).pdf")));
     assert_eq!(std::fs::read(dir.path().join("report final.pdf")).unwrap(), b"keep me");
 }
+
+#[tokio::test(flavor = "multi_thread")]
+async fn speed_limit_caps_all_connections_together() {
+    let data = test_data(2 * MB);
+    let addr = Server::new(data.clone()).start().await;
+    let dir = tempfile::tempdir().unwrap();
+    let engine = Engine::new().unwrap();
+    engine.set_speed_limit(Some(MB as u64));
+    let mut options = DownloadOptions::new(format!("http://{addr}/limited.bin"), dir.path());
+    options.connections = 4;
+
+    let started = std::time::Instant::now();
+    let Outcome::Completed(path) = engine.start(options).wait().await.unwrap() else {
+        panic!("not completed")
+    };
+    let took = started.elapsed();
+    assert!(std::fs::read(path).unwrap() == data);
+    // 2 MB at 1 MB/s; a short burst at the start is allowed.
+    assert!(took >= Duration::from_millis(1700), "took {took:?}");
+    assert!(took < Duration::from_secs(4), "took {took:?}");
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn waiting_for_the_speed_limit_is_not_a_stall() {
+    // Eight connections share 256 KB/s, so each waits far longer than the
+    // stall timeout between reads. That must not count as the server stalling.
+    let data = test_data(MB);
+    let addr = Server::new(data.clone()).start().await;
+    let dir = tempfile::tempdir().unwrap();
+    let engine = Engine::with_stall_timeout(Duration::from_millis(300)).unwrap();
+    engine.set_speed_limit(Some(256 * 1024));
+    let mut options = DownloadOptions::new(format!("http://{addr}/slow.bin"), dir.path());
+    options.connections = 8;
+
+    let handle = engine.start(options);
+    let mut saw_problem = false;
+    while !handle.is_finished() {
+        saw_problem |= handle.progress().problem.is_some();
+        tokio::time::sleep(Duration::from_millis(20)).await;
+    }
+    let Outcome::Completed(path) = handle.wait().await.unwrap() else {
+        panic!("not completed")
+    };
+    assert!(std::fs::read(path).unwrap() == data);
+    assert!(!saw_problem, "waiting for the limit was reported as a problem");
+}

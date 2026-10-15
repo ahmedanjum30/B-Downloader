@@ -20,6 +20,9 @@ use iced::{Size, window};
 
 use crate::app::App;
 
+/// The window's size when it opens.
+pub const WINDOW_SIZE: Size = Size::new(1120.0, 720.0);
+
 fn main() -> iced::Result {
     // Run by the installer and uninstaller.
     match std::env::args().nth(1).as_deref() {
@@ -50,7 +53,7 @@ fn main() -> iced::Result {
             exit_on_close_request: false,
             // `--background`: started by an update while the app was in the tray.
             visible: !std::env::args().any(|a| a == "--background"),
-            size: Size::new(1120.0, 720.0),
+            size: WINDOW_SIZE,
             min_size: Some(Size::new(820.0, 520.0)),
             icon: window::icon::from_rgba(include_bytes!("../assets/icon-64.rgba").to_vec(), 64, 64).ok(),
             ..window::Settings::default()

@@ -14,6 +14,7 @@ mod download;
 mod error;
 mod fsutil;
 mod http;
+mod limit;
 mod segment;
 mod state;
 

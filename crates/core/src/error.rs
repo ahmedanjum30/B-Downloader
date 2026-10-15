@@ -16,6 +16,8 @@ pub enum Error {
     ResourceChanged,
     #[error("the connection closed before the download finished")]
     Incomplete,
+    #[error("the server stopped sending data")]
+    Stalled,
     #[error("file error: {0}")]
     Io(#[from] io::Error),
     #[error("checksum mismatch: expected {expected}, got {actual}")]
@@ -43,7 +45,7 @@ impl Error {
         match self {
             Error::Http(e) => !e.is_builder() && !e.is_redirect(),
             Error::Status(code) => *code == 408 || *code == 429 || *code >= 500,
-            Error::Incomplete => true,
+            Error::Incomplete | Error::Stalled => true,
             _ => false,
         }
     }

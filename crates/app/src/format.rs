@@ -42,6 +42,12 @@ pub fn middle_ellipsis(text: &str, max: usize) -> String {
     format!("{start}…{end}")
 }
 
+/// `5` for 5.0, `2.5` for 2.5: a number as someone would type it.
+pub fn number(value: f64) -> String {
+    let text = format!("{value:.2}");
+    text.trim_end_matches('0').trim_end_matches('.').to_owned()
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

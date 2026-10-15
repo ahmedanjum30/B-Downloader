@@ -14,6 +14,7 @@ use crate::checksum::Checksum;
 use crate::error::{Error, Result};
 use crate::fsutil::{make_sparse, sanitize_file_name, sidecar, unique_path, write_all_at};
 use crate::http::{self, ProbeInfo, header_str, parse_content_range};
+use crate::limit::Limiter;
 use crate::segment::Segments;
 use crate::state::ResumeState;
 
@@ -37,6 +38,8 @@ const RECEIVING_WINDOW: Duration = Duration::from_secs(3);
 #[derive(Debug, Clone)]
 pub struct Engine {
     client: Client,
+    stall_timeout: Duration,
+    limiter: Arc<Limiter>,
 }
 
 /// A connection that sends nothing for this long is dropped and reopened.
@@ -49,32 +52,58 @@ impl Engine {
 
     /// Like [`Engine::new`] with a different [`STALL_TIMEOUT`], for tests.
     pub fn with_stall_timeout(stall_timeout: Duration) -> Result<Self> {
+        // No `read_timeout` here: its clock keeps running while we aren't
+        // reading (waiting for the speed limit or a slow disk), so it would
+        // drop healthy connections. `stalled` times only the waits on the server.
         let client = Client::builder()
             .user_agent(concat!("BDownloader/", env!("CARGO_PKG_VERSION")))
             // With HTTP/2 all range requests would share a single TCP
             // connection, which defeats downloading over several connections.
             .http1_only()
             .connect_timeout(Duration::from_secs(15))
-            .read_timeout(stall_timeout)
             .build()?;
-        Ok(Self { client })
+        Ok(Self {
+            client,
+            stall_timeout,
+            limiter: Arc::default(),
+        })
+    }
+
+    /// Caps the combined speed of all downloads, in bytes per second.
+    /// `None` removes the limit. Applies to running downloads right away.
+    pub fn set_speed_limit(&self, bytes_per_second: Option<u64>) {
+        self.limiter.set(bytes_per_second);
+    }
+
+    pub fn speed_limit(&self) -> Option<u64> {
+        self.limiter.get()
+    }
+
+    /// Waits for `future`, a step that needs the server to answer, giving up
+    /// if it takes longer than the stall timeout.
+    async fn stalled<T, E: Into<Error>>(&self, future: impl Future<Output = std::result::Result<T, E>>) -> Result<T> {
+        match tokio::time::timeout(self.stall_timeout, future).await {
+            Ok(result) => result.map_err(Into::into),
+            Err(_) => Err(Error::Stalled),
+        }
     }
 
     /// Asks the server for the file's size, name and range support without
     /// downloading it. `headers` are sent along, as in [`DownloadOptions::headers`].
     pub async fn probe(&self, url: &str, headers: &[(String, String)]) -> Result<ProbeInfo> {
-        http::probe(&self.client, &parse_url(url)?, &http::header_map(headers)).await
+        self.stalled(http::probe(&self.client, &parse_url(url)?, &http::header_map(headers)))
+            .await
     }
 
     /// Fetches a small text resource, such as a JSON API response, refusing
     /// anything larger than `max_bytes`.
     pub async fn get_text(&self, url: &str, max_bytes: usize) -> Result<String> {
-        let mut response = self.client.get(parse_url(url)?).send().await?;
+        let mut response = self.stalled(self.client.get(parse_url(url)?).send()).await?;
         if !response.status().is_success() {
             return Err(Error::Status(response.status().as_u16()));
         }
         let mut body = Vec::new();
-        while let Some(chunk) = response.chunk().await? {
+        while let Some(chunk) = self.stalled(response.chunk()).await? {
             if body.len() + chunk.len() > max_bytes {
                 return Err(io::Error::other("response too large").into());
             }
@@ -86,7 +115,7 @@ impl Engine {
     /// Follows redirects from `url` and returns where they end, without
     /// downloading the body.
     pub async fn final_url(&self, url: &str) -> Result<String> {
-        let response = self.client.head(parse_url(url)?).send().await?;
+        let response = self.stalled(self.client.head(parse_url(url)?).send()).await?;
         if !response.status().is_success() {
             return Err(Error::Status(response.status().as_u16()));
         }
@@ -100,7 +129,7 @@ impl Engine {
     pub fn start(&self, options: DownloadOptions) -> DownloadHandle {
         let shared = Arc::new(Shared::default());
         let pause = CancellationToken::new();
-        let task = tokio::spawn(run(self.client.clone(), options, shared.clone(), pause.clone()));
+        let task = tokio::spawn(run(self.clone(), options, shared.clone(), pause.clone()));
         DownloadHandle { shared, pause, task }
     }
 }
@@ -280,8 +309,8 @@ fn parse_url(url: &str) -> Result<Url> {
     }
 }
 
-async fn run(client: Client, options: DownloadOptions, shared: Arc<Shared>, pause: CancellationToken) -> Result<Outcome> {
-    let result = download(&client, &options, &shared, &pause).await;
+async fn run(engine: Engine, options: DownloadOptions, shared: Arc<Shared>, pause: CancellationToken) -> Result<Outcome> {
+    let result = download(&engine, &options, &shared, &pause).await;
     let url = Url::parse(&options.url).map_or_else(|_| "invalid URL".to_owned(), |u| redact(&u));
     match &result {
         Ok(Outcome::Completed(_)) => log::info!("{url}: completed"),
@@ -297,10 +326,10 @@ async fn run(client: Client, options: DownloadOptions, shared: Arc<Shared>, paus
     result
 }
 
-async fn download(client: &Client, options: &DownloadOptions, shared: &Arc<Shared>, pause: &CancellationToken) -> Result<Outcome> {
+async fn download(engine: &Engine, options: &DownloadOptions, shared: &Arc<Shared>, pause: &CancellationToken) -> Result<Outcome> {
     let url = parse_url(&options.url)?;
     let headers = http::header_map(&options.headers);
-    let info = http::probe(client, &url, &headers).await?;
+    let info = engine.stalled(http::probe(&engine.client, &url, &headers)).await?;
     let target = Target::resolve(options, &info).await?;
     {
         let mut progress = lock(&shared.info);
@@ -348,7 +377,7 @@ async fn download(client: &Client, options: &DownloadOptions, shared: &Arc<Share
     });
 
     let ctx = Arc::new(Worker {
-        client: client.clone(),
+        engine: engine.clone(),
         url,
         file: file.clone(),
         headers,
@@ -543,7 +572,7 @@ async fn save_periodically(shared: Arc<Shared>, base: ResumeState, path: PathBuf
 
 /// One connection's view of the download.
 struct Worker {
-    client: Client,
+    engine: Engine,
     url: Url,
     file: Arc<File>,
     headers: HeaderMap,
@@ -632,7 +661,7 @@ impl Worker {
         if start >= end {
             return Ok(());
         }
-        let mut request = self.client.get(self.url.clone()).headers(self.headers.clone());
+        let mut request = self.engine.client.get(self.url.clone()).headers(self.headers.clone());
         if self.ranged {
             request = request.header(header::RANGE, format!("bytes={start}-{}", end - 1));
             if let Some(validator) = &self.if_range {
@@ -641,7 +670,7 @@ impl Worker {
         }
         let mut response = tokio::select! {
             _ = self.stop.cancelled() => return Ok(()),
-            response = request.send() => response?,
+            response = self.engine.stalled(request.send()) => response?,
         };
         check_response(&response, start)?;
         if !self.ranged {
@@ -653,16 +682,24 @@ impl Worker {
         let result = loop {
             let chunk = tokio::select! {
                 _ = self.stop.cancelled() => break Ok(()),
-                chunk = response.chunk() => chunk,
+                chunk = self.engine.stalled(response.chunk()) => chunk,
             };
             let chunk = match chunk {
                 Ok(Some(chunk)) => chunk,
                 Ok(None) => break lock(&self.shared.segments).finish_stream(i),
-                Err(e) => break Err(e.into()),
+                Err(e) => break Err(e),
             };
             self.shared.clear_problem();
             let (take, complete) = lock(&self.shared.segments).claim(i, chunk.len() as u64);
             buf.extend_from_slice(&chunk[..take as usize]);
+            // Reading more slowly makes the server send more slowly.
+            let wait = self.engine.limiter.delay(take);
+            if !wait.is_zero() {
+                tokio::select! {
+                    _ = self.stop.cancelled() => break Ok(()),
+                    _ = tokio::time::sleep(wait) => {}
+                }
+            }
             if buf.len() >= WRITE_BUFFER {
                 match self.flush(i, &mut buf, offset).await {
                     Ok(next) => offset = next,

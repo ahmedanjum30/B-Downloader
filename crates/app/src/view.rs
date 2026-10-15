@@ -13,6 +13,12 @@ use crate::item::{Item, State};
 use crate::style::{self, Colors, Pick};
 use crate::{dialogs, update};
 
+/// The sidebar's width.
+const SIDEBAR_WIDTH: f32 = 236.0;
+/// Room the header needs for everything in one row, and with "Add download" as "+".
+const WIDE_HEADER: f32 = 920.0;
+const MEDIUM_HEADER: f32 = 760.0;
+
 pub const FONT: Font = Font::with_name("Segoe UI");
 pub const SEMIBOLD: Font = Font {
     weight: Weight::Semibold,
@@ -100,7 +106,7 @@ fn sidebar(app: &App) -> Element<'_, Message> {
             bottom: 18.0,
             left: 14.0,
         })
-        .width(236)
+        .width(SIDEBAR_WIDTH)
         .height(Fill)
         .style(style::sidebar)
         .into()
@@ -155,18 +161,32 @@ fn main_panel(app: &App) -> Element<'_, Message> {
             bottom: 0.0,
             left: 13.0,
         }),
-    ]
-    .width(260);
+    ];
 
-    let header = row![
-        column![text(app.filter.label()).size(26).font(BOLD), muted(subtitle).size(13)]
-            .spacing(2)
-            .width(Fill),
-        search,
-        add_button(),
-    ]
-    .spacing(12)
-    .align_y(Center);
+    let title = column![text(app.filter.label()).size(26).font(BOLD), muted(subtitle).size(13)]
+        .spacing(2)
+        .width(Fill);
+    // Room next to the sidebar, without the panel's padding.
+    let room = app.width - SIDEBAR_WIDTH - 50.0;
+    let header: Element<'_, Message> = if room >= WIDE_HEADER {
+        row![title, speed_limit(app), search.width(260), add_button(true)]
+            .spacing(12)
+            .align_y(Center)
+            .into()
+    } else if room >= MEDIUM_HEADER {
+        // "Add download" turns into a + button to make room.
+        row![title, speed_limit(app), search.width(220), add_button(false)]
+            .spacing(12)
+            .align_y(Center)
+            .into()
+    } else {
+        column![
+            row![title, add_button(true)].spacing(12).align_y(Center),
+            row![speed_limit(app), search.width(Fill)].spacing(12).align_y(Center),
+        ]
+        .spacing(14)
+        .into()
+    };
 
     let items: Vec<&Item> = app.visible().collect();
     let list: Element<'_, Message> = if app.items.is_empty() {
@@ -248,16 +268,52 @@ fn update_banner(app: &App) -> Option<Element<'_, Message>> {
     Some(container(bar).padding([10, 14]).width(Fill).style(style::accent_soft(12.0)).into())
 }
 
-fn add_button<'a>() -> Element<'a, Message> {
-    button(
-        row![icon(&icons::PLUS, 16.0, |c| c.on_accent), text("Add download").size(14).font(SEMIBOLD)]
-            .spacing(8)
-            .align_y(Center),
+/// The speed limit for all downloads together: a toggle and, while it's on,
+/// the limit in MB/s. Changes apply at once, also to running downloads.
+fn speed_limit(app: &App) -> Element<'_, Message> {
+    let on = app.settings.limit_speed;
+    let toggle = button(
+        row![
+            icon(&icons::GAUGE, 16.0, if on { |c| c.accent } else { |c| c.muted }),
+            text(if on { "Limit" } else { "No speed limit" }).size(14),
+        ]
+        .spacing(8)
+        .align_y(Center),
     )
-    .padding([10, 18])
-    .style(style::primary)
-    .on_press(Message::OpenAdd)
-    .into()
+    .padding([7, 10])
+    .style(style::nav(on))
+    .on_press(Message::LimitSpeed(!on));
+    let mut control = row![toggle].spacing(6).align_y(Center);
+    if on {
+        control = control.push(
+            text_input("5", &app.speed_limit_text)
+                .on_input(Message::SpeedLimit)
+                .padding([6, 8])
+                .size(14)
+                .width(56)
+                .style(style::input),
+        );
+        control = control.push(container(muted("MB/s").size(13)).padding(Padding {
+            top: 0.0,
+            right: 8.0,
+            bottom: 0.0,
+            left: 0.0,
+        }));
+    }
+    container(control).padding(3).style(style::panel).into()
+}
+
+/// "+ Add download", or just "+" where space is short.
+fn add_button<'a>(with_label: bool) -> Element<'a, Message> {
+    let mut content = row![icon(&icons::PLUS, 16.0, |c| c.on_accent)].spacing(8).align_y(Center);
+    if with_label {
+        content = content.push(text("Add download").size(14).font(SEMIBOLD));
+    }
+    button(content)
+        .padding(if with_label { [10, 18] } else { [10, 12] })
+        .style(style::primary)
+        .on_press(Message::OpenAdd)
+        .into()
 }
 
 fn empty_state<'a>() -> Element<'a, Message> {
@@ -270,7 +326,7 @@ fn empty_state<'a>() -> Element<'a, Message> {
             text("No downloads yet").size(20).font(SEMIBOLD),
             muted("Copy a link and press Ctrl+V, or click Add download.").size(14),
             space().height(8),
-            add_button(),
+            add_button(true),
         ]
         .spacing(8)
         .align_x(Center),

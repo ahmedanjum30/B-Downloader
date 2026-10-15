@@ -3,8 +3,8 @@
 use std::path::Path;
 
 use bdownloader_core::MAX_CONNECTIONS;
-use iced::widget::{button, checkbox, column, container, pick_list, row, slider, space, text, text_input};
-use iced::{Center, Element, Fill};
+use iced::widget::{button, checkbox, column, container, pick_list, row, scrollable, slider, space, text, text_input};
+use iced::{Center, Element, Fill, Shrink};
 
 use crate::app::{AddDialog, Message, Probe, RefreshDialog};
 use crate::browser;
@@ -24,11 +24,12 @@ fn frame<'a>(title: &'a str, body: Element<'a, Message>, footer: Element<'a, Mes
             .on_press(Message::CloseModal),
     ]
     .align_y(Center);
-    container(column![header, body, footer].spacing(22))
+    let dialog = container(column![header, body, footer].spacing(22))
         .padding(26)
         .width(540)
-        .style(style::dialog)
-        .into()
+        .style(style::dialog);
+    // Scrolls when the window is too short for it, instead of being cut off.
+    container(scrollable(dialog).height(Shrink).spacing(6)).padding(16).into()
 }
 
 fn field<'a>(label: &'a str, content: impl Into<Element<'a, Message>>) -> Element<'a, Message> {

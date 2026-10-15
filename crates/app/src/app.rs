@@ -245,6 +245,10 @@ pub enum Message {
     /// A request from another copy of the app or from the browser extension.
     External(Request),
     SettingsConnections(usize),
+    /// Turns the speed limit in the top bar on or off.
+    LimitSpeed(bool),
+    /// The speed limit as typed, in MB/s.
+    SpeedLimit(String),
     SettingsTheme(ThemeChoice),
     SettingsCloseToTray(bool),
     SettingsAutoUpdate(bool),
@@ -275,6 +279,7 @@ pub enum Message {
 
     /// The window's close button.
     CloseRequested(window::Id),
+    Resized(f32),
     Tray(TrayAction),
     /// Downloads are paused and saved; leave.
     Quit,
@@ -311,16 +316,23 @@ pub struct App {
     install_on_quit: Option<Relaunch>,
     /// Downloads from the browser waiting for their confirmation dialog.
     pending: VecDeque<AddRequest>,
+    /// The speed limit field in Settings, as typed.
+    pub speed_limit_text: String,
+    /// The window's width, so the layout can adapt to it.
+    pub width: f32,
 }
 
 impl App {
     pub fn new() -> (Self, Task<Message>) {
         let engine = Engine::new().expect("failed to set up the HTTP client");
+        let settings = store::load_settings();
+        engine.set_speed_limit(settings.speed_limit());
+        let speed_limit_text = format::number(settings.speed_limit_mb);
         let items: Vec<Item> = store::load_downloads().into_iter().map(Item::from_saved).collect();
         let next_id = items.iter().map(|i| i.id).max().unwrap_or(0) + 1;
         let mut app = Self {
             engine,
-            settings: store::load_settings(),
+            settings,
             items,
             filter: Filter::All,
             search: String::new(),
@@ -336,6 +348,8 @@ impl App {
             update_manual: false,
             install_on_quit: None,
             pending: VecDeque::new(),
+            speed_limit_text,
+            width: crate::WINDOW_SIZE.width,
         };
         // `BDownloader.exe URL...` starts those downloads right away.
         for url in std::env::args().skip(1).filter(|a| a.starts_with("http://") || a.starts_with("https://")) {
@@ -432,6 +446,7 @@ impl App {
             Subscription::run(instance::listen),
             Subscription::run(tray::events),
             window::close_requests().map(Message::CloseRequested),
+            window::resize_events().map(|(_, size)| Message::Resized(size.width)),
         ];
         if self.items.iter().any(|i| i.handle.is_some()) || matches!(self.update, Update::Downloading { .. }) {
             subscriptions.push(time::every(REFRESH).map(|_| Message::Tick));
@@ -651,7 +666,6 @@ impl App {
                     self.filter = Filter::All;
                 }
             }
-
             Message::OpenSettings => self.modal = Some(Modal::Settings(self.settings.clone())),
             Message::OpenExtension => self.modal = Some(Modal::Extension),
             Message::Copy(text) => {
@@ -700,6 +714,21 @@ impl App {
                     draft.connections = n.clamp(1, MAX_CONNECTIONS);
                 }
             }
+            Message::LimitSpeed(limit_speed) => {
+                self.settings.limit_speed = limit_speed;
+                self.apply_speed_limit();
+            }
+            Message::SpeedLimit(typed) => {
+                // Half-typed values ("", "1.") keep the last valid one.
+                if let Ok(mb) = typed.trim().parse::<f64>()
+                    && mb.is_finite()
+                    && mb > 0.0
+                {
+                    self.settings.speed_limit_mb = mb;
+                    self.apply_speed_limit();
+                }
+                self.speed_limit_text = typed;
+            }
             Message::SettingsTheme(theme) => {
                 if let Some(Modal::Settings(draft)) = &mut self.modal {
                     draft.theme = theme;
@@ -718,6 +747,7 @@ impl App {
             Message::SaveSettings => {
                 if let Some(Modal::Settings(draft)) = self.modal.take() {
                     self.settings = draft;
+                    self.engine.set_speed_limit(self.settings.speed_limit());
                     let _ = store::save_settings(&self.settings);
                 }
             }
@@ -867,6 +897,7 @@ impl App {
                 }
             }
 
+            Message::Resized(width) => self.width = width,
             Message::CloseRequested(id) => {
                 // Without a tray icon there'd be no way back to a hidden window.
                 if self.settings.close_to_tray && self.tray.is_some() {
@@ -940,6 +971,12 @@ impl App {
     /// With automatic updates, a downloaded update installs once nothing is
     /// downloading and the window is in the tray, so it never interrupts. The
     /// app comes back in the tray. Otherwise it installs when the app exits.
+    /// Applies the speed limit to running downloads at once and remembers it.
+    fn apply_speed_limit(&mut self) {
+        self.engine.set_speed_limit(self.settings.speed_limit());
+        let _ = store::save_settings(&self.settings);
+    }
+
     fn install_if_idle(&mut self) -> Task<Message> {
         let idle = !self.items.iter().any(|i| i.state.is_running());
         if self.settings.auto_update && idle && self.window_hidden && !self.exiting && matches!(self.update, Update::Ready { .. }) {
