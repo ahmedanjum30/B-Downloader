@@ -24,6 +24,12 @@ pub struct ProbeInfo {
 }
 
 impl ProbeInfo {
+    /// The link is an HLS video stream: a playlist of many small video files.
+    pub fn is_stream(&self) -> bool {
+        self.content_type.as_deref().is_some_and(|t| t.to_ascii_lowercase().contains("mpegurl"))
+            || self.final_url.path().to_ascii_lowercase().ends_with(".m3u8")
+    }
+
     pub fn is_web_page(&self) -> bool {
         self.content_type
             .as_deref()
@@ -35,12 +41,25 @@ impl ProbeInfo {
 /// ranges work. A `HEAD` request would be cheaper, but many servers answer it
 /// differently from `GET`.
 pub(crate) async fn probe(client: &Client, url: &Url, extra: &HeaderMap) -> Result<ProbeInfo> {
-    let resp = client
+    let mut resp = client
         .get(url.clone())
         .headers(extra.clone())
         .header(header::RANGE, "bytes=0-0")
         .send()
         .await?;
+    // Some servers refuse range requests outright (often with 403 or 404)
+    // although a plain request works; such a file downloads over one connection.
+    if resp.status().is_client_error() && resp.status() != StatusCode::RANGE_NOT_SATISFIABLE {
+        let plain = client.get(url.clone()).headers(extra.clone()).send().await?;
+        if plain.status().is_success() {
+            log::info!(
+                "{}: refuses range requests (HTTP {})",
+                crate::download::redact(url),
+                resp.status().as_u16()
+            );
+            resp = plain;
+        }
+    }
     let headers = resp.headers();
     let content_range = header_str(headers, header::CONTENT_RANGE).and_then(parse_content_range);
     let (size, resumable) = match resp.status() {

@@ -2,11 +2,31 @@
   "manifest_version": 3,
   "name": "BDownloader",
   "version": "0.1.10",
-  "description": "Sends your downloads to BDownloader, a fast multi-connection download manager.",
+  "description": "Sends your downloads and the videos you watch to BDownloader, a fast multi-connection download manager.",
   "key": "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEArGb7QZ7PYR2w7OAFuQGsv3ais4oZTVSlS2Q6e7zziOKhP2BcFlplAuJarKESyk9biW5VKMEahxTGQ/LZQw0ztDd1g89i33mFNWp3YafVzFzIjA/OX1jxO7rgL7ElTLNMoivm9A9ECTPebA8O1NFRJjJb2FivAtsGDm749nRfc1LWZz+7aBKmVQs1BUecuznXZCyrrkQcbjMR2vF0iiyaECvqSQ5CrujNNA1sX5iEjm2odSFfij5qO42jWJvDeMcPQcNHcAmSlocJAshhkhbTw6VSch7gi5LkGIa2GfEBrJePQGYAtktYkZiJgvdmb8LyrTgC9/MlNMq1MhgaFkmyfwIDAQAB",
-  "permissions": ["downloads", "contextMenus", "nativeMessaging", "cookies"],
+  "permissions": ["downloads", "contextMenus", "nativeMessaging", "cookies", "webRequest", "webNavigation", "storage", "declarativeNetRequestWithHostAccess"],
   "host_permissions": ["<all_urls>"],
   "background": { "service_worker": "background.js" },
+  "action": { "default_title": "BDownloader", "default_popup": "popup.html" },
+  "content_scripts": [
+    {
+      "matches": ["<all_urls>"],
+      "exclude_matches": ["*://*.youtube.com/*", "*://*.youtube-nocookie.com/*"],
+      "js": ["content.js"],
+      "run_at": "document_start",
+      "all_frames": true,
+      "match_origin_as_fallback": true
+    },
+    {
+      "matches": ["<all_urls>"],
+      "exclude_matches": ["*://*.youtube.com/*", "*://*.youtube-nocookie.com/*"],
+      "js": ["hook.js"],
+      "run_at": "document_start",
+      "all_frames": true,
+      "match_origin_as_fallback": true,
+      "world": "MAIN"
+    }
+  ],
   "icons": {
     "16": "icons/16.png",
     "32": "icons/32.png",

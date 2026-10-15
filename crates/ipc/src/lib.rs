@@ -43,6 +43,10 @@ pub struct AddRequest {
     pub cookies: Option<String>,
     #[serde(default)]
     pub user_agent: Option<String>,
+    /// The site of the page that played a video. Some video servers only
+    /// answer requests that come from their own player.
+    #[serde(default)]
+    pub origin: Option<String>,
     /// Start right away. Links given on the command line do; downloads from
     /// the browser leave this out, so the app asks where to save them first.
     #[serde(default)]
@@ -57,6 +61,7 @@ impl AddRequest {
             referrer: None,
             cookies: None,
             user_agent: None,
+            origin: None,
             start: false,
         }
     }
@@ -78,6 +83,7 @@ impl AddRequest {
         add("Referer", &self.referrer);
         add("Cookie", &self.cookies);
         add("User-Agent", &self.user_agent);
+        add("Origin", &self.origin);
         headers
     }
 }

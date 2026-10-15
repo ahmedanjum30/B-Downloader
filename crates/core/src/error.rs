@@ -18,6 +18,8 @@ pub enum Error {
     Incomplete,
     #[error("the server stopped sending data")]
     Stalled,
+    #[error("can't download this video: {0}")]
+    Unsupported(String),
     #[error("file error: {0}")]
     Io(#[from] io::Error),
     #[error("checksum mismatch: expected {expected}, got {actual}")]

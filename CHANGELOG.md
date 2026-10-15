@@ -6,6 +6,30 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+### Added
+- Download videos from web pages. The browser extension finds the videos a
+  page plays: video files (MP4, WebM, ...) and HLS streams (`.m3u8`).
+  - A "Download this video" bar appears on the video, like IDM. It follows
+    the mouse when a page has several videos, and lists all videos found
+    (with their format and length) plus "Download all" when there's more
+    than one.
+  - The extension's toolbar button shows how many videos were found and
+    lists them too.
+- HLS streams download over several connections and can be paused and
+  resumed. The best quality is picked, encrypted (AES-128) streams are
+  decrypted, and the parts are joined into a `.ts` file, or an `.mp4` for
+  MP4-based streams. Live streams, DRM-protected video and streams whose
+  sound is a separate track aren't supported yet, and say so.
+
+### Fixed
+- Downloads from servers that refuse requests for part of a file (some
+  answer them with 403 or 404) no longer fail; they download over one
+  connection.
+
+### Changed
+- The extension sends the Referer and Origin the page's player used, since
+  many video servers only answer their own player.
+
 ## [0.1.10] - 2026-10-15
 
 ### Added

@@ -32,6 +32,9 @@ struct Server {
     /// Send data to at most this many connections at once; any more get
     /// their headers and then nothing, like a proxy throttling a download.
     stream_limit: Option<usize>,
+    /// Answer every range request with this status, like servers that
+    /// refuse them although a plain request works.
+    refuse_ranges: Option<u16>,
     streaming: AtomicUsize,
     open: AtomicUsize,
 }
@@ -57,6 +60,7 @@ impl Server {
             echo_range: false,
             stall_after: None,
             stream_limit: None,
+            refuse_ranges: None,
             streaming: AtomicUsize::new(0),
             open: AtomicUsize::new(0),
         }
@@ -106,6 +110,21 @@ impl Server {
             Some((a.parse::<usize>().ok()?, b.parse::<usize>().ok()?))
         });
 
+        if let (Some(status), Some(_)) = (self.refuse_ranges, range) {
+            let _ = socket
+                .write_all(
+                    format!(
+                        "HTTP/1.1 {status} Refused
+Content-Length: 0
+Connection: close
+
+"
+                    )
+                    .as_bytes(),
+                )
+                .await;
+            return;
+        }
         let len = self.data.len();
         let (start, end, mut head) = match range {
             Some((a, b)) if self.ranges => {
@@ -579,4 +598,22 @@ async fn waiting_for_the_speed_limit_is_not_a_stall() {
     };
     assert!(std::fs::read(path).unwrap() == data);
     assert!(!saw_problem, "waiting for the limit was reported as a problem");
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn servers_that_refuse_ranges_download_over_one_connection() {
+    let data = test_data(3 * MB);
+    let addr = Server {
+        refuse_ranges: Some(404),
+        ..Server::new(data.clone())
+    }
+    .start()
+    .await;
+    let dir = tempfile::tempdir().unwrap();
+    let options = DownloadOptions::new(format!("http://{addr}/no-ranges.bin"), dir.path());
+
+    let Outcome::Completed(path) = Engine::new().unwrap().start(options).wait().await.unwrap() else {
+        panic!("not completed")
+    };
+    assert!(std::fs::read(path).unwrap() == data);
 }

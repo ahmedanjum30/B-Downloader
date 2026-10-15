@@ -115,8 +115,14 @@ pub fn add(dialog: &AddDialog, existing: Option<(u64, u64)>) -> Element<'_, Mess
                 .rsplit_once('.')
                 .filter(|(stem, ext)| !stem.is_empty() && (1..=5).contains(&ext.len()))
                 .map_or("FILE".to_owned(), |(_, ext)| ext.to_ascii_uppercase());
-            let size = info.size.map_or("Unknown size".to_owned(), format::size);
-            let (support, pick): (&str, style::Pick) = if info.is_web_page() {
+            let (extension, size) = if info.is_stream() {
+                ("VIDEO".to_owned(), "Video stream".to_owned())
+            } else {
+                (extension, info.size.map_or("Unknown size".to_owned(), format::size))
+            };
+            let (support, pick): (&str, style::Pick) = if info.is_stream() {
+                ("Downloads in parts · can resume", |c| c.success)
+            } else if info.is_web_page() {
                 ("This link opens a web page, not a file", |c| c.warning)
             } else if info.resumable {
                 ("Multiple connections · can resume", |c| c.success)

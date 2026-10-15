@@ -610,6 +610,12 @@ impl App {
                         && !dialog.name_edited
                     {
                         dialog.file_name = info.file_name.clone().unwrap_or_default();
+                        // A video stream's name is the playlist's; the video gets its own extension.
+                        if info.is_stream()
+                            && let Some(stem) = dialog.file_name.strip_suffix(".m3u8")
+                        {
+                            dialog.file_name = stem.to_owned();
+                        }
                     }
                     dialog.probe = match result {
                         Ok(info) => Probe::Ready(info),

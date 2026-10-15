@@ -13,6 +13,7 @@ use tokio_util::sync::CancellationToken;
 use crate::checksum::Checksum;
 use crate::error::{Error, Result};
 use crate::fsutil::{make_sparse, sanitize_file_name, sidecar, unique_path, write_all_at};
+use crate::hls;
 use crate::http::{self, ProbeInfo, header_str, parse_content_range};
 use crate::limit::Limiter;
 use crate::segment::Segments;
@@ -25,7 +26,7 @@ pub const MAX_CONNECTIONS: usize = 64;
 /// fast download makes a few large writes instead of many small ones.
 const WRITE_BUFFER: usize = 1024 * 1024;
 /// Attempts per segment in a row without progress before the download fails.
-const MAX_RETRIES: u32 = 5;
+pub(crate) const MAX_RETRIES: u32 = 5;
 const SAVE_INTERVAL: Duration = Duration::from_secs(2);
 /// A download starts with one connection and doubles them (1, 2, 4, 8, ...)
 /// at this interval, up to the number asked for, while the server accepts
@@ -37,9 +38,9 @@ const RECEIVING_WINDOW: Duration = Duration::from_secs(3);
 /// Creates downloads. Cheap to clone; all downloads share one connection pool.
 #[derive(Debug, Clone)]
 pub struct Engine {
-    client: Client,
+    pub(crate) client: Client,
     stall_timeout: Duration,
-    limiter: Arc<Limiter>,
+    pub(crate) limiter: Arc<Limiter>,
 }
 
 /// A connection that sends nothing for this long is dropped and reopened.
@@ -81,7 +82,7 @@ impl Engine {
 
     /// Waits for `future`, a step that needs the server to answer, giving up
     /// if it takes longer than the stall timeout.
-    async fn stalled<T, E: Into<Error>>(&self, future: impl Future<Output = std::result::Result<T, E>>) -> Result<T> {
+    pub(crate) async fn stalled<T, E: Into<Error>>(&self, future: impl Future<Output = std::result::Result<T, E>>) -> Result<T> {
         match tokio::time::timeout(self.stall_timeout, future).await {
             Ok(result) => result.map_err(Into::into),
             Err(_) => Err(Error::Stalled),
@@ -229,6 +230,13 @@ impl DownloadHandle {
 
     pub fn progress(&self) -> Progress {
         let info = lock(&self.shared.info).clone();
+        if let Some(stream) = *lock(&self.shared.stream) {
+            return Progress {
+                total: stream.estimated_total(),
+                downloaded: stream.done_bytes + stream.in_flight,
+                ..info
+            };
+        }
         let segments = lock(&self.shared.segments);
         Progress {
             total: segments.size().or(info.total),
@@ -262,11 +270,35 @@ impl DownloadHandle {
     }
 }
 
+/// Progress of a video stream, counted in parts.
+#[derive(Debug, Clone, Copy, Default)]
+pub(crate) struct StreamProgress {
+    pub parts: u64,
+    pub done_parts: u64,
+    pub done_bytes: u64,
+    /// Bytes of parts still downloading.
+    pub in_flight: u64,
+}
+
+impl StreamProgress {
+    /// The parts' sizes are only known once downloaded, so the total is
+    /// estimated from the average part so far.
+    fn estimated_total(&self) -> Option<u64> {
+        match self.done_parts {
+            0 => None,
+            n if n == self.parts => Some(self.done_bytes),
+            n => Some(self.done_bytes / n * self.parts),
+        }
+    }
+}
+
 #[derive(Default)]
-struct Shared {
+pub(crate) struct Shared {
     segments: Mutex<Segments>,
     /// Everything in [`Progress`] except the segment figures.
-    info: Mutex<Progress>,
+    pub(crate) info: Mutex<Progress>,
+    /// Set for video streams, which come in many small files instead of byte ranges.
+    pub(crate) stream: Mutex<Option<StreamProgress>>,
     /// `info.problem` is set, so the next data that arrives should clear it.
     has_problem: AtomicBool,
     /// The server refused a connection as one too many (HTTP 429 or 503), so
@@ -275,12 +307,12 @@ struct Shared {
 }
 
 impl Shared {
-    fn report_problem(&self, problem: String) {
+    pub(crate) fn report_problem(&self, problem: String) {
         lock(&self.info).problem = Some(problem);
         self.has_problem.store(true, Ordering::Relaxed);
     }
 
-    fn clear_problem(&self) {
+    pub(crate) fn clear_problem(&self) {
         if self.has_problem.swap(false, Ordering::Relaxed) {
             lock(&self.info).problem = None;
         }
@@ -297,7 +329,7 @@ pub(crate) fn redact(url: &Url) -> String {
     url.to_string()
 }
 
-fn lock<T>(mutex: &Mutex<T>) -> MutexGuard<'_, T> {
+pub(crate) fn lock<T>(mutex: &Mutex<T>) -> MutexGuard<'_, T> {
     mutex.lock().unwrap_or_else(PoisonError::into_inner)
 }
 
@@ -330,6 +362,9 @@ async fn download(engine: &Engine, options: &DownloadOptions, shared: &Arc<Share
     let url = parse_url(&options.url)?;
     let headers = http::header_map(&options.headers);
     let info = engine.stalled(http::probe(&engine.client, &url, &headers)).await?;
+    if info.is_stream() {
+        return hls::download(engine, options, shared, pause, &info, &headers).await;
+    }
     let target = Target::resolve(options, &info).await?;
     {
         let mut progress = lock(&shared.info);

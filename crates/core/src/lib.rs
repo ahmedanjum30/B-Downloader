@@ -13,8 +13,10 @@ mod checksum;
 mod download;
 mod error;
 mod fsutil;
+mod hls;
 mod http;
 mod limit;
+mod m3u8;
 mod segment;
 mod state;
 

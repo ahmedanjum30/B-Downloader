@@ -5,6 +5,8 @@
 // BDownloader, and is offered to the app. If the app can't be reached, the
 // browser downloads it again itself, so nothing is lost.
 
+importScripts("videos.js");
+
 const HOST = "com.bdownloader.host";
 const MENU_ID = "bdownloader";
 
@@ -31,7 +33,7 @@ async function cookieHeader(url) {
   }
 }
 
-async function handOver(url, referrer, fileName) {
+async function handOver(url, referrer, fileName, origin) {
   return send({
     type: "add",
     url,
@@ -39,6 +41,7 @@ async function handOver(url, referrer, fileName) {
     file_name: fileName || null,
     cookies: await cookieHeader(url),
     user_agent: navigator.userAgent,
+    origin: origin || null,
   });
 }
 
@@ -92,8 +95,76 @@ chrome.runtime.onInstalled.addListener(() => {
 
 chrome.runtime.onStartup.addListener(hello);
 
-chrome.contextMenus.onClicked.addListener((info, tab) => {
+chrome.contextMenus.onClicked.addListener(async (info, tab) => {
   if (info.menuItemId !== MENU_ID) return;
   const url = info.linkUrl || info.srcUrl;
-  if (isWebUrl(url)) handOver(url, info.pageUrl || (tab && tab.url), null);
+  const page = info.pageUrl || (tab && tab.url);
+  if (isWebUrl(url)) {
+    handOver(url, page, null);
+    return;
+  }
+  // Players that stream (blob: sources) have no link of their own; use the
+  // video found in the tab's traffic instead.
+  if (info.mediaType === "video" && tab) {
+    const [video] = await videosFor(tab.id);
+    if (video) handOver(video.url, video.referer || page, await videoName(tab.id, video), video.origin);
+  }
+});
+
+// From the popup: the tab's videos, and sending one to the app.
+chrome.runtime.onMessage.addListener((message, sender, reply) => {
+  if (message.type === "status") {
+    load(message.tabId).then(
+      (state) => reply({ chunks: Boolean(state.chunks), inline: Boolean(state.inline) }),
+      () => reply({}),
+    );
+    return true;
+  }
+  if (message.type === "videos") {
+    videosFor(message.tabId).then(reply, () => reply([]));
+    return true;
+  }
+  // From content.js, on the page.
+  const tabId = sender.tab && sender.tab.id;
+  if (message.type === "playlist" && tabId !== undefined) {
+    addPlaylist(tabId, message.url, { referer: message.referer, origin: message.origin }).catch(() => {});
+    return false;
+  }
+  if (message.type === "chunk" && tabId !== undefined) {
+    dropChunks(tabId, message.url).catch(() => {});
+    return false;
+  }
+  if (message.type === "inline-playlist" && tabId !== undefined) {
+    update(tabId, (state) => {
+      if (state.inline) return false;
+      state.inline = true;
+    }).catch(() => {});
+    return false;
+  }
+  if (message.type === "videos-count" && tabId !== undefined) {
+    videosFor(tabId).then((v) => reply(v.length), () => reply(0));
+    return true;
+  }
+  if (message.type === "videos-here" && tabId !== undefined) {
+    Promise.all([videosFor(tabId), pageTitle(tabId)]).then(([videos, title]) => reply({ videos, title }), () => reply({ videos: [] }));
+    return true;
+  }
+  if (message.type === "download-from-page" && tabId !== undefined) {
+    (async () => {
+      // Only videos the extension found itself, whatever the page asks for.
+      const video = (await videosFor(tabId)).find((v) => v.url === (message.video && message.video.url));
+      if (!video) return reply(false);
+      reply(await handOver(video.url, video.referer || sender.tab.url, await videoName(tabId, video), video.origin));
+    })().catch(() => reply(false));
+    return true;
+  }
+  if (message.type === "download") {
+    (async () => {
+      const tab = await chrome.tabs.get(message.tabId).catch(() => null);
+      const name = await videoName(message.tabId, message.video);
+      reply(await handOver(message.video.url, message.video.referer || (tab && tab.url), name, message.video.origin));
+    })().catch(() => reply(false));
+    return true;
+  }
+  return false;
 });

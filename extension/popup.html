@@ -1,0 +1,34 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <style>
+    :root {
+      --bg: #ffffff; --card: #f3f4f8; --text: #1b1d24; --muted: #6b7080;
+      --accent: #6c63ff; --on-accent: #ffffff; --ok: #1f9d55; --bad: #d64545;
+    }
+    @media (prefers-color-scheme: dark) {
+      :root { --bg: #14161c; --card: #1e2129; --text: #e9eaf0; --muted: #8b90a0; --ok: #4cc38a; --bad: #f07070; }
+    }
+    body { margin: 0; width: 340px; background: var(--bg); color: var(--text); font: 13px "Segoe UI", system-ui, sans-serif; }
+    header { display: flex; align-items: center; gap: 8px; padding: 12px 14px 8px; font-weight: 600; font-size: 14px; }
+    header img { width: 20px; height: 20px; }
+    #list { padding: 4px 10px 12px; display: flex; flex-direction: column; gap: 8px; max-height: 420px; overflow-y: auto; }
+    .video { background: var(--card); border-radius: 10px; padding: 10px 12px; display: flex; align-items: center; gap: 10px; }
+    .info { flex: 1; min-width: 0; }
+    .name { font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .meta { color: var(--muted); font-size: 12px; margin-top: 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    button { border: 0; border-radius: 8px; padding: 7px 12px; background: var(--accent); color: var(--on-accent); font: inherit; font-weight: 600; cursor: pointer; }
+    button:disabled { opacity: .6; cursor: default; }
+    .status { font-size: 12px; font-weight: 600; }
+    .status.ok { color: var(--ok); }
+    .status.bad { color: var(--bad); }
+    .empty { color: var(--muted); padding: 6px 4px 8px; line-height: 1.5; }
+  </style>
+</head>
+<body>
+  <header><img src="icons/32.png" alt="">Videos on this page</header>
+  <div id="list"></div>
+  <script src="popup.js"></script>
+</body>
+</html>
