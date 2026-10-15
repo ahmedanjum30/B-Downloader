@@ -1,6 +1,6 @@
 # Privacy policy
 
-This policy covers the BDownloader desktop app and the BDownloader browser extension for Chrome, Edge and other Chromium-based browsers.
+This policy covers the BDownloader desktop app and the BDownloader browser extension for Chrome, Edge, Firefox and other browsers.
 
 **Short version:** BDownloader doesn't collect, send or sell any data. Everything stays on your computer.
 
@@ -15,6 +15,10 @@ When you start a download in the browser, or choose **Download with BDownloader*
 - the browser's user agent
 
 The app needs the cookies and referrer to download files from sites where you're signed in, in the same way the browser would.
+
+To show the **Download this video** bar, the extension also notices the videos a page plays: the addresses of video files and streams the page loads, and on YouTube, the video's title, its available formats and the player's streaming request. It keeps these in the browser's memory for that tab only (they're forgotten when you leave the page or close the browser), and passes the one you pick to the app on your computer, the same way as a download.
+
+The extension doesn't read or send the text of the pages you visit, and keeps no history of them.
 
 These details go **only to the BDownloader app on your computer**, through the browser's native messaging channel. The extension doesn't send anything over the internet, and has no server, analytics or tracking.
 
@@ -32,4 +36,4 @@ BDownloader doesn't share data with anyone. There are no accounts, ads or analyt
 
 Questions about this policy: open an issue at https://github.com/ahmedanjum30/BDownloader/issues.
 
-_Last updated: October 13, 2026_
+_Last updated: October 15, 2026_
