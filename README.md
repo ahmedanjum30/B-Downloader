@@ -21,7 +21,7 @@ Free for personal and other non-commercial use. See [License](#license).
 - **Speed limit** for all downloads together, from the top bar; it applies at once.
 - **Optional integrity check.** Verify a finished file's MD5 or SHA-256 checksum.
 - **Stays out of the way.** Runs in the tray, uses little memory while idle, and updates itself.
-- **Native and lightweight.** Written in Rust with the [iced](https://iced.rs) GUI toolkit; the installer is under 5 MB. No bundled browser engine.
+- **Native and lightweight.** Written in Rust with the [iced](https://iced.rs) GUI toolkit; the installer is about 6 MB. No bundled browser engine.
 - **Modern interface** with dark and light themes, live speed and time left, and a progress bar that shows what each connection is downloading.
 
 **Coming later:** a download queue with a scheduler, and per-download speed limits.
@@ -40,6 +40,8 @@ Windows SmartScreen shows this for programs that aren't code-signed and that Mic
 The installer on the Releases page is built by this repository's [release workflow](.github/workflows/release.yml) from the source you see here. To check that your download is that file, compare its SHA-256 (`Get-FileHash BDownloader-Setup-<version>.exe` in PowerShell) with `SHA256SUMS.txt` on the same release. Updates that BDownloader installs itself don't show this warning.
 
 To add the browser extension, open **Browser extension** in BDownloader and follow the steps.
+
+Questions or ideas? Ask in [Discussions](https://github.com/ahmedanjum30/BDownloader/discussions). Found a bug? Open an [issue](https://github.com/ahmedanjum30/BDownloader/issues).
 
 ## Building from source
 
