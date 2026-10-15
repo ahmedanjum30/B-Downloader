@@ -129,15 +129,48 @@ if (Test-Path $signed) {
     "Wrote $signed"
 }
 
-# What installed copies check for updates: this version, attached to its
-# GitHub release by the release workflow.
+# The extension has its own version, raised only when its files change, so an
+# unchanged extension isn't uploaded again. A signed file of this version must
+# hold exactly our files; if not, the extension changed without a new version.
+Add-Type -AssemblyName System.IO.Compression.FileSystem
+function Contents($path) {
+    $zip = [IO.Compression.ZipFile]::OpenRead($path)
+    try {
+        $sha = [Security.Cryptography.SHA256]::Create()
+        $zip.Entries | Where-Object { $_.Name -and -not $_.FullName.StartsWith('META-INF/') } | Sort-Object FullName | ForEach-Object {
+            $stream = $_.Open()
+            try {
+                if ($_.FullName -eq 'manifest.json') {
+                    # Generated, and laid out differently by PowerShell 5 and 7: compare its content.
+                    $text = (New-Object IO.StreamReader $stream).ReadToEnd() | ConvertFrom-Json | ConvertTo-Json -Compress -Depth 10
+                    "manifest.json $([BitConverter]::ToString($sha.ComputeHash([Text.Encoding]::UTF8.GetBytes($text))))"
+                } else {
+                    "$($_.FullName) $([BitConverter]::ToString($sha.ComputeHash($stream)))"
+                }
+            } finally {
+                $stream.Dispose()
+            }
+        }
+    } finally {
+        $zip.Dispose()
+    }
+}
+$changed = Compare-Object @(Contents $xpi) @(Contents $signed)
+if ($changed) {
+    $changed | ForEach-Object { "  $($_.InputObject.Split(' ')[0])" } | Sort-Object -Unique
+    throw "The extension changed (files above) but version $version is already signed. Raise `"version`" in extension\manifest.json."
+}
+
+# What installed copies check for updates: this version, attached to the app's
+# GitHub release (every release carries it, changed or not).
+$appVersion = (Select-String -Path (Join-Path $root 'Cargo.toml') -Pattern '^version = "(.+)"').Matches[0].Groups[1].Value
 $hash = (Get-FileHash $signed -Algorithm SHA256).Hash.ToLower()
 $updates = @{
     addons = @{
         $addonId = @{
             updates = @(@{
                 version = $version
-                update_link = "https://github.com/ahmedanjum30/BDownloader/releases/download/v$version/bdownloader-firefox-$version.xpi"
+                update_link = "https://github.com/ahmedanjum30/BDownloader/releases/download/v$appVersion/bdownloader-firefox-$version.xpi"
                 update_hash = "sha256:$hash"
             })
         }

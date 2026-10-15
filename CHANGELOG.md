@@ -6,6 +6,23 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+## [1.0.2] - 2026-10-15
+
+### Added
+- A Details button (ⓘ) on every download shows where it's saved, its link
+  and the page it came from (both can be copied), its size and
+  connections, and opens its folder.
+
+### Changed
+- Text and data files (`.txt`, `.json`, `.xml`, `.csv` and the like) stay
+  in the browser instead of going to BDownloader.
+- The browser extension has its own version number, raised only when it
+  changes, so the Firefox add-on is only updated when there's something new.
+
+### Fixed
+- Firefox: when Firefox asks where to save a download, the folder chosen
+  there is now used, instead of BDownloader's own download folder.
+
 ## [1.0.1] - 2026-10-15
 
 ### Added
@@ -260,7 +277,8 @@ First release.
   from 167 MB to 24 MB (working set) and the exe from 11.6 MB to 6.8 MB, with
   no change in download speed (28 MB/s over 8 connections, about 1% CPU).
 
-[Unreleased]: https://github.com/ahmedanjum30/BDownloader/compare/v1.0.1...HEAD
+[Unreleased]: https://github.com/ahmedanjum30/BDownloader/compare/v1.0.2...HEAD
+[1.0.2]: https://github.com/ahmedanjum30/BDownloader/compare/v1.0.1...v1.0.2
 [1.0.1]: https://github.com/ahmedanjum30/BDownloader/compare/v1.0.0...v1.0.1
 [1.0.0]: https://github.com/ahmedanjum30/BDownloader/compare/v0.1.10...v1.0.0
 [0.1.10]: https://github.com/ahmedanjum30/BDownloader/compare/v0.1.9...v0.1.10

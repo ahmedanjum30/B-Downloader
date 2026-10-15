@@ -45,6 +45,16 @@ impl App {
                     store::show_in_folder(&path);
                 }
             }
+            Message::ShowDetails(id) => self.modal = Some(Modal::Details(id)),
+            Message::OpenDownloadFolder(id) => {
+                if let Some(item) = self.item(id) {
+                    // The file once it's there; until then, its folder.
+                    match item.path().filter(|p| p.exists()) {
+                        Some(path) => store::show_in_folder(&path),
+                        None => store::open_file(&item.dir),
+                    }
+                }
+            }
             _ => {}
         }
         Task::none()

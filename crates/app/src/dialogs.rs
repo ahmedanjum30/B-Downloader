@@ -359,29 +359,40 @@ pub fn extension<'a>(browser: Browser, connected: bool, copied: Option<&str>) ->
         container(tabs).padding(4).style(style::panel),
     ]
     .spacing(12);
+    // One click where the browser can: Firefox's signed add-on, or the store page.
+    if browser.one_click() {
+        let hint = match browser {
+            Browser::Firefox => "Firefox opens and asks whether to add BDownloader: click Add.".to_owned(),
+            Browser::Opera => "Opera opens the store page. The first time, it offers Install Chrome Extensions; then click Add to Opera.".to_owned(),
+            _ => format!("{} opens the store page: click Add (or Get) there.", browser.name()),
+        };
+        body = body.push(
+            row![
+                button(text(format!("Add to {}", browser.name())).size(14))
+                    .padding([10, 18])
+                    .style(style::primary)
+                    .on_press(Message::AddExtension(browser)),
+                text(hint).size(14).width(Fill),
+            ]
+            .spacing(14)
+            .align_y(Center),
+        );
+    }
     body = if browser == Browser::Firefox {
         // Signed by Mozilla, so Firefox installs it like any add-on and keeps it.
         let file = crate::browser::firefox_addon().map_or("bdownloader-firefox.xpi next to BDownloader.exe".to_owned(), |f| f.display().to_string());
         let file_copied = copied == Some(file.as_str());
-        body.push(
-            row![
-                button(text("Add to Firefox").size(14))
-                    .padding([10, 18])
-                    .style(style::primary)
-                    .on_press(Message::AddToFirefox),
-                text("Firefox opens and asks whether to add BDownloader: click Add.").size(14).width(Fill),
-            ]
-            .spacing(14)
-            .align_y(Center),
-        )
-        .push(muted("Firefox didn't open? Drag this file into a Firefox window:").size(13))
-        .push(copy_field(file, file_copied))
+        body.push(muted("Firefox didn't open? Drag this file into a Firefox window:").size(13))
+            .push(copy_field(file, file_copied))
     } else {
         let page = browser.extensions_page().to_owned();
         let folder =
             crate::browser::extension_dir().map_or("the extension folder next to BDownloader.exe".to_owned(), |dir| dir.display().to_string());
         let page_copied = copied == Some(page.as_str());
         let folder_copied = copied == Some(folder.as_str());
+        if browser.one_click() {
+            body = body.push(muted("Or add it yourself, without the store:").size(13));
+        }
         body.push(step("1", "Copy this address and paste it into the browser's address bar:"))
             .push(copy_field(page, page_copied))
             .push(step("2", browser.developer_mode()))
@@ -555,6 +566,85 @@ pub fn remove(item: &Item, delete_file: bool) -> Element<'_, Message> {
     .spacing(10);
 
     frame("Remove download", body.into(), footer.into())
+}
+
+/// A download's details: where it's saved, where it came from, and how it's going.
+pub fn details<'a>(item: &'a Item, copied: Option<&str>) -> Element<'a, Message> {
+    let status = match &item.state {
+        State::Starting => "Starting".to_owned(),
+        State::Downloading => "Downloading".to_owned(),
+        State::Verifying => "Checking the file".to_owned(),
+        State::Paused => "Paused".to_owned(),
+        State::Completed => "Completed".to_owned(),
+        State::Failed(error) => format!("Failed: {error}"),
+    };
+    let progress = match item.size {
+        Some(size) => format!("{} of {}", format::size(item.downloaded), format::size(size)),
+        None => format::size(item.downloaded),
+    };
+    let connections = if item.state.is_running() && item.active_connections > 0 {
+        format!("{} open (up to {})", item.active_connections, item.connections)
+    } else {
+        format!("Up to {}", item.connections)
+    };
+    let line = |label: &'a str, value: String| {
+        row![muted(label).size(13).width(110), text(value).size(14).width(Fill)]
+            .spacing(12)
+            .align_y(Center)
+    };
+    let copyable = |value: String| {
+        let is_copied = copied == Some(value.as_str());
+        copy_field(value, is_copied)
+    };
+
+    let mut body = column![
+        container(
+            row![
+                file_badge(item.extension()),
+                text(format::middle_ellipsis(&item.display_name(), 48)).size(15).font(SEMIBOLD),
+            ]
+            .spacing(14)
+            .align_y(Center),
+        )
+        .padding(12)
+        .width(Fill)
+        .style(style::panel),
+        line("Status", status),
+        line("Size", progress),
+        line("Connections", connections),
+    ]
+    .spacing(12);
+    if let Some(source) = &item.youtube {
+        let what = if source.video.is_some() { "Picture and sound" } else { "Sound only" };
+        body = body.push(line("YouTube", what.to_owned()));
+    }
+    if let Some((kind, hash)) = &item.checksum {
+        body = body.push(line("Checksum", format!("{kind:?} {hash}")));
+    }
+    body = body
+        .push(muted("Saved in").size(13).font(SEMIBOLD))
+        .push(copyable(item.dir.display().to_string()))
+        .push(muted("Link").size(13).font(SEMIBOLD))
+        .push(copyable(item.url.clone()));
+    let page = item.headers.iter().find(|(name, _)| name.eq_ignore_ascii_case("referer"));
+    if let Some((_, page)) = page {
+        body = body.push(muted("From page").size(13).font(SEMIBOLD)).push(copyable(page.clone()));
+    }
+
+    let footer = row![
+        space().width(Fill),
+        button(text("Open folder").size(14))
+            .padding([10, 18])
+            .style(style::secondary)
+            .on_press(Message::OpenDownloadFolder(item.id)),
+        button(text("Close").size(14))
+            .padding([10, 18])
+            .style(style::secondary)
+            .on_press(Message::CloseModal),
+    ]
+    .spacing(10);
+
+    frame("Download details", scrollable(body).into(), footer.into())
 }
 
 /// What's about to be downloaded: a file-type badge, the size and how it downloads.

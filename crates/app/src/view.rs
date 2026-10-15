@@ -43,6 +43,10 @@ pub fn view(app: &App) -> Element<'_, Message> {
             Some(item) => modal(base, dialogs::remove(item, *delete_file)),
             None => base.into(),
         },
+        Some(Modal::Details(id)) => match app.items.iter().find(|i| i.id == *id) {
+            Some(item) => modal(base, dialogs::details(item, app.copied.as_deref())),
+            None => base.into(),
+        },
         Some(Modal::Extension(browser)) => modal(
             base,
             dialogs::extension(*browser, app.settings.extension_connected, app.copied.as_deref()),
@@ -435,6 +439,7 @@ fn download_card(item: &Item) -> Element<'_, Message> {
         }
         _ => {}
     }
+    actions = actions.push(action(&icons::INFO, "Details", Message::ShowDetails(id)));
     let remove_tip = if item.state == State::Completed { "Remove" } else { "Cancel and remove" };
     actions = actions.push(action(&icons::TRASH, remove_tip, Message::Remove(id)));
 

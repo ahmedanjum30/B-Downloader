@@ -47,6 +47,10 @@ pub struct AddRequest {
     /// answer requests that come from their own player.
     #[serde(default)]
     pub origin: Option<String>,
+    /// The folder the browser already saved to. Firefox asks where to save
+    /// (when set to) before the extension gets the download.
+    #[serde(default)]
+    pub dir: Option<String>,
     /// Start right away. Links given on the command line do; downloads from
     /// the browser leave this out, so the app asks where to save them first.
     #[serde(default)]
@@ -93,6 +97,7 @@ impl AddRequest {
             cookies: None,
             user_agent: None,
             origin: None,
+            dir: None,
             youtube: None,
             start: false,
         }

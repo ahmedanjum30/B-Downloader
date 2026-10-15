@@ -89,6 +89,8 @@ pub enum Modal {
     /// The steps shown are for this browser.
     Extension(browser::Browser),
     Refresh(Box<RefreshDialog>),
+    /// A download's details: its folder, link and the like.
+    Details(u64),
     /// `delete_file`: also move a finished download's file to the Recycle Bin.
     Remove {
         id: u64,
@@ -114,6 +116,9 @@ pub enum Message {
     ConfirmRemove,
     OpenFile(u64),
     ShowInFolder(u64),
+    ShowDetails(u64),
+    /// Opens the folder a download saves to, even before its file exists.
+    OpenDownloadFolder(u64),
 
     OpenAdd,
     Clipboard(Option<String>),
@@ -134,7 +139,8 @@ pub enum Message {
     OpenExtension,
     /// Show the Browser extension steps for this browser.
     ExtensionBrowser(browser::Browser),
-    AddToFirefox,
+    /// Opens the extension in the browser, to add it with one click.
+    AddExtension(browser::Browser),
     /// Copies the text to the clipboard and shows "Copied" next to it for a moment.
     Copy(String),
     CopiedShown(String),
@@ -370,7 +376,9 @@ impl App {
             | Message::RemoveDeleteFile(_)
             | Message::ConfirmRemove
             | Message::OpenFile(_)
-            | Message::ShowInFolder(_)) => return self.handle_downloads(m),
+            | Message::ShowInFolder(_)
+            | Message::ShowDetails(_)
+            | Message::OpenDownloadFolder(_)) => return self.handle_downloads(m),
             m @ (Message::OpenAdd
             | Message::Clipboard(_)
             | Message::AddUrl(_)
@@ -448,9 +456,9 @@ impl App {
                     *browser = chosen;
                 }
             }
-            Message::AddToFirefox => {
-                if let Err(e) = browser::add_to_firefox() {
-                    log::warn!("opening the add-on in Firefox: {e}");
+            Message::AddExtension(browser) => {
+                if let Err(e) = browser::add_extension(browser) {
+                    log::warn!("opening the extension in {}: {e}", browser.name());
                 }
             }
             Message::Copy(text) => {

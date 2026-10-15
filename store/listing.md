@@ -7,7 +7,7 @@ Text and answers to paste into the Chrome Web Store and Edge Add-ons dashboards.
 | Field | Value |
 |---|---|
 | Name | BDownloader |
-| Summary (max 132 characters) | Sends your downloads to BDownloader, a fast multi-connection download manager. |
+| Summary (max 132 characters) | Sends your downloads and the videos you watch to BDownloader, a fast multi-connection download manager. |
 | Category | Chrome: Productivity → Tools · Edge: Productivity |
 | Language | English |
 | Homepage | https://github.com/ahmedanjum30/BDownloader |
@@ -22,6 +22,7 @@ BDownloader catches the downloads you start in your browser and hands them to th
 What the extension does:
 • Downloads you start in the browser go to BDownloader automatically.
 • Right-click any link, image, video or audio and choose "Download with BDownloader".
+• A "Download this video" bar appears on videos you watch, including streamed (HLS) video and YouTube, listing the qualities available.
 • Downloads that need you to be signed in still work: the extension passes along the browser's cookies for that link.
 • If BDownloader isn't installed or can't be reached, the browser simply downloads the file itself.
 
@@ -33,7 +34,7 @@ Privacy: the extension sends download details only to the BDownloader app on you
 ## Single purpose
 
 ```
-Hand the downloads the user starts in the browser, or picks from the right-click menu, to the BDownloader download manager app installed on the same computer.
+Hand the downloads the user starts in the browser, picks from the right-click menu, or picks from the "Download this video" bar on a video, to the BDownloader download manager app installed on the same computer.
 ```
 
 ## Permission justifications
@@ -44,7 +45,11 @@ Hand the downloads the user starts in the browser, or picks from the right-click
 | `contextMenus` | Adds the "Download with BDownloader" entry to the right-click menu of links, images, video and audio. |
 | `nativeMessaging` | The only way the extension talks to the BDownloader desktop app on the same computer. It sends the download link and details to the app. |
 | `cookies` | Reads the browser's cookies for the URL being downloaded, so the app can download files from sites where the user is signed in. Cookies are sent only to the local app and never stored on disk. |
-| Host permission `<all_urls>` | Downloads can come from any website, and reading the cookies for a download's URL requires access to that URL's site. The extension doesn't read or change page content. |
+| `webRequest` | Notices the video streams a page loads (video files, HLS playlists and YouTube's player requests), so the "Download this video" bar can offer them. Requests are only observed, never blocked or changed. |
+| `webNavigation` | Lists a tab's frames, to find videos inside embedded players, and forgets a tab's videos when the user moves to another page. |
+| `storage` | Keeps the videos found in each tab while the browser runs (session storage; nothing is written to disk). |
+| `declarativeNetRequestWithHostAccess` | When the user downloads a video, some sites only serve its playlist with their own page as the referrer; a temporary session rule adds that header to the extension's own request for it. |
+| Host permission `<all_urls>` | Downloads and videos can come from any website, and reading the cookies for a download's URL requires access to that URL's site. The content script only shows the "Download this video" bar on videos; it doesn't read or send the page's content. |
 
 **Remote code:** No. All code is in the package.
 
@@ -52,7 +57,7 @@ Hand the downloads the user starts in the browser, or picks from the right-click
 
 Data types the extension handles:
 - **Authentication information:** the cookies for the URL being downloaded.
-- **Web history:** the download link and the page it came from.
+- **Web history:** the download link and the page it came from, and the addresses of videos playing on the page.
 
 Explain that this data is sent only to the BDownloader app on the user's own computer, through native messaging, and never leaves the device.
 
@@ -75,4 +80,8 @@ All in `store/images/`:
 
 ## After the first upload
 
-Each store assigns the extension an ID. Add both IDs to `EXTENSION_IDS` in `crates/app/src/browser.rs` so the app's bridge accepts the published extension, and release a new app version.
+Each store assigns the extension an ID as soon as the package is uploaded (before review). Set them in two places, then release a new app version:
+- `CHROME_STORE_ID` and `EDGE_STORE_ID` in `crates/app/src/browser.rs`: the bridge accepts the store extension, and the Browser extension window gets an "Add to …" button for every browser (Brave, Opera and Vivaldi use the Chrome Web Store).
+- `ChromeStoreId` and `EdgeStoreId` in `installer/bdownloader.iss`: Chrome and Edge offer the extension at their next start.
+
+Opera can install from the Chrome Web Store (it offers "Install Chrome Extensions" first), so it needs no listing of its own.

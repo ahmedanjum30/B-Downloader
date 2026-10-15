@@ -56,7 +56,7 @@ impl Settings {
     }
 }
 
-fn default_download_dir() -> PathBuf {
+pub fn default_download_dir() -> PathBuf {
     std::env::var_os("USERPROFILE")
         .map(|home| PathBuf::from(home).join("Downloads"))
         .unwrap_or_else(|| PathBuf::from("."))

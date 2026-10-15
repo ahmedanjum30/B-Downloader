@@ -62,13 +62,51 @@ impl Browser {
             _ => "Turn on Developer mode (top right).",
         }
     }
+
+    /// The extension's page on the store this browser installs from, once
+    /// it's published there. Brave, Opera and Vivaldi use the Chrome Web Store.
+    pub fn store_page(self) -> Option<String> {
+        match self {
+            Browser::Firefox => None,
+            Browser::Edge => (!EDGE_STORE_ID.is_empty()).then(|| format!("https://microsoftedge.microsoft.com/addons/detail/{EDGE_STORE_ID}")),
+            _ => (!CHROME_STORE_ID.is_empty()).then(|| format!("https://chromewebstore.google.com/detail/{CHROME_STORE_ID}")),
+        }
+    }
+
+    /// The browser's program, as Windows' "App Paths" knows it.
+    fn exe(self) -> &'static str {
+        match self {
+            Browser::Chrome => "chrome.exe",
+            Browser::Edge => "msedge.exe",
+            Browser::Brave => "brave.exe",
+            Browser::Opera => "opera.exe",
+            Browser::Vivaldi => "vivaldi.exe",
+            Browser::Firefox => "firefox.exe",
+        }
+    }
+
+    /// Whether the app can add the extension with one click: Firefox's
+    /// signed add-on, or a store page to open.
+    pub fn one_click(self) -> bool {
+        match self {
+            Browser::Firefox => firefox_addon().is_some(),
+            _ => self.store_page().is_some(),
+        }
+    }
 }
 
+/// The extension's IDs on the Chrome Web Store and Edge Add-ons, assigned on
+/// the first upload; empty until then. Also set in `installer/bdownloader.iss`,
+/// which has the browsers offer the extension at their next start.
+pub const CHROME_STORE_ID: &str = "";
+pub const EDGE_STORE_ID: &str = "";
+
 /// The extension IDs the bridge accepts; it refuses every other extension.
-/// Each store assigns its own ID on the first upload, so add them here once known.
 pub const EXTENSION_IDS: &[&str] = &[
     // Loaded unpacked from the `extension` folder (fixed by the `key` in its manifest).
     "glehdmgljkbkfnbigknlpjjmfegaagfi",
+    CHROME_STORE_ID,
+    EDGE_STORE_ID,
 ];
 
 /// Where each browser looks for native messaging hosts, under `HKEY_CURRENT_USER`,
@@ -120,32 +158,46 @@ pub fn firefox_addon() -> Option<PathBuf> {
         .map(strip_verbatim)
 }
 
-/// Opens the add-on in Firefox, which asks whether to add it.
+/// Opens the extension in the browser, which then asks whether to add it:
+/// Firefox gets the signed add-on, the others its store page.
+pub fn add_extension(browser: Browser) -> io::Result<()> {
+    let target = match browser {
+        Browser::Firefox => firefox_addon()
+            .ok_or_else(|| io::Error::other("the Firefox add-on is missing"))?
+            .into_os_string(),
+        _ => browser.store_page().ok_or_else(|| io::Error::other("not on the store yet"))?.into(),
+    };
+    match browser_exe(browser) {
+        Some(exe) => std::process::Command::new(exe).arg(target).spawn().map(drop),
+        // A store page opens in the default browser too; the add-on doesn't.
+        None if browser != Browser::Firefox => std::process::Command::new("explorer").arg(target).spawn().map(drop),
+        None => Err(io::Error::other(format!("{} isn't installed", browser.name()))),
+    }
+}
+
+/// Where the browser is installed. Browser installers record it, for the
+/// whole PC or one user.
 #[cfg(windows)]
-pub fn add_to_firefox() -> io::Result<()> {
+fn browser_exe(browser: Browser) -> Option<PathBuf> {
     use winreg::RegKey;
     use winreg::enums::{HKEY_CURRENT_USER, HKEY_LOCAL_MACHINE};
 
-    let addon = firefox_addon().ok_or_else(|| io::Error::other("the Firefox add-on is missing"))?;
-    // Firefox's installer records where it is, for the whole PC or one user.
-    let firefox = [HKEY_CURRENT_USER, HKEY_LOCAL_MACHINE]
+    [HKEY_CURRENT_USER, HKEY_LOCAL_MACHINE]
         .into_iter()
         .filter_map(|root| {
             RegKey::predef(root)
-                .open_subkey(r"Software\Microsoft\Windows\CurrentVersion\App Paths\firefox.exe")
+                .open_subkey(format!(r"Software\Microsoft\Windows\CurrentVersion\App Paths\{}", browser.exe()))
                 .ok()?
                 .get_value::<String, _>("")
                 .ok()
         })
         .map(|path| PathBuf::from(path.trim_matches('"')))
         .find(|path| path.exists())
-        .ok_or_else(|| io::Error::other("Firefox isn't installed"))?;
-    std::process::Command::new(firefox).arg(addon).spawn().map(drop)
 }
 
 #[cfg(not(windows))]
-pub fn add_to_firefox() -> io::Result<()> {
-    Err(io::Error::other("not supported here"))
+fn browser_exe(_browser: Browser) -> Option<PathBuf> {
+    None
 }
 
 /// Where Firefox looks for native messaging hosts, under `HKEY_CURRENT_USER`.
@@ -175,7 +227,7 @@ pub fn register() -> io::Result<()> {
         "description": "BDownloader",
         "path": host,
         "type": "stdio",
-        "allowed_origins": EXTENSION_IDS.iter().map(|id| format!("chrome-extension://{id}/")).collect::<Vec<_>>(),
+        "allowed_origins": EXTENSION_IDS.iter().filter(|id| !id.is_empty()).map(|id| format!("chrome-extension://{id}/")).collect::<Vec<_>>(),
     });
     let dir = crate::store::data_dir();
     std::fs::create_dir_all(&dir)?;

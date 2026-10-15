@@ -16,6 +16,27 @@ function isWebUrl(url) {
   return /^https?:\/\//i.test(url || "");
 }
 
+// Text and data files are small and often just opened; the browser keeps those.
+const BROWSER_TYPES = new Set([
+  "txt", "json", "xml", "csv", "tsv", "html", "htm", "js", "css", "md", "log",
+  "ini", "cfg", "conf", "yaml", "yml", "ics", "vcf", "srt", "vtt", "svg", "rss",
+]);
+
+function keepInBrowser(item, url) {
+  const name = (item.filename || "").split(/[\\/]/).pop() || (() => {
+    try {
+      return new URL(url).pathname.split("/").pop();
+    } catch {
+      return "";
+    }
+  })();
+  const ext = name.includes(".") ? name.split(".").pop().toLowerCase() : "";
+  if (ext) return BROWSER_TYPES.has(ext);
+  // No extension: go by the type the server gave.
+  const mime = (item.mime || "").toLowerCase();
+  return /^text\//.test(mime) || /^application\/(json|xml|[\w.+-]*\+(json|xml))\b/.test(mime);
+}
+
 // Resolves to true if the app accepted the message.
 function send(message) {
   return new Promise((resolve) => {
@@ -35,7 +56,7 @@ async function cookieHeader(url) {
   }
 }
 
-async function handOver(url, referrer, fileName, origin) {
+async function handOver(url, referrer, fileName, origin, dir) {
   return send({
     type: "add",
     url,
@@ -44,6 +65,7 @@ async function handOver(url, referrer, fileName, origin) {
     cookies: await cookieHeader(url),
     user_agent: navigator.userAgent,
     origin: origin || null,
+    dir: dir || null,
   });
 }
 
@@ -60,7 +82,7 @@ if (chrome.downloads.onDeterminingFilename) {
     if (item.byExtensionId === chrome.runtime.id) return false;
     const url = item.finalUrl || item.url;
     // blob:, data: and file: downloads only exist inside the browser.
-    if (!isWebUrl(url)) return false;
+    if (!isWebUrl(url) || keepInBrowser(item, url)) return false;
 
     takeOver(item, url, suggest);
     return true; // suggest() is called once the download is cancelled
@@ -71,12 +93,12 @@ if (chrome.downloads.onDeterminingFilename) {
   chrome.downloads.onCreated.addListener((item) => {
     if (item.byExtensionId === chrome.runtime.id) return;
     const url = item.finalUrl || item.url;
-    if (!isWebUrl(url)) return;
-    takeOver(item, url, () => {});
+    if (!isWebUrl(url) || keepInBrowser(item, url)) return;
+    takeOver(item, url, () => {}, true);
   });
 }
 
-async function takeOver(item, url, suggest) {
+async function takeOver(item, url, suggest, saved) {
   // Cancel rather than pause: a paused download can keep its connection
   // open, and sites that limit connections count it against BDownloader.
   await chrome.downloads.cancel(item.id).catch(() => {});
@@ -89,7 +111,9 @@ async function takeOver(item, url, suggest) {
 
   // By now the browser knows the real file name.
   const name = item.filename ? item.filename.split(/[\\/]/).pop() : null;
-  if (!(await handOver(url, item.referrer, name))) {
+  // Firefox has already asked where to save it (when set to): keep that folder.
+  const dir = saved && /[\\/]/.test(item.filename || "") ? item.filename.replace(/[\\/][^\\/]*$/, "") : null;
+  if (!(await handOver(url, item.referrer, name, null, dir))) {
     // BDownloader isn't available: let the browser download it after all.
     chrome.downloads.download({ url: item.url }).catch(() => {});
   }

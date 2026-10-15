@@ -9,7 +9,7 @@ use iced::{Task, clipboard};
 
 use super::{App, Filter, Message, Modal};
 use crate::item::{Item, State, youtube_source};
-use crate::store::{HashKind, Settings};
+use crate::store::{self, HashKind, Settings};
 
 /// Where the check of a link stands.
 #[derive(Debug, Clone)]
@@ -72,6 +72,7 @@ impl AddDialog {
             url: request.url.trim().to_owned(),
             name_edited: file_name.is_some(),
             file_name: file_name.unwrap_or_default(),
+            dir: browser_dir(settings, request.dir.as_deref()),
             headers,
             youtube,
             ..Self::new(settings)
@@ -231,7 +232,7 @@ impl App {
         }
         let headers = request.headers();
         let file_name = request.file_name.filter(|n| !n.trim().is_empty());
-        let (dir, connections) = (self.settings.download_dir.clone(), self.settings.connections);
+        let (dir, connections) = (browser_dir(&self.settings, request.dir.as_deref()), self.settings.connections);
         let youtube = request.youtube.map(|y| youtube_source(*y));
         self.add_with(request.url.trim().to_owned(), dir, file_name, connections, None, |item| {
             item.headers = headers;
@@ -293,4 +294,20 @@ impl App {
             })
             .map(|i| (i.id, i.downloaded))
     }
+}
+
+/// Where to save a download from the browser: the folder the browser already
+/// asked the user for (Firefox asks before the extension gets the download),
+/// unless that's just the usual Downloads folder, which the browser uses
+/// without asking. Otherwise the folder from Settings.
+fn browser_dir(settings: &Settings, chosen: Option<&str>) -> PathBuf {
+    let same = |a: &std::path::Path, b: &std::path::Path| {
+        let key = |p: &std::path::Path| p.to_string_lossy().trim_end_matches(['\\', '/']).to_lowercase();
+        key(a) == key(b)
+    };
+    chosen
+        .map(PathBuf::from)
+        .filter(|dir| dir.is_absolute() && dir.is_dir())
+        .filter(|dir| !same(dir, &store::default_download_dir()))
+        .unwrap_or_else(|| settings.download_dir.clone())
 }

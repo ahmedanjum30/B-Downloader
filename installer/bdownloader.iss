@@ -11,8 +11,9 @@
   #define BinDir "..\target\release"
 #endif
 
-; Extension IDs on the Chrome Web Store and Edge Add-ons. Once set, the
-; browser offers to add the extension the next time it starts (like IDM).
+; Extension IDs on the Chrome Web Store and Edge Add-ons, the same as
+; CHROME_STORE_ID and EDGE_STORE_ID in crates\app\src\browser.rs. Once set,
+; the browser offers to add the extension the next time it starts (like IDM).
 ; Browsers only allow this for extensions published on their store.
 #define ChromeStoreId ""
 #define EdgeStoreId ""
