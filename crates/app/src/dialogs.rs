@@ -295,11 +295,20 @@ fn copy_field<'a>(value: String, copied: bool) -> Element<'a, Message> {
             .align_y(Center)
             .into()
     };
-    // The whole field is the button, so a click anywhere on it copies.
+    // The whole field is the button, so a click anywhere on it copies. Long
+    // values (links with tokens) are shortened in the middle to fit on one
+    // line; the copy is whole.
     button(
-        row![text(value.clone()).size(14).font(SEMIBOLD).width(Fill), label]
-            .spacing(12)
-            .align_y(Center),
+        row![
+            text(format::middle_ellipsis(&value, 56))
+                .size(14)
+                .font(SEMIBOLD)
+                .wrapping(text::Wrapping::None)
+                .width(Fill),
+            label
+        ]
+        .spacing(12)
+        .align_y(Center),
     )
     .padding([10, 14])
     .width(Fill)

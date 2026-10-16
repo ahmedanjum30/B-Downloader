@@ -6,6 +6,16 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+## [1.0.5] - 2026-10-17
+
+### Fixed
+- While a file downloads, its folder no longer shows a file that keeps
+  appearing and disappearing. The progress file next to the download
+  (`.bdl`) and its temporary copy are hidden now.
+- Long links and folders no longer run past their box (and under the Copy
+  button) in the Details and Browser extension windows; they're shortened
+  in the middle, and Copy still copies all of it.
+
 ## [1.0.4] - 2026-10-16
 
 ### Fixed
@@ -303,7 +313,8 @@ First release.
   from 167 MB to 24 MB (working set) and the exe from 11.6 MB to 6.8 MB, with
   no change in download speed (28 MB/s over 8 connections, about 1% CPU).
 
-[Unreleased]: https://github.com/ahmedanjum30/BDownloader/compare/v1.0.4...HEAD
+[Unreleased]: https://github.com/ahmedanjum30/BDownloader/compare/v1.0.5...HEAD
+[1.0.5]: https://github.com/ahmedanjum30/BDownloader/compare/v1.0.4...v1.0.5
 [1.0.4]: https://github.com/ahmedanjum30/BDownloader/compare/v1.0.3...v1.0.4
 [1.0.3]: https://github.com/ahmedanjum30/BDownloader/compare/v1.0.2...v1.0.3
 [1.0.2]: https://github.com/ahmedanjum30/BDownloader/compare/v1.0.1...v1.0.2
