@@ -73,6 +73,7 @@ All in `store/images/`:
 | File | Size | Used for |
 |---|---|---|
 | `icon-128.png` | 128×128 | Store icon (Chrome takes it from the package too) |
+| `icon-64.png` | 64×64 | Opera store icon |
 | `logo-300.png` | 300×300 | Edge store logo |
 | `screenshot-1.png` … | 1280×800 | Screenshots (Chrome needs at least 1, up to 5) |
 | `promo-small-440x280.png` | 440×280 | Small promo tile (required by Chrome) |
