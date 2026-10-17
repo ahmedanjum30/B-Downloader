@@ -106,3 +106,20 @@ jobs:
           EDGE_CLIENT_ID: ${{ secrets.EDGE_CLIENT_ID }}
           EDGE_API_KEY: ${{ secrets.EDGE_API_KEY }}
           EDGE_PRODUCT_ID: ${{ secrets.EDGE_PRODUCT_ID }}
+
+  # Each new version goes to winget (Windows Package Manager) as a pull
+  # request from the winget-pkgs fork, so `winget install BDownloader` and
+  # `winget upgrade` get it. Skipped without the WINGET_TOKEN secret.
+  winget:
+    needs: publish
+    runs-on: windows-latest
+    env:
+      WINGET_TOKEN: ${{ secrets.WINGET_TOKEN }}
+    steps:
+      - name: Submit to winget
+        if: env.WINGET_TOKEN != ''
+        uses: vedantmgoyal9/winget-releaser@v2
+        with:
+          identifier: AhmadAnjum.BDownloader
+          installers-regex: '^BDownloader-Setup-.*\.exe$'
+          token: ${{ secrets.WINGET_TOKEN }}
