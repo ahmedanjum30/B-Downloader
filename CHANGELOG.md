@@ -6,6 +6,16 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+## [1.0.6] - 2026-10-17
+
+### Changed
+- The download folder shows just the file being downloaded. What's needed
+  to continue a download later is kept in BDownloader's own folder
+  (`%APPDATA%\BDownloader\resume`) instead of in a `.bdl` file next to it,
+  which kept appearing and disappearing with hidden files shown. Downloads
+  started by an earlier version continue as before, and their `.bdl` moves
+  over.
+
 ## [1.0.5] - 2026-10-17
 
 ### Fixed
@@ -313,7 +323,8 @@ First release.
   from 167 MB to 24 MB (working set) and the exe from 11.6 MB to 6.8 MB, with
   no change in download speed (28 MB/s over 8 connections, about 1% CPU).
 
-[Unreleased]: https://github.com/ahmedanjum30/BDownloader/compare/v1.0.5...HEAD
+[Unreleased]: https://github.com/ahmedanjum30/BDownloader/compare/v1.0.6...HEAD
+[1.0.6]: https://github.com/ahmedanjum30/BDownloader/compare/v1.0.5...v1.0.6
 [1.0.5]: https://github.com/ahmedanjum30/BDownloader/compare/v1.0.4...v1.0.5
 [1.0.4]: https://github.com/ahmedanjum30/BDownloader/compare/v1.0.3...v1.0.4
 [1.0.3]: https://github.com/ahmedanjum30/BDownloader/compare/v1.0.2...v1.0.3

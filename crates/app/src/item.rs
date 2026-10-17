@@ -145,6 +145,7 @@ impl Item {
             headers: self.headers.clone(),
             new_link: std::mem::take(&mut self.new_link),
             youtube: self.youtube.clone(),
+            state_dir: Some(crate::store::resume_dir()),
         };
         self.awaiting_link = false;
         self.handle = Some(engine.start(options));

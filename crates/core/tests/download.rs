@@ -529,6 +529,72 @@ async fn pause_and_resume() {
     assert_no_leftovers(dir.path());
 }
 
+/// Pauses a download once half a megabyte is in, waiting for it to stop.
+async fn start_and_pause(engine: &Engine, options: DownloadOptions) {
+    let handle = engine.start(options);
+    while handle.progress().downloaded < MB as u64 / 2 {
+        assert!(!handle.is_finished(), "finished before it could be paused");
+        tokio::time::sleep(Duration::from_millis(10)).await;
+    }
+    handle.pause();
+    assert_eq!(handle.wait().await.unwrap(), Outcome::Paused);
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn progress_files_can_live_in_their_own_folder() {
+    let data = test_data(4 * MB);
+    let addr = Server {
+        delay: Some(Duration::from_millis(10)),
+        ..Server::new(data.clone())
+    }
+    .start()
+    .await;
+    let (dir, state_dir) = (tempfile::tempdir().unwrap(), tempfile::tempdir().unwrap());
+    let engine = Engine::new().unwrap();
+    let mut options = DownloadOptions::new(format!("http://{addr}/big.bin"), dir.path());
+    options.state_dir = Some(state_dir.path().to_owned());
+
+    start_and_pause(&engine, options.clone()).await;
+    // Only the file being downloaded is in the download folder.
+    let names: Vec<_> = std::fs::read_dir(dir.path()).unwrap().map(|e| e.unwrap().file_name()).collect();
+    assert_eq!(names, ["big.bin.part"]);
+    let state = bdownloader_core::state_path(Some(state_dir.path()), &dir.path().join("big.bin"));
+    assert!(state.exists());
+
+    let outcome = engine.start(options).wait().await.unwrap();
+    let path = dir.path().join("big.bin");
+    assert_eq!(outcome, Outcome::Completed(path.clone()));
+    assert!(std::fs::read(path).unwrap() == data);
+    assert!(!state.exists(), "progress file left behind");
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn a_download_paused_by_an_older_version_continues_and_moves_its_progress_file() {
+    let data = test_data(4 * MB);
+    let addr = Server {
+        delay: Some(Duration::from_millis(10)),
+        ..Server::new(data.clone())
+    }
+    .start()
+    .await;
+    let (dir, state_dir) = (tempfile::tempdir().unwrap(), tempfile::tempdir().unwrap());
+    let engine = Engine::new().unwrap();
+    // Paused with the progress file next to the download, as before.
+    let mut options = DownloadOptions::new(format!("http://{addr}/big.bin"), dir.path());
+    start_and_pause(&engine, options.clone()).await;
+    assert!(dir.path().join("big.bin.bdl").exists());
+
+    options.state_dir = Some(state_dir.path().to_owned());
+    let handle = engine.start(options);
+    tokio::time::sleep(Duration::from_millis(50)).await;
+    assert!(handle.progress().downloaded >= MB as u64 / 4, "resume started over");
+    assert!(!dir.path().join("big.bin.bdl").exists(), "old progress file not moved");
+    let path = dir.path().join("big.bin");
+    assert_eq!(handle.wait().await.unwrap(), Outcome::Completed(path.clone()));
+    assert!(std::fs::read(path).unwrap() == data);
+    assert_no_leftovers(dir.path());
+}
+
 #[tokio::test(flavor = "multi_thread")]
 async fn checksum_mismatch_is_reported() {
     let addr = Server::new(test_data(MB)).start().await;

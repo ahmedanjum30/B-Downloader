@@ -161,6 +161,9 @@ pub struct DownloadOptions {
     /// A YouTube video captured by the browser extension: downloaded over
     /// YouTube's own streaming protocol instead of from `url`.
     pub youtube: Option<YoutubeSource>,
+    /// Where to keep the progress files that let a download continue later.
+    /// `None` keeps them next to the download (`<file>.bdl`).
+    pub state_dir: Option<PathBuf>,
 }
 
 impl DownloadOptions {
@@ -174,8 +177,25 @@ impl DownloadOptions {
             headers: Vec::new(),
             new_link: false,
             youtube: None,
+            state_dir: None,
         }
     }
+}
+
+/// The progress file of a download saved as `path`: in `state_dir`, named
+/// after the file and its full path (so two folders' `setup.exe` don't
+/// clash), or next to it without one.
+pub fn state_path(state_dir: Option<&Path>, path: &Path) -> PathBuf {
+    let Some(dir) = state_dir else {
+        return sidecar(path, "bdl");
+    };
+    // FNV-1a: the same name in every version of the app, unlike std's hasher.
+    let key = path.to_string_lossy().to_lowercase();
+    let hash = key
+        .bytes()
+        .fold(0xcbf2_9ce4_8422_2325u64, |h, b| (h ^ u64::from(b)).wrapping_mul(0x0100_0000_01b3));
+    let name = path.file_name().map_or_else(Default::default, |n| n.to_string_lossy().into_owned());
+    dir.join(format!("{name}-{hash:016x}.bdl"))
 }
 
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
@@ -530,12 +550,26 @@ impl Target {
         tokio::fs::create_dir_all(&options.dir).await?;
         let path = options.dir.join(sanitize_file_name(name));
 
+        let state_dir = options.state_dir.as_deref();
+        if let Some(dir) = state_dir {
+            tokio::fs::create_dir_all(dir).await?;
+        }
         if info.resumable {
-            let (part, state) = (sidecar(&path, "part"), sidecar(&path, "bdl"));
-            if let Some(saved) = ResumeState::load(&state).await
+            let (part, state) = (sidecar(&path, "part"), state_path(state_dir, &path));
+            // Downloads from before the progress files moved keep theirs next to the file.
+            let old = sidecar(&path, "bdl");
+            let (saved, found) = match ResumeState::load(&state).await {
+                Some(saved) => (Some(saved), state.clone()),
+                None => (ResumeState::load(&old).await, old.clone()),
+            };
+            if let Some(saved) = saved
                 && (saved.matches(&options.url, info) || (options.new_link && saved.same_size(info)))
                 && tokio::fs::metadata(&part).await.is_ok_and(|m| m.len() == saved.size)
             {
+                if found != state {
+                    saved.save(&state).await?;
+                    let _ = tokio::fs::remove_file(&found).await;
+                }
                 return Ok(Self {
                     path,
                     part,
@@ -545,8 +579,10 @@ impl Target {
             }
         }
 
-        let path = unique_path(&path, |p| p.exists() || sidecar(p, "part").exists() || sidecar(p, "bdl").exists());
-        let (part, state) = (sidecar(&path, "part"), sidecar(&path, "bdl"));
+        let path = unique_path(&path, |p| {
+            p.exists() || sidecar(p, "part").exists() || sidecar(p, "bdl").exists() || state_path(state_dir, p).exists()
+        });
+        let (part, state) = (sidecar(&path, "part"), state_path(state_dir, &path));
         Ok(Self {
             path,
             part,

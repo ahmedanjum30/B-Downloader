@@ -93,11 +93,13 @@ impl App {
                     let _ = handle.wait().await;
                 }
                 if let Some(path) = path {
+                    // ".bdl" next to the file is where versions before 1.0.6 kept progress.
                     for suffix in [".part", ".bdl"] {
                         let mut file = OsString::from(path.as_os_str());
                         file.push(suffix);
                         let _ = std::fs::remove_file(file);
                     }
+                    let _ = std::fs::remove_file(bdownloader_core::state_path(Some(&store::resume_dir()), &path));
                     // Video streams and YouTube videos keep their pieces in a folder.
                     let mut parts = OsString::from(path.as_os_str());
                     parts.push(".parts");

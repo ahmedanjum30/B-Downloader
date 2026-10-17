@@ -132,6 +132,12 @@ pub fn data_dir() -> PathBuf {
         .join("BDownloader")
 }
 
+/// Where unfinished downloads keep what's needed to continue them, so the
+/// download folder shows just the file being downloaded.
+pub fn resume_dir() -> PathBuf {
+    data_dir().join("resume")
+}
+
 fn load<T: DeserializeOwned + Default>(name: &str) -> T {
     let path = data_dir().join(name);
     let Ok(bytes) = std::fs::read(&path) else { return T::default() };
