@@ -6,6 +6,15 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+## [1.0.7] - 2026-10-17
+
+### Fixed
+- BDownloader now starts on any Windows 10 or 11 PC. It needed Microsoft's
+  Visual C++ runtime (`vcruntime140.dll`), which only PCs where another
+  program had installed it have; elsewhere it didn't start ("VCRUNTIME140.dll
+  was not found") and a silent install hung on that error. The runtime is
+  now built into BDownloader.
+
 ## [1.0.6] - 2026-10-17
 
 ### Changed
@@ -323,7 +332,8 @@ First release.
   from 167 MB to 24 MB (working set) and the exe from 11.6 MB to 6.8 MB, with
   no change in download speed (28 MB/s over 8 connections, about 1% CPU).
 
-[Unreleased]: https://github.com/ahmedanjum30/BDownloader/compare/v1.0.6...HEAD
+[Unreleased]: https://github.com/ahmedanjum30/BDownloader/compare/v1.0.7...HEAD
+[1.0.7]: https://github.com/ahmedanjum30/BDownloader/compare/v1.0.6...v1.0.7
 [1.0.6]: https://github.com/ahmedanjum30/BDownloader/compare/v1.0.5...v1.0.6
 [1.0.5]: https://github.com/ahmedanjum30/BDownloader/compare/v1.0.4...v1.0.5
 [1.0.4]: https://github.com/ahmedanjum30/BDownloader/compare/v1.0.3...v1.0.4

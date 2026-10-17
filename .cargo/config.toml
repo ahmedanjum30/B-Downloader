@@ -1,0 +1,6 @@
+# Build the C runtime into the programs instead of loading vcruntime140.dll,
+# which only PCs with the Visual C++ Redistributable have. Without this,
+# BDownloader doesn't start on a clean Windows install ("VCRUNTIME140.dll was
+# not found"), and its installer hangs on that error when run silently.
+[target.x86_64-pc-windows-msvc]
+rustflags = ["-C", "target-feature=+crt-static"]
