@@ -14,6 +14,7 @@ Options:
   -c, --connections N     parallel connections, 1-64 (default: 8)
       --sha256 HEX        verify the finished file's SHA-256
       --md5 HEX           verify the finished file's MD5
+  -H, --header \"N: V\"   send this request header too (repeatable), e.g. a Cookie
   -h, --help              show this help
 
 Press Ctrl+C to pause. Run the same command again to resume.";
@@ -95,6 +96,11 @@ fn parse_args(mut args: impl Iterator<Item = String>) -> Result<Option<DownloadO
             }
             "--sha256" => options.checksum = Some(Checksum::Sha256(value(&arg)?)),
             "--md5" => options.checksum = Some(Checksum::Md5(value(&arg)?)),
+            "-H" | "--header" => {
+                let header = value(&arg)?;
+                let (name, value) = header.split_once(':').ok_or("--header needs \"Name: value\"")?;
+                options.headers.push((name.trim().to_owned(), value.trim().to_owned()));
+            }
             a if a.starts_with('-') => return Err(format!("unknown option {a}")),
             a if url.is_none() => url = Some(a.to_owned()),
             a => return Err(format!("unexpected argument {a}")),

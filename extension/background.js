@@ -56,7 +56,9 @@ async function cookieHeader(url) {
   }
 }
 
-async function handOver(url, referrer, fileName, origin, dir) {
+// `expect`: what the browser's own download is getting. BDownloader then
+// checks the link first and only accepts it if it gets the same file.
+async function handOver(url, referrer, fileName, origin, dir, expect) {
   return send({
     type: "add",
     url,
@@ -66,6 +68,7 @@ async function handOver(url, referrer, fileName, origin, dir) {
     user_agent: navigator.userAgent,
     origin: origin || null,
     dir: dir || null,
+    expect: expect || null,
   });
 }
 
@@ -74,22 +77,23 @@ function hello() {
 }
 
 // Runs while the browser is still choosing the file name, before it shows
-// the download anywhere or asks where to save it. Holding the download here
-// and cancelling it means the browser's own download never appears.
+// the download anywhere or asks where to save it. The download waits here
+// while BDownloader checks the link; if BDownloader takes it, it's cancelled
+// and never appears.
 if (chrome.downloads.onDeterminingFilename) {
   chrome.downloads.onDeterminingFilename.addListener((item, suggest) => {
-    // Our own fallback downloads (below) stay in the browser.
+    // Our own downloads stay in the browser.
     if (item.byExtensionId === chrome.runtime.id) return false;
     const url = item.finalUrl || item.url;
     // blob:, data: and file: downloads only exist inside the browser.
     if (!isWebUrl(url) || keepInBrowser(item, url)) return false;
 
     takeOver(item, url, suggest);
-    return true; // suggest() is called once the download is cancelled
+    return true; // suggest() is called once BDownloader has answered
   });
 } else {
-  // Firefox can't hold a download before it starts, so it's cancelled as
-  // soon as it appears; the browser's download list may show it briefly.
+  // Firefox can't hold a download before it starts: it runs while
+  // BDownloader checks the link, and is cancelled if BDownloader takes it.
   chrome.downloads.onCreated.addListener((item) => {
     if (item.byExtensionId === chrome.runtime.id) return;
     const url = item.finalUrl || item.url;
@@ -99,23 +103,27 @@ if (chrome.downloads.onDeterminingFilename) {
 }
 
 async function takeOver(item, url, suggest, saved) {
-  // Cancel rather than pause: a paused download can keep its connection
-  // open, and sites that limit connections count it against BDownloader.
-  await chrome.downloads.cancel(item.id).catch(() => {});
-  await chrome.downloads.erase({ id: item.id }).catch(() => {});
-  try {
-    suggest();
-  } catch {
-    // Already cancelled; nothing left to release.
-  }
-
   // By now the browser knows the real file name.
   const name = item.filename ? item.filename.split(/[\\/]/).pop() : null;
   // Firefox has already asked where to save it (when set to): keep that folder.
   const dir = saved && /[\\/]/.test(item.filename || "") ? item.filename.replace(/[\\/][^\\/]*$/, "") : null;
-  if (!(await handOver(url, item.referrer, name, null, dir))) {
-    // BDownloader isn't available: let the browser download it after all.
-    chrome.downloads.download({ url: item.url }).catch(() => {});
+  // Some links work only once, or only for the browser (sites that unlock a
+  // download after a check). So the browser's download stays until
+  // BDownloader has checked it gets the same file.
+  const size = item.totalBytes > 0 ? item.totalBytes : item.fileSize > 0 ? item.fileSize : null;
+  const expect = { mime: item.mime || null, size };
+  const taken = await handOver(url, item.referrer, name, null, dir, expect);
+  if (taken) {
+    // Cancelled rather than paused: a paused download can keep its
+    // connection open, and sites that limit connections count it against BDownloader.
+    await chrome.downloads.cancel(item.id).catch(() => {});
+    await chrome.downloads.erase({ id: item.id }).catch(() => {});
+  }
+  // BDownloader didn't take it (or isn't available): the browser carries on.
+  try {
+    suggest();
+  } catch {
+    // Already cancelled; nothing left to release.
   }
 }
 

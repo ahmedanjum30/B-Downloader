@@ -521,7 +521,11 @@ impl App {
                 }
                 Request::Add(add) => {
                     if add.is_valid() {
-                        log::info!("download from the browser, waiting for confirmation (browser's folder: {:?})", add.dir);
+                        log::info!(
+                            "download from the browser, waiting for confirmation (browser's folder: {:?}, cookies: {})",
+                            add.dir,
+                            add.cookie_names()
+                        );
                         // The newest download's dialog goes on top of what's open.
                         if let Some(open) = self.modal.take() {
                             self.covered.push(open);

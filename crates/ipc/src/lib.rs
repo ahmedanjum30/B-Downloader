@@ -5,7 +5,7 @@
 //! pass on downloads caught by the extension. Each message is one line of JSON.
 
 use std::fs::OpenOptions;
-use std::io::{self, Write};
+use std::io::{self, Read, Write};
 use std::thread::sleep;
 use std::time::{Duration, Instant};
 
@@ -58,6 +58,29 @@ pub struct AddRequest {
     /// A YouTube video, captured from its player by the extension.
     #[serde(default)]
     pub youtube: Option<Box<YoutubeRequest>>,
+    /// What the browser got for this link, which keeps its own download
+    /// until the app says whether it gets the same: some links work only for
+    /// the browser (sites that unlock a download once). Sent with [`ask`].
+    #[serde(default)]
+    pub expect: Option<Expected>,
+}
+
+/// The file the browser's download is getting.
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct Expected {
+    /// Its `Content-Type`, e.g. `application/zip`.
+    #[serde(default)]
+    pub mime: Option<String>,
+    #[serde(default)]
+    pub size: Option<u64>,
+}
+
+/// The app's answer to a request sent with [`ask`].
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct Reply {
+    pub ok: bool,
+    #[serde(default)]
+    pub error: Option<String>,
 }
 
 /// What the extension captured from YouTube's player: its streaming address
@@ -99,8 +122,22 @@ impl AddRequest {
             origin: None,
             dir: None,
             youtube: None,
+            expect: None,
             start: false,
         }
+    }
+
+    /// The names of the cookies sent along (never their values), for the
+    /// log: they tell why a site that needs a login refused a download.
+    pub fn cookie_names(&self) -> String {
+        let names: Vec<&str> = self
+            .cookies
+            .as_deref()
+            .unwrap_or_default()
+            .split(';')
+            .filter_map(|c| c.split_once('=').map(|(name, _)| name.trim()))
+            .collect();
+        if names.is_empty() { "none".to_owned() } else { names.join(", ") }
     }
 
     /// Only web downloads are accepted; `file:` and other schemes are refused.
@@ -151,13 +188,32 @@ fn fnv1a(bytes: &[u8]) -> u64 {
 
 /// Sends a request to the running app. Fails with `NotFound` if it isn't running.
 pub fn send(request: &Request) -> io::Result<()> {
+    connect(request, false).map(drop)
+}
+
+/// Sends a request and waits for the app's [`Reply`], which it gives for a
+/// download with [`AddRequest::expect`] once it has checked the link.
+pub fn ask(request: &Request) -> io::Result<Reply> {
+    use std::io::BufRead;
+
+    let pipe = connect(request, true)?;
+    let mut line = Vec::new();
+    io::BufReader::new(pipe).take(MAX_MESSAGE as u64).read_until(b'\n', &mut line)?;
+    serde_json::from_slice(&line).map_err(io::Error::other)
+}
+
+/// Opens the pipe (for reading the answer too, if `answer`) and writes the request.
+fn connect(request: &Request, answer: bool) -> io::Result<std::fs::File> {
     const ERROR_PIPE_BUSY: i32 = 231;
     let mut line = serde_json::to_vec(request)?;
     line.push(b'\n');
     let deadline = Instant::now() + Duration::from_secs(2);
     loop {
-        match OpenOptions::new().write(true).open(pipe_name()) {
-            Ok(mut pipe) => return pipe.write_all(&line),
+        match OpenOptions::new().read(answer).write(true).open(pipe_name()) {
+            Ok(mut pipe) => {
+                pipe.write_all(&line)?;
+                return Ok(pipe);
+            }
             // Another client is connected right now; the app opens a new pipe instance at once.
             Err(e) if e.raw_os_error() == Some(ERROR_PIPE_BUSY) && Instant::now() < deadline => sleep(Duration::from_millis(50)),
             Err(e) => return Err(e),
@@ -189,6 +245,33 @@ mod tests {
             Request::Hello { browser: None }
         );
         assert_eq!(serde_json::from_str::<Request>(r#"{"type":"show"}"#).unwrap(), Request::Show);
+    }
+
+    #[test]
+    fn reads_what_the_browser_is_getting() {
+        let json = r#"{"type":"add","url":"https://f1.example.com/download/x","expect":{"mime":"application/zip","size":677344546}}"#;
+        let Request::Add(add) = serde_json::from_str(json).unwrap() else {
+            panic!("not add")
+        };
+        assert_eq!(
+            add.expect,
+            Some(Expected {
+                mime: Some("application/zip".into()),
+                size: Some(677_344_546),
+            })
+        );
+        // Older extensions don't send it, and an unknown size comes as null.
+        let Request::Add(add) = serde_json::from_str(r#"{"type":"add","url":"https://x.com/a","expect":{"mime":null,"size":null}}"#).unwrap() else {
+            panic!("not add")
+        };
+        assert_eq!(add.expect, Some(Expected::default()));
+        assert_eq!(
+            serde_json::from_str::<Reply>(r#"{"ok":false,"error":"web page"}"#)
+                .unwrap()
+                .error
+                .as_deref(),
+            Some("web page")
+        );
     }
 
     #[test]

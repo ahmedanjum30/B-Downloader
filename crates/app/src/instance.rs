@@ -1,10 +1,11 @@
 //! Keeps BDownloader to one window: later copies of the app, and the browser
 //! bridge, send their requests to the running one over a named pipe.
 
-use bdownloader_ipc::{MAX_MESSAGE, Request, pipe_name};
+use bdownloader_core::Engine;
+use bdownloader_ipc::{AddRequest, Expected, MAX_MESSAGE, Reply, Request, pipe_name};
 use iced::futures::channel::mpsc::Sender;
 use iced::futures::{SinkExt, Stream};
-use tokio::io::AsyncReadExt;
+use tokio::io::{AsyncBufReadExt, AsyncReadExt, AsyncWriteExt, BufReader};
 use tokio::net::windows::named_pipe::{NamedPipeServer, ServerOptions};
 
 use crate::app::Message;
@@ -52,14 +53,121 @@ pub fn listen() -> impl Stream<Item = Message> {
     })
 }
 
+/// Reads one request per line. A download the browser is holding (one with
+/// `expect`) is answered on the same pipe once its link is checked, and only
+/// taken over if the app gets the same file.
 async fn read_requests(client: NamedPipeServer, mut output: Sender<Message>) {
-    let mut data = Vec::new();
-    if client.take(MAX_MESSAGE as u64).read_to_end(&mut data).await.is_err() {
-        return;
-    }
-    for line in data.split(|&b| b == b'\n').filter(|line| !line.is_empty()) {
-        if let Ok(request) = serde_json::from_slice::<Request>(line) {
-            let _ = output.send(Message::External(request)).await;
+    let (read, mut write) = tokio::io::split(client);
+    let mut reader = BufReader::new(read.take(MAX_MESSAGE as u64));
+    let mut line = Vec::new();
+    loop {
+        line.clear();
+        match reader.read_until(b'\n', &mut line).await {
+            Ok(0) | Err(_) => return,
+            Ok(_) => {}
         }
+        let Ok(request) = serde_json::from_slice::<Request>(&line) else {
+            continue;
+        };
+        if let Request::Add(add) = &request
+            && let Some(expected) = &add.expect
+        {
+            let reply = match check(add, expected).await {
+                Ok(()) => Reply { ok: true, error: None },
+                Err(reason) => {
+                    log::info!("left to the browser: {reason} (cookies: {})", add.cookie_names());
+                    Reply {
+                        ok: false,
+                        error: Some(reason),
+                    }
+                }
+            };
+            if reply.ok {
+                let _ = output.send(Message::External(request)).await;
+            }
+            let mut answer = serde_json::to_vec(&reply).unwrap_or_default();
+            answer.push(b'\n');
+            let _ = write.write_all(&answer).await;
+            return;
+        }
+        let _ = output.send(Message::External(request)).await;
+    }
+}
+
+/// Whether the app gets the file the browser is getting from this link.
+/// Some sites unlock a download once, for the browser: asked again, they send
+/// a web page (a login or "are you a human?" check) or nothing at all.
+async fn check(add: &AddRequest, expected: &Expected) -> Result<(), String> {
+    let engine = Engine::new().map_err(|e| e.to_string())?;
+    let info = engine.probe(add.url.trim(), &add.headers()).await.map_err(|e| e.to_string())?;
+    let browser_page = expected.mime.as_deref().is_some_and(|m| m.to_ascii_lowercase().starts_with("text/html"));
+    if info.is_web_page() && !browser_page {
+        return Err("the site sends a web page instead of the file".into());
+    }
+    if let (Some(browser), Some(ours)) = (expected.size, info.size)
+        && browser != ours
+    {
+        return Err(format!("the site sends a different file ({ours} bytes instead of {browser})"));
+    }
+    Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use tokio::net::TcpListener;
+
+    /// Serves `/file` (a 1000-byte zip) and `/page` (a web page, as sites
+    /// that unlock a download once send when asked again).
+    async fn server() -> String {
+        let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let addr = listener.local_addr().unwrap();
+        tokio::spawn(async move {
+            loop {
+                let (mut socket, _) = listener.accept().await.unwrap();
+                tokio::spawn(async move {
+                    let mut buf = [0; 4096];
+                    let n = socket.read(&mut buf).await.unwrap_or(0);
+                    let head = String::from_utf8_lossy(&buf[..n]);
+                    let (kind, body) = if head.starts_with("GET /file") {
+                        ("application/zip", vec![7u8; 1000])
+                    } else {
+                        ("text/html", b"<html>Are you a human?</html>".to_vec())
+                    };
+                    let reply = format!(
+                        "HTTP/1.1 200 OK\r\nContent-Type: {kind}\r\nContent-Length: {}\r\nConnection: close\r\n\r\n",
+                        body.len()
+                    );
+                    let _ = socket.write_all(reply.as_bytes()).await;
+                    let _ = socket.write_all(&body).await;
+                });
+            }
+        });
+        format!("http://{addr}")
+    }
+
+    fn zip(size: u64) -> Expected {
+        Expected {
+            mime: Some("application/zip".into()),
+            size: Some(size),
+        }
+    }
+
+    #[tokio::test]
+    async fn takes_a_link_only_when_it_gets_the_browsers_file() {
+        let base = server().await;
+        let file = AddRequest::new(format!("{base}/file"));
+        assert_eq!(check(&file, &zip(1000)).await, Ok(()));
+        // Same link, but not the file the browser is getting.
+        assert!(check(&file, &zip(5000)).await.unwrap_err().contains("different file"));
+        // A web page where the browser got a zip.
+        let page = AddRequest::new(format!("{base}/page"));
+        assert!(check(&page, &zip(1000)).await.unwrap_err().contains("web page"));
+        // The browser is saving a web page itself: that's what it gets.
+        let html = Expected {
+            mime: Some("text/html".into()),
+            size: None,
+        };
+        assert_eq!(check(&page, &html).await, Ok(()));
     }
 }

@@ -6,6 +6,22 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+## [1.0.8] - 2026-10-18
+
+### Fixed
+- A download from the browser is never lost or replaced by a web page.
+  The browser's download now waits while BDownloader checks the link: if
+  BDownloader gets the same file, it takes over as before; if the site
+  sends it something else (a login or "are you a human?" page, a different
+  file, an error), the browser downloads the file itself. Before, some
+  sites ended up as a small web page saved under the file's name.
+
+### Changed
+- The log names the cookies each download from the browser came with (never
+  their values), to tell why a site refused a download.
+- The command-line tool takes `-H "Name: value"` to send extra request
+  headers, such as a cookie.
+
 ## [1.0.7] - 2026-10-17
 
 ### Fixed
@@ -332,7 +348,8 @@ First release.
   from 167 MB to 24 MB (working set) and the exe from 11.6 MB to 6.8 MB, with
   no change in download speed (28 MB/s over 8 connections, about 1% CPU).
 
-[Unreleased]: https://github.com/ahmedanjum30/BDownloader/compare/v1.0.7...HEAD
+[Unreleased]: https://github.com/ahmedanjum30/BDownloader/compare/v1.0.8...HEAD
+[1.0.8]: https://github.com/ahmedanjum30/BDownloader/compare/v1.0.7...v1.0.8
 [1.0.7]: https://github.com/ahmedanjum30/BDownloader/compare/v1.0.6...v1.0.7
 [1.0.6]: https://github.com/ahmedanjum30/BDownloader/compare/v1.0.5...v1.0.6
 [1.0.5]: https://github.com/ahmedanjum30/BDownloader/compare/v1.0.4...v1.0.5

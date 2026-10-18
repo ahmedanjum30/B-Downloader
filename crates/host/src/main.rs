@@ -14,7 +14,7 @@ use std::process::{Command, Stdio};
 use std::thread::sleep;
 use std::time::{Duration, Instant};
 
-use bdownloader_ipc::{MAX_MESSAGE, Request};
+use bdownloader_ipc::{MAX_MESSAGE, Reply, Request};
 use serde_json::json;
 
 /// How long to wait for the app to start listening after launching it.
@@ -22,37 +22,51 @@ const STARTUP_WAIT: Duration = Duration::from_secs(20);
 
 fn main() {
     let reply = match handle(&mut io::stdin().lock()) {
-        Ok(()) => json!({ "ok": true }),
+        Ok(Reply { ok: true, .. }) => json!({ "ok": true }),
+        Ok(Reply { error, .. }) => json!({ "ok": false, "error": error }),
         Err(e) => json!({ "ok": false, "error": e.to_string() }),
     };
     let _ = write_message(&mut io::stdout().lock(), &serde_json::to_vec(&reply).unwrap_or_default());
 }
 
-fn handle(input: &mut impl Read) -> io::Result<()> {
+fn handle(input: &mut impl Read) -> io::Result<Reply> {
     let message = read_message(input)?;
     let request: Request = serde_json::from_slice(&message).map_err(io::Error::other)?;
+    let taken = Reply { ok: true, error: None };
     match &request {
         Request::Add(add) if !add.is_valid() => return Err(io::Error::other("only http and https links can be downloaded")),
         // Don't start the app just because the browser started.
-        Request::Hello { .. } | Request::Show => return bdownloader_ipc::send(&request).or(Ok(())),
+        Request::Hello { .. } | Request::Show => return bdownloader_ipc::send(&request).map(|()| taken.clone()).or(Ok(taken)),
         Request::Add(_) => {}
     }
-    if bdownloader_ipc::send(&request).is_err() {
-        launch_app()?;
-        let deadline = Instant::now() + STARTUP_WAIT;
-        loop {
-            sleep(Duration::from_millis(200));
-            match bdownloader_ipc::send(&request) {
-                Ok(()) => break,
-                Err(e) if Instant::now() >= deadline => return Err(e),
-                Err(_) => {}
+    // A download the browser is holding waits for the app to check its link.
+    let expects = matches!(&request, Request::Add(add) if add.expect.is_some());
+    let deliver = || {
+        if expects {
+            bdownloader_ipc::ask(&request)
+        } else {
+            bdownloader_ipc::send(&request).map(|()| taken.clone())
+        }
+    };
+    let reply = match deliver() {
+        Ok(reply) => reply,
+        Err(_) => {
+            launch_app()?;
+            let deadline = Instant::now() + STARTUP_WAIT;
+            loop {
+                sleep(Duration::from_millis(200));
+                match deliver() {
+                    Ok(reply) => break reply,
+                    Err(e) if Instant::now() >= deadline => return Err(e),
+                    Err(_) => {}
+                }
             }
         }
-    }
+    };
     // Lets the app show the extension as connected, even if it wasn't
     // running when the browser started and said hello.
     let _ = bdownloader_ipc::send(&Request::Hello { browser: None });
-    Ok(())
+    Ok(reply)
 }
 
 /// Reads one message: a 32-bit length in native byte order, then that many bytes of JSON.
