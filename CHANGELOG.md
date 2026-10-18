@@ -6,6 +6,15 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+## [1.0.9] - 2026-10-18
+
+### Fixed
+- Downloads from Incognito and private windows (and Firefox containers)
+  now come with that window's cookies. The extension read the normal
+  window's cookies, so a site you'd signed in to (or passed a check on) in
+  Incognito refused BDownloader; workupload, for example, then sent its
+  "are you a human?" page.
+
 ## [1.0.8] - 2026-10-18
 
 ### Fixed
@@ -348,7 +357,8 @@ First release.
   from 167 MB to 24 MB (working set) and the exe from 11.6 MB to 6.8 MB, with
   no change in download speed (28 MB/s over 8 connections, about 1% CPU).
 
-[Unreleased]: https://github.com/ahmedanjum30/BDownloader/compare/v1.0.8...HEAD
+[Unreleased]: https://github.com/ahmedanjum30/BDownloader/compare/v1.0.9...HEAD
+[1.0.9]: https://github.com/ahmedanjum30/BDownloader/compare/v1.0.8...v1.0.9
 [1.0.8]: https://github.com/ahmedanjum30/BDownloader/compare/v1.0.7...v1.0.8
 [1.0.7]: https://github.com/ahmedanjum30/BDownloader/compare/v1.0.6...v1.0.7
 [1.0.6]: https://github.com/ahmedanjum30/BDownloader/compare/v1.0.5...v1.0.6

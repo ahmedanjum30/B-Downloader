@@ -46,10 +46,35 @@ function send(message) {
   });
 }
 
-// The browser's cookies for the URL, so downloads that need a login work.
-async function cookieHeader(url) {
+// Which cookie store a download or tab uses. Incognito and private windows
+// (and Firefox containers) keep their cookies apart from the normal ones, and
+// a login made there only exists in their store. `from`: a tab (its id and,
+// in Firefox, `cookieStoreId`) or a download (`incognito`, `cookieStoreId`).
+async function cookieStore(from) {
+  if (!from) return undefined;
+  if (from.cookieStoreId) return from.cookieStoreId;
   try {
-    const cookies = await chrome.cookies.getAll({ url });
+    const stores = await chrome.cookies.getAllCookieStores();
+    if (from.tabId !== undefined && from.tabId >= 0) {
+      const store = stores.find((s) => s.tabIds.includes(from.tabId));
+      if (store) return store.id;
+    }
+    // Chrome names its Incognito store "1"; Firefox marks its private one.
+    if (from.incognito) {
+      const store = stores.find((s) => s.incognito) || stores.find((s) => s.id === "1");
+      if (store) return store.id;
+    }
+  } catch {
+    // Unknown: the normal store.
+  }
+  return undefined;
+}
+
+// The browser's cookies for the URL, so downloads that need a login work.
+async function cookieHeader(url, from) {
+  try {
+    const storeId = await cookieStore(from);
+    const cookies = await chrome.cookies.getAll(storeId ? { url, storeId } : { url });
     return cookies.map((c) => `${c.name}=${c.value}`).join("; ") || null;
   } catch {
     return null;
@@ -58,13 +83,14 @@ async function cookieHeader(url) {
 
 // `expect`: what the browser's own download is getting. BDownloader then
 // checks the link first and only accepts it if it gets the same file.
-async function handOver(url, referrer, fileName, origin, dir, expect) {
+// `from`: the tab or download it comes from, for its cookies.
+async function handOver(url, referrer, fileName, origin, dir, expect, from) {
   return send({
     type: "add",
     url,
     referrer: referrer || null,
     file_name: fileName || null,
-    cookies: await cookieHeader(url),
+    cookies: await cookieHeader(url, from),
     user_agent: navigator.userAgent,
     origin: origin || null,
     dir: dir || null,
@@ -112,7 +138,8 @@ async function takeOver(item, url, suggest, saved) {
   // BDownloader has checked it gets the same file.
   const size = item.totalBytes > 0 ? item.totalBytes : item.fileSize > 0 ? item.fileSize : null;
   const expect = { mime: item.mime || null, size };
-  const taken = await handOver(url, item.referrer, name, null, dir, expect);
+  const from = { incognito: item.incognito, cookieStoreId: item.cookieStoreId };
+  const taken = await handOver(url, item.referrer, name, null, dir, expect, from);
   if (taken) {
     // Cancelled rather than paused: a paused download can keep its
     // connection open, and sites that limit connections count it against BDownloader.
@@ -145,14 +172,14 @@ chrome.contextMenus.onClicked.addListener(async (info, tab) => {
   const url = info.linkUrl || info.srcUrl;
   const page = info.pageUrl || (tab && tab.url);
   if (isWebUrl(url)) {
-    handOver(url, page, null);
+    handOver(url, page, null, null, null, null, tab && { tabId: tab.id, cookieStoreId: tab.cookieStoreId });
     return;
   }
   // Players that stream (blob: sources) have no link of their own; use the
   // video found in the tab's traffic instead.
   if (info.mediaType === "video" && tab) {
     const [video] = await videosFor(tab.id);
-    if (video) handOver(video.url, video.referer || page, await videoName(tab.id, video), video.origin);
+    if (video) handOver(video.url, video.referer || page, await videoName(tab.id, video), video.origin, null, null, { tabId: tab.id, cookieStoreId: tab.cookieStoreId });
   }
 });
 
@@ -199,7 +226,8 @@ chrome.runtime.onMessage.addListener((message, sender, reply) => {
       // Only videos the extension found itself, whatever the page asks for.
       const video = (await videosFor(tabId)).find((v) => v.url === (message.video && message.video.url));
       if (!video) return reply(false);
-      reply(await handOver(video.url, video.referer || sender.tab.url, await videoName(tabId, video), video.origin));
+      const from = { tabId, cookieStoreId: sender.tab.cookieStoreId };
+      reply(await handOver(video.url, video.referer || sender.tab.url, await videoName(tabId, video), video.origin, null, null, from));
     })().catch(() => reply(false));
     return true;
   }
@@ -230,7 +258,8 @@ chrome.runtime.onMessage.addListener((message, sender, reply) => {
     (async () => {
       const tab = await chrome.tabs.get(message.tabId).catch(() => null);
       const name = await videoName(message.tabId, message.video);
-      reply(await handOver(message.video.url, message.video.referer || (tab && tab.url), name, message.video.origin));
+      const from = tab && { tabId: tab.id, cookieStoreId: tab.cookieStoreId };
+      reply(await handOver(message.video.url, message.video.referer || (tab && tab.url), name, message.video.origin, null, null, from));
     })().catch(() => reply(false));
     return true;
   }
