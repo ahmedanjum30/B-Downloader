@@ -3,25 +3,252 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>BDownloader</title>
-<meta name="description" content="BDownloader: a fast, lightweight download manager for Windows, with multi-connection downloads, pause and resume, and a browser extension.">
+<title>BDownloader: free, fast download manager for Windows</title>
+<meta name="description" content="BDownloader is a free, lightweight download manager for Windows. Multi-connection downloads, pause and resume, a browser extension for Edge, Chrome and Firefox, and video downloads including HLS and YouTube up to 4K.">
+<link rel="canonical" href="https://ahmedanjum30.github.io/BDownloader/">
+<link rel="icon" type="image/png" href="images/icon.png">
+<meta property="og:type" content="website">
+<meta property="og:title" content="BDownloader: free, fast download manager for Windows">
+<meta property="og:description" content="Multi-connection downloads, pause and resume, a browser extension, and video downloads up to 4K. Free for personal use.">
+<meta property="og:url" content="https://ahmedanjum30.github.io/BDownloader/">
+<meta property="og:image" content="https://ahmedanjum30.github.io/BDownloader/images/social.png">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="theme-color" content="#14171d">
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "SoftwareApplication",
+  "name": "BDownloader",
+  "operatingSystem": "Windows 10, Windows 11",
+  "applicationCategory": "UtilitiesApplication",
+  "description": "A free, lightweight download manager for Windows with multi-connection downloads, pause and resume, a browser extension, and video downloads including HLS streams and YouTube.",
+  "offers": { "@type": "Offer", "price": "0", "priceCurrency": "USD" },
+  "author": { "@type": "Person", "name": "Ahmad Anjum", "url": "https://github.com/ahmedanjum30" },
+  "url": "https://ahmedanjum30.github.io/BDownloader/",
+  "downloadUrl": "https://github.com/ahmedanjum30/BDownloader/releases/latest",
+  "screenshot": "https://ahmedanjum30.github.io/BDownloader/images/app.png",
+  "license": "https://github.com/ahmedanjum30/BDownloader/blob/main/LICENSE"
+}
+</script>
 <style>
-  :root { color-scheme: light dark; --bg: #ffffff; --fg: #1f2328; --muted: #59636e; --accent: #6366f1; }
-  @media (prefers-color-scheme: dark) { :root { --bg: #0d1117; --fg: #e6edf3; --muted: #9198a1; --accent: #818cf8; } }
-  body { margin: 0; background: var(--bg); color: var(--fg); font: 16px/1.6 system-ui, -apple-system, "Segoe UI", sans-serif; }
-  main { max-width: 640px; margin: 0 auto; padding: 64px 16px; }
-  h1 { margin: 0 0 8px; font-size: 32px; }
-  p { color: var(--muted); }
+  :root {
+    --bg: #ffffff; --bg-soft: #f4f5fb; --card: #ffffff; --line: #e3e5ef;
+    --fg: #161a22; --muted: #5b6273; --accent: #5b67f0; --accent-fg: #ffffff;
+    --hero: linear-gradient(160deg, #eef0ff 0%, #ffffff 60%);
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --bg: #14171d; --bg-soft: #1a1e27; --card: #1c2029; --line: #2a2f3b;
+      --fg: #eceef4; --muted: #a2a8b8; --accent: #6e7bff; --accent-fg: #ffffff;
+      --hero: linear-gradient(160deg, #23264a 0%, #14171d 60%);
+    }
+  }
+  :root[data-theme="dark"] {
+    --bg: #14171d; --bg-soft: #1a1e27; --card: #1c2029; --line: #2a2f3b;
+    --fg: #eceef4; --muted: #a2a8b8; --accent: #6e7bff; --accent-fg: #ffffff;
+    --hero: linear-gradient(160deg, #23264a 0%, #14171d 60%);
+  }
+  * { box-sizing: border-box; }
+  html { scroll-behavior: smooth; }
+  body { margin: 0; background: var(--bg); color: var(--fg); font: 17px/1.6 "Segoe UI Variable Text", "Segoe UI", system-ui, -apple-system, sans-serif; }
   a { color: var(--accent); }
-  .button { display: inline-block; margin: 16px 12px 0 0; padding: 10px 18px; border-radius: 8px; background: var(--accent); color: #fff; text-decoration: none; font-weight: 600; }
+  img { max-width: 100%; display: block; }
+  .wrap { max-width: 1120px; margin: 0 auto; padding: 0 16px; }
+  header.bar { position: sticky; top: 0; z-index: 10; background: color-mix(in srgb, var(--bg) 85%, transparent); backdrop-filter: blur(10px); border-bottom: 1px solid var(--line); }
+  header.bar .wrap { display: flex; align-items: center; gap: 16px; height: 60px; }
+  .brand { display: flex; align-items: center; gap: 10px; font-weight: 700; font-size: 18px; color: var(--fg); text-decoration: none; }
+  .brand img { width: 30px; height: 30px; }
+  nav { margin-left: auto; display: flex; gap: 20px; }
+  nav a { color: var(--muted); text-decoration: none; font-size: 15px; }
+  nav a:hover { color: var(--fg); }
+  @media (max-width: 640px) { nav a.optional { display: none; } }
+  .hero { background: var(--hero); padding: 72px 0 40px; text-align: center; }
+  .hero h1 { font-size: clamp(34px, 6vw, 56px); line-height: 1.1; margin: 0 0 16px; letter-spacing: -0.02em; }
+  .hero p.lead { font-size: clamp(17px, 2.2vw, 20px); color: var(--muted); max-width: 680px; margin: 0 auto 28px; }
+  .cta { display: flex; flex-wrap: wrap; gap: 12px; justify-content: center; align-items: center; }
+  .button { display: inline-flex; align-items: center; gap: 10px; padding: 13px 22px; border-radius: 10px; font-weight: 600; text-decoration: none; font-size: 16px; }
+  .button.primary { background: var(--accent); color: var(--accent-fg); box-shadow: 0 6px 24px color-mix(in srgb, var(--accent) 35%, transparent); }
+  .button.primary:hover { filter: brightness(1.08); }
+  .button.secondary { color: var(--fg); border: 1px solid var(--line); background: var(--card); }
+  .meta { margin-top: 14px; color: var(--muted); font-size: 14px; }
+  .shot { margin: 44px auto 0; max-width: 1040px; border-radius: 12px; overflow: hidden; border: 1px solid var(--line); box-shadow: 0 30px 80px rgba(0, 0, 0, 0.35); }
+  section { padding: 72px 0; }
+  section.soft { background: var(--bg-soft); }
+  h2 { font-size: clamp(26px, 4vw, 36px); margin: 0 0 12px; letter-spacing: -0.01em; text-align: center; }
+  .sub { color: var(--muted); text-align: center; max-width: 640px; margin: 0 auto 40px; }
+  .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 18px; }
+  .card { background: var(--card); border: 1px solid var(--line); border-radius: 14px; padding: 22px; }
+  .card h3 { margin: 12px 0 6px; font-size: 18px; }
+  .card p { margin: 0; color: var(--muted); font-size: 15.5px; }
+  .icon { width: 40px; height: 40px; border-radius: 10px; display: grid; place-items: center; background: color-mix(in srgb, var(--accent) 16%, transparent); color: var(--accent); }
+  .icon svg { width: 22px; height: 22px; }
+  .split { display: grid; grid-template-columns: 1fr 1fr; gap: 40px; align-items: center; }
+  @media (max-width: 820px) { .split { grid-template-columns: 1fr; } }
+  .split h2, .split .sub { text-align: left; margin-left: 0; }
+  .browsers { list-style: none; padding: 0; margin: 0; display: grid; gap: 10px; }
+  .browsers li { background: var(--card); border: 1px solid var(--line); border-radius: 10px; padding: 12px 14px; font-size: 15.5px; }
+  .browsers b { margin-right: 6px; }
+  .rounded { border-radius: 12px; border: 1px solid var(--line); box-shadow: 0 20px 50px rgba(0, 0, 0, 0.25); }
+  details { background: var(--card); border: 1px solid var(--line); border-radius: 12px; padding: 16px 20px; margin-bottom: 12px; }
+  summary { cursor: pointer; font-weight: 600; font-size: 17px; }
+  details p { color: var(--muted); margin: 10px 0 0; }
+  .faq { max-width: 780px; margin: 0 auto; }
+  footer { border-top: 1px solid var(--line); padding: 32px 0; color: var(--muted); font-size: 14.5px; }
+  footer .wrap { display: flex; flex-wrap: wrap; gap: 12px 24px; justify-content: space-between; }
+  footer a { color: var(--muted); }
 </style>
 </head>
 <body>
+<header class="bar">
+  <div class="wrap">
+    <a class="brand" href="#"><img src="images/icon.png" alt="">BDownloader</a>
+    <nav>
+      <a class="optional" href="#features">Features</a>
+      <a class="optional" href="#browsers">Browsers</a>
+      <a href="#faq">FAQ</a>
+      <a href="https://github.com/ahmedanjum30/BDownloader">GitHub</a>
+    </nav>
+  </div>
+</header>
+
 <main>
-  <h1>BDownloader</h1>
-  <p>A fast, lightweight download manager for Windows. It downloads each file over several connections at once, pauses and resumes anything, and catches downloads and videos from your browser.</p>
-  <a class="button" href="https://github.com/ahmedanjum30/BDownloader/releases/latest">Download for Windows</a>
-  <a href="https://github.com/ahmedanjum30/BDownloader">Source code and documentation</a>
+  <div class="hero">
+    <div class="wrap">
+      <h1>Downloads, done properly.</h1>
+      <p class="lead">BDownloader is a free, lightweight download manager for Windows. It downloads every file over several connections at once, pauses and resumes anything, and catches downloads and videos straight from your browser.</p>
+      <div class="cta">
+        <a class="button primary" id="download" href="https://github.com/ahmedanjum30/BDownloader/releases/latest">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M12 4v11"/><path d="m7 10 5 5 5-5"/><path d="M5 20h14"/></svg>
+          <span id="download-label">Download for Windows</span>
+        </a>
+        <a class="button secondary" href="https://github.com/ahmedanjum30/BDownloader">View on GitHub</a>
+      </div>
+      <p class="meta">Windows 10 and 11 · Under 5 MB · No admin rights needed · Free for personal use</p>
+      <div class="shot"><img src="images/app.png" width="1600" height="990" alt="BDownloader downloading three files over 16 connections each, with three finished downloads below"></div>
+    </div>
+  </div>
+
+  <section id="features">
+    <div class="wrap">
+      <h2>Everything a download manager should do</h2>
+      <p class="sub">Fast where it counts, quiet everywhere else.</p>
+      <div class="grid">
+        <div class="card">
+          <div class="icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h16M4 12h16M4 17h16"/></svg></div>
+          <h3>Many connections at once</h3>
+          <p>Each file is split into parts that download side by side. BDownloader adds connections while the server keeps up, and a finished connection takes over half of the biggest remaining part.</p>
+        </div>
+        <div class="card">
+          <div class="icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="6" y="5" width="4" height="14" rx="1"/><rect x="14" y="5" width="4" height="14" rx="1"/></svg></div>
+          <h3>Pause and resume anything</h3>
+          <p>Stop a download and continue later, even after closing the app or restarting the PC. Link expired? Give it a fresh one and it continues where it stopped.</p>
+        </div>
+        <div class="card">
+          <div class="icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3a14 14 0 0 1 0 18M12 3a14 14 0 0 0 0 18"/></svg></div>
+          <h3>Works with your browser</h3>
+          <p>Downloads you start in Edge, Chrome, Firefox, Brave, Opera or Vivaldi go to BDownloader, even ones that need you to be signed in, private windows included.</p>
+        </div>
+        <div class="card">
+          <div class="icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="m10 9 5 3-5 3z"/></svg></div>
+          <h3>Download videos</h3>
+          <p>A "Download this video" bar appears on videos: video files, HLS streams, and YouTube in any quality up to 4K, saved as one MP4. No extra tools needed.</p>
+        </div>
+        <div class="card">
+          <div class="icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m12 14 4-4"/><path d="M3.3 19a10 10 0 1 1 17.4 0"/></svg></div>
+          <h3>Speed limit</h3>
+          <p>Cap all downloads together from the top bar, so a big download doesn't slow down everything else. It applies instantly.</p>
+        </div>
+        <div class="card">
+          <div class="icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M13 2 4 14h7l-1 8 9-12h-7z"/></svg></div>
+          <h3>Small and light</h3>
+          <p>A native app written in Rust: no bundled browser engine, little memory while idle, and it keeps itself up to date while staying out of your way in the tray.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section id="browsers" class="soft">
+    <div class="wrap split">
+      <div>
+        <h2>One extension, every browser</h2>
+        <p class="sub">Add the extension once and downloads go to BDownloader by themselves. Right-click any link for "Download with BDownloader". If a site won't give BDownloader the file, your browser downloads it instead, so nothing is ever lost.</p>
+        <ul class="browsers">
+          <li><b>Edge</b>from the <a href="https://microsoftedge.microsoft.com/addons/detail/kfbjnlpmchkeaphhdeidpdpcomoohdfa">Edge Add-ons store</a></li>
+          <li><b>Firefox</b>one click from inside BDownloader, signed by Mozilla</li>
+          <li><b>Chrome, Brave, Opera, Vivaldi</b>a few guided steps inside BDownloader</li>
+        </ul>
+      </div>
+      <img class="rounded" src="images/extension.png" width="671" height="500" alt="BDownloader's browser extension window, showing it connected, with tabs for Chrome, Edge, Brave, Opera, Vivaldi and Firefox">
+    </div>
+  </section>
+
+  <section id="faq">
+    <div class="wrap faq">
+      <h2>Questions</h2>
+      <p class="sub">Didn't find yours? Ask in <a href="https://github.com/ahmedanjum30/BDownloader/discussions">Discussions</a>.</p>
+      <details>
+        <summary>Is BDownloader free?</summary>
+        <p>Yes, for personal and other non-commercial use, with every feature included. There are no ads and no paid version. If you'd like to support it, there's <a href="https://www.patreon.com/cw/ahmedanjum30">Patreon</a>.</p>
+      </details>
+      <details>
+        <summary>Windows says "Windows protected your PC". Is it safe?</summary>
+        <p>BDownloader isn't code-signed yet, so Windows doesn't know the publisher and warns about it. Click <b>More info</b>, then <b>Run anyway</b>. The installer is built from the public source code by GitHub's release workflow, and you can check it against the <code>SHA256SUMS.txt</code> file on each release. Updates installed by BDownloader itself don't show the warning.</p>
+      </details>
+      <details>
+        <summary>Which browsers does it work with?</summary>
+        <p>Edge, Chrome, Firefox, Brave, Opera and Vivaldi. Open <b>Browser extension</b> in BDownloader for the steps; Edge and Firefox take a single click.</p>
+      </details>
+      <details>
+        <summary>Can it download YouTube videos?</summary>
+        <p>Yes. Play the video for a few seconds and a "Download this video" bar appears on it, listing every quality up to 4K and sound only. Picture and sound are joined into one MP4 that any player opens. Live streams aren't supported.</p>
+      </details>
+      <details>
+        <summary>Do I need admin rights to install it?</summary>
+        <p>No. It installs for your Windows user only, in your own AppData folder, and can be removed from Installed apps like any program.</p>
+      </details>
+      <details>
+        <summary>Can I use it at work?</summary>
+        <p>BDownloader's license (PolyForm Noncommercial) allows personal use and use by charities, schools and public institutions, but not commercial use. For commercial use, get in touch on GitHub.</p>
+      </details>
+      <details>
+        <summary>Does it send my data anywhere?</summary>
+        <p>No. It connects only to the servers of the files you download, and to GitHub to check for updates. The browser extension talks only to the app on your own computer. See the <a href="https://github.com/ahmedanjum30/BDownloader/blob/main/PRIVACY.md">privacy policy</a>.</p>
+      </details>
+      <details>
+        <summary>Can I install it from the command line?</summary>
+        <p>Download the installer and run it with <code>/VERYSILENT</code> for a silent install. BDownloader is also on its way to winget, Windows' package manager.</p>
+      </details>
+    </div>
+  </section>
+
+  <section class="soft">
+    <div class="wrap" style="text-align: center">
+      <h2>Ready when you are</h2>
+      <p class="sub">Download BDownloader and add the extension to your browser. It takes a minute.</p>
+      <a class="button primary" href="https://github.com/ahmedanjum30/BDownloader/releases/latest">Download for Windows</a>
+    </div>
+  </section>
 </main>
+
+<footer>
+  <div class="wrap">
+    <span>BDownloader · made by <a href="https://github.com/ahmedanjum30">Ahmad Anjum</a></span>
+    <span><a href="https://github.com/ahmedanjum30/BDownloader">Source code</a> · <a href="https://github.com/ahmedanjum30/BDownloader/blob/main/CHANGELOG.md">Changelog</a> · <a href="https://github.com/ahmedanjum30/BDownloader/blob/main/PRIVACY.md">Privacy</a> · <a href="https://github.com/ahmedanjum30/BDownloader/blob/main/LICENSE">License</a></span>
+  </div>
+</footer>
+
+<script>
+  // The newest installer and its version, straight from GitHub. Without it,
+  // the button still leads to the latest release.
+  fetch("https://api.github.com/repos/ahmedanjum30/BDownloader/releases/latest")
+    .then((r) => (r.ok ? r.json() : null))
+    .then((release) => {
+      const asset = release && release.assets.find((a) => /^BDownloader-Setup-.*\.exe$/.test(a.name));
+      if (!asset) return;
+      document.getElementById("download").href = asset.browser_download_url;
+      document.getElementById("download-label").textContent = "Download for Windows · " + release.tag_name;
+    })
+    .catch(() => {});
+</script>
 </body>
 </html>

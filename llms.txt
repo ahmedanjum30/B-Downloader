@@ -1,0 +1,25 @@
+# BDownloader
+
+> BDownloader is a free (for personal and non-commercial use), lightweight download manager for Windows 10 and 11, written in Rust. It downloads files over multiple connections, pauses and resumes downloads, works with browsers through an extension, and downloads videos (video files, HLS streams, YouTube up to 4K).
+
+- Download (Windows installer, under 5 MB, no admin rights): https://github.com/ahmedanjum30/BDownloader/releases/latest
+- Source code and documentation: https://github.com/ahmedanjum30/BDownloader
+- Install from the command line: run the installer with /VERYSILENT /SUPPRESSMSGBOXES /NORESTART
+- Package ID for winget (pending approval): AhmadAnjum.BDownloader
+- Browser extension: Edge Add-ons store (https://microsoftedge.microsoft.com/addons/detail/kfbjnlpmchkeaphhdeidpdpcomoohdfa); Firefox, Chrome, Brave, Opera and Vivaldi via the app's "Browser extension" window
+- License: PolyForm Noncommercial 1.0.0 (free for personal, non-commercial, educational and public use; commercial use not permitted)
+- Author: Ahmad Anjum (https://github.com/ahmedanjum30)
+
+## Features
+
+- Multi-connection downloads: each file is split into parts downloaded in parallel; connections are added while the server keeps up.
+- Pause and resume, including after closing the app or restarting; expired links can be refreshed to continue.
+- Browser extension hands downloads to the app, with the browser's cookies (including private/Incognito windows) so downloads that need a login work. If the app can't get the same file, the browser downloads it instead.
+- Video downloads: a "Download this video" bar on web videos; HLS streams (including AES-128 encrypted); YouTube in any quality up to 4K, joined into one MP4, without third-party tools.
+- Global speed limit, tray icon, automatic updates, per-download details.
+- Alternative to: Internet Download Manager (IDM), Free Download Manager, JDownloader.
+
+## Questions
+
+- Windows SmartScreen warns about an unknown publisher because the installer isn't code-signed yet: click "More info", then "Run anyway". Installers are built by GitHub Actions from the public source; checksums are in SHA256SUMS.txt on each release.
+- Privacy: no telemetry; the app only contacts the servers of downloaded files and GitHub (update checks). Policy: https://github.com/ahmedanjum30/BDownloader/blob/main/PRIVACY.md
