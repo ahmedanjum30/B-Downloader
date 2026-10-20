@@ -30,6 +30,9 @@ use crate::tray::{self, Tray, TrayAction};
 use crate::update::{self, Relaunch, Release};
 use crate::{browser, format, instance, memory, style};
 
+/// Where people can support BDownloader.
+pub const SUPPORT_URL: &str = "https://www.patreon.com/cw/ahmedanjum30";
+
 /// Trims memory once the window and the last download have settled.
 fn trim_memory_soon() -> Task<Message> {
     Task::perform(tokio::time::sleep(Duration::from_secs(3)), |_| Message::TrimMemory)
@@ -137,6 +140,8 @@ pub enum Message {
 
     OpenSettings,
     OpenExtension,
+    /// Opens the page where people can support BDownloader (Patreon).
+    OpenSupport,
     /// Show the Browser extension steps for this browser.
     ExtensionBrowser(browser::Browser),
     /// Opens the extension in the browser, to add it with one click.
@@ -476,6 +481,7 @@ impl App {
             Message::Filter(filter) => self.filter = filter,
             Message::Search(search) => self.search = search,
             Message::OpenExtension => self.modal = Some(Modal::Extension(browser::Browser::Chrome)),
+            Message::OpenSupport => store::open_file(std::path::Path::new(SUPPORT_URL)),
             Message::ExtensionBrowser(chosen) => {
                 if let Some(Modal::Extension(browser)) = &mut self.modal {
                     *browser = chosen;

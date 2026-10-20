@@ -101,6 +101,7 @@ fn sidebar(app: &App) -> Element<'_, Message> {
     .spacing(4);
 
     let footer = column![
+        nav_item(&icons::HEART, "Support BDownloader", None, false, Message::OpenSupport),
         nav_item(&icons::GLOBE, "Browser extension", None, false, Message::OpenExtension),
         nav_item(&icons::SETTINGS, "Settings", None, false, Message::OpenSettings),
     ]
