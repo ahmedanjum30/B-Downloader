@@ -71,6 +71,31 @@ function Draw-Promo([int]$w, [int]$h, [string]$file) {
     $g.Dispose(); $bmp.Dispose()
 }
 
+# The Microsoft Store's 1:1 box art (its main logo): the icon and the name,
+# on the promo tiles' background.
+function Draw-BoxArt([int]$size, [string]$file) {
+    $bmp, $g = New-Canvas $size $size
+    $rect = New-Object Drawing.Rectangle 0, 0, $size, $size
+    $bg = New-Object Drawing.Drawing2D.LinearGradientBrush $rect, ([Drawing.Color]::FromArgb(255, 0x14, 0x17, 0x1d)), ([Drawing.Color]::FromArgb(255, 0x23, 0x26, 0x4a)), 45.0
+    $g.FillRectangle($bg, $rect)
+    $glow = New-Object Drawing.Drawing2D.GraphicsPath
+    $glow.AddEllipse([float]($size * 0.1), [float]($size * 0.02), [float]($size * 0.8), [float]($size * 0.8))
+    $pgb = New-Object Drawing.Drawing2D.PathGradientBrush $glow
+    $pgb.CenterColor = [Drawing.Color]::FromArgb(90, 0x6e, 0x7b, 0xff)
+    $pgb.SurroundColors = [Drawing.Color[]]@([Drawing.Color]::FromArgb(0, 0x6e, 0x7b, 0xff))
+    $g.FillPath($pgb, $glow)
+    $icon = $size * 0.42
+    Draw-Icon $g (($size - $icon) / 2) ($size * 0.21) $icon
+    $font = New-Object Drawing.Font 'Segoe UI', ([float]($size * 0.085)), ([Drawing.FontStyle]::Bold), ([Drawing.GraphicsUnit]::Pixel)
+    $format = New-Object Drawing.StringFormat
+    $format.Alignment = 'Center'
+    $g.DrawString('BDownloader', $font, [Drawing.Brushes]::White, (New-Object Drawing.RectangleF 0, ([float]($size * 0.7)), ([float]$size), ([float]($size * 0.15))), $format)
+    $bmp.Save((Join-Path $out $file), [Drawing.Imaging.ImageFormat]::Png)
+    $g.Dispose(); $bmp.Dispose()
+}
+Draw-BoxArt 1080 'boxart-1080.png'
+Draw-BoxArt 2160 'boxart-2160.png'
+
 foreach ($size in 128, 300) {
     $bmp, $g = New-Canvas $size $size
     $g.Clear([Drawing.Color]::Transparent)
@@ -83,4 +108,6 @@ foreach ($size in 128, 300) {
 }
 Draw-Promo 440 280 'promo-small-440x280.png'
 Draw-Promo 1400 560 'promo-marquee-1400x560.png'
+# Link previews: GitHub's social preview, and the website's og:image.
+Draw-Promo 1280 640 'social-1280x640.png'
 Get-ChildItem $out | ForEach-Object { "  $($_.Name)" }
