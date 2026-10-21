@@ -2,6 +2,7 @@
 
 > BDownloader is a free (for personal and non-commercial use), lightweight download manager for Windows 10 and 11, written in Rust. It downloads files over multiple connections, pauses and resumes downloads, works with browsers through an extension, and downloads videos (video files, HLS streams, YouTube up to 4K).
 
+- Microsoft Store: https://apps.microsoft.com/detail/xp89fxjjf4j45w (product ID XP89FXJJF4J45W)
 - Download (Windows installer, under 5 MB, no admin rights): https://github.com/ahmedanjum30/BDownloader/releases/latest
 - Source code and documentation: https://github.com/ahmedanjum30/BDownloader
 - Install from the command line: run the installer with /VERYSILENT /SUPPRESSMSGBOXES /NORESTART
