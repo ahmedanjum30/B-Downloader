@@ -204,6 +204,21 @@ pub fn add(dialog: &AddDialog, existing: Option<(u64, u64)>) -> Element<'_, Mess
 }
 
 fn updates<'a>(draft: &Settings, status: String) -> Element<'a, Message> {
+    let logs = row![
+        muted("Something not working? The log helps find out why.").size(12).width(Fill),
+        button(text("Open log folder").size(13))
+            .padding([7, 14])
+            .style(style::secondary)
+            .on_press(Message::OpenLogs),
+    ]
+    .spacing(12)
+    .align_y(Center);
+    let version = format!("Version {}", env!("CARGO_PKG_VERSION"));
+    if crate::update::is_packaged() {
+        return column![muted(format!("{version} · Updates come from the Microsoft Store.")).size(13), logs]
+            .spacing(8)
+            .into();
+    }
     let mode = row([(true, "Install automatically"), (false, "Ask me first")].map(|(auto, label)| {
         button(text(label).size(14).width(Fill).center())
             .padding([8, 12])
@@ -213,7 +228,6 @@ fn updates<'a>(draft: &Settings, status: String) -> Element<'a, Message> {
             .into()
     }))
     .spacing(4);
-    let version = format!("Version {}", env!("CARGO_PKG_VERSION"));
     let status = if status.is_empty() { version } else { format!("{version} · {status}") };
     column![
         container(mode).padding(4).style(style::panel),
@@ -226,16 +240,8 @@ fn updates<'a>(draft: &Settings, status: String) -> Element<'a, Message> {
         ]
         .spacing(12)
         .align_y(Center),
-        muted("Automatic updates install while nothing is downloading and BDownloader is in the tray.").size(12),
-        row![
-            muted("Something not working? The log helps find out why.").size(12).width(Fill),
-            button(text("Open log folder").size(13))
-                .padding([7, 14])
-                .style(style::secondary)
-                .on_press(Message::OpenLogs),
-        ]
-        .spacing(12)
-        .align_y(Center),
+        muted("Automatic updates install while nothing is downloading and no dialog is open.").size(12),
+        logs,
     ]
     .spacing(8)
     .into()

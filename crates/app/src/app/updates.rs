@@ -50,7 +50,8 @@ impl App {
     pub(super) fn handle_updates(&mut self, message: Message) -> Task<Message> {
         match message {
             Message::CheckForUpdates { manual } => {
-                if matches!(self.update, Update::Checking | Update::Downloading { .. } | Update::Ready { .. }) {
+                // The Store version gets its updates from the Store.
+                if update::is_packaged() || matches!(self.update, Update::Checking | Update::Downloading { .. } | Update::Ready { .. }) {
                     return Task::none();
                 }
                 self.update_manual = manual;

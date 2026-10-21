@@ -70,6 +70,25 @@ fn checksum_for(sums: &str, name: &str) -> Option<String> {
     })
 }
 
+/// The Microsoft Store version (an MSIX package). The Store updates it, so it
+/// doesn't look for updates on GitHub.
+#[cfg(windows)]
+pub fn is_packaged() -> bool {
+    use windows_sys::Win32::Storage::Packaging::Appx::GetCurrentPackageFullName;
+    const APPMODEL_ERROR_NO_PACKAGE: i32 = 15700;
+    static PACKAGED: std::sync::OnceLock<bool> = std::sync::OnceLock::new();
+    *PACKAGED.get_or_init(|| {
+        let mut len = 0;
+        // SAFETY: asks only for the length (no buffer), which is allowed.
+        unsafe { GetCurrentPackageFullName(&mut len, std::ptr::null_mut()) as i32 != APPMODEL_ERROR_NO_PACKAGE }
+    })
+}
+
+#[cfg(not(windows))]
+pub fn is_packaged() -> bool {
+    false
+}
+
 /// Updates only make sense for an installed copy (the uninstaller sits next
 /// to it). Development builds would otherwise install a release over nothing.
 pub fn is_installed() -> bool {

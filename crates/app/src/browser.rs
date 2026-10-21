@@ -218,10 +218,20 @@ pub fn register() -> io::Result<()> {
     use winreg::RegKey;
     use winreg::enums::HKEY_CURRENT_USER;
 
-    let host = exe_dir().ok_or_else(|| io::Error::other("no exe folder"))?.join("bdl-host.exe");
-    if !host.exists() {
-        return Ok(());
-    }
+    let host = if crate::update::is_packaged() {
+        // The Store version's files sit in a protected folder that changes
+        // with every update; browsers start the bridge through its app alias,
+        // which stays put. (An alias is a special link, so it isn't checked
+        // with `exists`.)
+        PathBuf::from(std::env::var_os("LOCALAPPDATA").ok_or_else(|| io::Error::other("no LOCALAPPDATA"))?)
+            .join(r"Microsoft\WindowsApps\bdl-host.exe")
+    } else {
+        let host = exe_dir().ok_or_else(|| io::Error::other("no exe folder"))?.join("bdl-host.exe");
+        if !host.exists() {
+            return Ok(());
+        }
+        host
+    };
     let manifest = serde_json::json!({
         "name": HOST_NAME,
         "description": "BDownloader",
