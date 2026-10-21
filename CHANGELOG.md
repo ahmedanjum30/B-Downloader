@@ -6,6 +6,14 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+## [1.0.10] - 2026-10-21
+
+### Added
+- A Support BDownloader item in the sidebar opens its Patreon page, for
+  anyone who'd like to support its development. No pop-ups or reminders.
+- BDownloader is on the Microsoft Store:
+  https://apps.microsoft.com/detail/xp89fxjjf4j45w
+
 ## [1.0.9] - 2026-10-18
 
 ### Fixed
@@ -357,7 +365,8 @@ First release.
   from 167 MB to 24 MB (working set) and the exe from 11.6 MB to 6.8 MB, with
   no change in download speed (28 MB/s over 8 connections, about 1% CPU).
 
-[Unreleased]: https://github.com/ahmedanjum30/BDownloader/compare/v1.0.9...HEAD
+[Unreleased]: https://github.com/ahmedanjum30/BDownloader/compare/v1.0.10...HEAD
+[1.0.10]: https://github.com/ahmedanjum30/BDownloader/compare/v1.0.9...v1.0.10
 [1.0.9]: https://github.com/ahmedanjum30/BDownloader/compare/v1.0.8...v1.0.9
 [1.0.8]: https://github.com/ahmedanjum30/BDownloader/compare/v1.0.7...v1.0.8
 [1.0.7]: https://github.com/ahmedanjum30/BDownloader/compare/v1.0.6...v1.0.7
