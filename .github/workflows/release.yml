@@ -163,3 +163,20 @@ jobs:
           git add download
           git commit -m "Installer $version"
           git push
+
+  # The new version goes to the Microsoft Store: its package points to the
+  # installer on GitHub Pages, then it's submitted for certification.
+  # Skipped without the MSSTORE_* secrets, or while a submission is in review.
+  msstore:
+    needs: pages
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - name: Submit to the Microsoft Store
+        shell: pwsh
+        run: ./scripts/publish-msstore.ps1
+        env:
+          MSSTORE_TENANT_ID: ${{ secrets.MSSTORE_TENANT_ID }}
+          MSSTORE_CLIENT_ID: ${{ secrets.MSSTORE_CLIENT_ID }}
+          MSSTORE_CLIENT_SECRET: ${{ secrets.MSSTORE_CLIENT_SECRET }}
+          MSSTORE_SELLER_ID: ${{ secrets.MSSTORE_SELLER_ID }}
