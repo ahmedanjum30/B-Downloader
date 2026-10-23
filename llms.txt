@@ -7,7 +7,7 @@
 - Source code and documentation: https://github.com/ahmedanjum30/BDownloader
 - Install from the command line: run the installer with /VERYSILENT /SUPPRESSMSGBOXES /NORESTART
 - Package ID for winget (pending approval): AhmadAnjum.BDownloader
-- Browser extension: Edge Add-ons store (https://microsoftedge.microsoft.com/addons/detail/kfbjnlpmchkeaphhdeidpdpcomoohdfa); Firefox, Chrome, Brave, Opera and Vivaldi via the app's "Browser extension" window
+- Browser extension: Edge Add-ons store (https://microsoftedge.microsoft.com/addons/detail/kfbjnlpmchkeaphhdeidpdpcomoohdfa); Firefox Add-ons (https://addons.mozilla.org/firefox/addon/bdownloader/); Chrome, Brave, Opera and Vivaldi via the app's "Browser extension" window
 - License: PolyForm Noncommercial 1.0.0 (free for personal, non-commercial, educational and public use; commercial use not permitted)
 - Author: Ahmad Anjum (https://github.com/ahmedanjum30)
 
