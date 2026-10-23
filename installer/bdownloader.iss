@@ -60,10 +60,12 @@ Name: "desktopicon"; Description: "{cm:CreateDesktopIcon}"; GroupDescription: "{
 Source: "{#BinDir}\BDownloader.exe"; DestDir: "{app}"; Flags: ignoreversion
 Source: "{#BinDir}\bdl-host.exe"; DestDir: "{app}"; Flags: ignoreversion
 Source: "..\extension\*"; DestDir: "{app}\extension"; Flags: ignoreversion recursesubdirs createallsubdirs
-; The same extension for Firefox, signed by Mozilla (scripts\sign-firefox.ps1).
-Source: "..\dist\bdownloader-firefox.xpi"; DestDir: "{app}"; Flags: ignoreversion
 Source: "..\LICENSE"; DestDir: "{app}"; DestName: "LICENSE.txt"; Flags: ignoreversion
 Source: "..\PRIVACY.md"; DestDir: "{app}"; Flags: ignoreversion
+
+[InstallDelete]
+; Versions before 1.0.11 shipped the Firefox add-on; it's on Firefox Add-ons now.
+Type: files; Name: "{app}\bdownloader-firefox.xpi"
 
 [Icons]
 Name: "{autoprograms}\BDownloader"; Filename: "{app}\BDownloader.exe"

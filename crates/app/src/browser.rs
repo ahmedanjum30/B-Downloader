@@ -67,7 +67,7 @@ impl Browser {
     /// it's published there. Brave, Opera and Vivaldi use the Chrome Web Store.
     pub fn store_page(self) -> Option<String> {
         match self {
-            Browser::Firefox => None,
+            Browser::Firefox => Some(FIREFOX_STORE_PAGE.to_owned()),
             Browser::Edge => (!EDGE_STORE_ID.is_empty()).then(|| format!("https://microsoftedge.microsoft.com/addons/detail/{EDGE_STORE_ID}")),
             _ => (!CHROME_STORE_ID.is_empty()).then(|| format!("https://chromewebstore.google.com/detail/{CHROME_STORE_ID}")),
         }
@@ -85,15 +85,15 @@ impl Browser {
         }
     }
 
-    /// Whether the app can add the extension with one click: Firefox's
-    /// signed add-on, or a store page to open.
+    /// Whether the app can add the extension with one click: the browser's
+    /// store has it.
     pub fn one_click(self) -> bool {
-        match self {
-            Browser::Firefox => firefox_addon().is_some(),
-            _ => self.store_page().is_some(),
-        }
+        self.store_page().is_some()
     }
 }
+
+/// The add-on's page on Firefox Add-ons (addons.mozilla.org).
+pub const FIREFOX_STORE_PAGE: &str = "https://addons.mozilla.org/firefox/addon/bdownloader/";
 
 /// The extension's IDs on the Chrome Web Store and Edge Add-ons, assigned on
 /// the first upload; empty until then. Also set in `installer/bdownloader.iss`,
@@ -145,33 +145,13 @@ pub fn extension_dir() -> Option<PathBuf> {
         .map(strip_verbatim)
 }
 
-/// The Firefox add-on, signed by Mozilla so Firefox keeps it: next to the
-/// app when installed, or where `scripts/build-installer.ps1` puts it for
-/// development builds.
-pub fn firefox_addon() -> Option<PathBuf> {
-    let installed = exe_dir()?.join("bdownloader-firefox.xpi");
-    let source = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../dist/bdownloader-firefox.xpi");
-    [installed, source]
-        .into_iter()
-        .find(|file| file.exists())
-        .and_then(|file| file.canonicalize().ok())
-        .map(strip_verbatim)
-}
-
-/// Opens the extension in the browser, which then asks whether to add it:
-/// Firefox gets the signed add-on, the others its store page.
+/// Opens the extension's store page in the browser, where one click adds it.
 pub fn add_extension(browser: Browser) -> io::Result<()> {
-    let target = match browser {
-        Browser::Firefox => firefox_addon()
-            .ok_or_else(|| io::Error::other("the Firefox add-on is missing"))?
-            .into_os_string(),
-        _ => browser.store_page().ok_or_else(|| io::Error::other("not on the store yet"))?.into(),
-    };
+    let page = browser.store_page().ok_or_else(|| io::Error::other("not on the store yet"))?;
     match browser_exe(browser) {
-        Some(exe) => std::process::Command::new(exe).arg(target).spawn().map(drop),
-        // A store page opens in the default browser too; the add-on doesn't.
-        None if browser != Browser::Firefox => std::process::Command::new("explorer").arg(target).spawn().map(drop),
-        None => Err(io::Error::other(format!("{} isn't installed", browser.name()))),
+        Some(exe) => std::process::Command::new(exe).arg(page).spawn().map(drop),
+        // Not found: the default browser opens it instead.
+        None => std::process::Command::new("explorer").arg(page).spawn().map(drop),
     }
 }
 

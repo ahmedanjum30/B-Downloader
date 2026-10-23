@@ -374,10 +374,10 @@ pub fn extension<'a>(browser: Browser, connected: bool, copied: Option<&str>) ->
         container(tabs).padding(4).style(style::panel),
     ]
     .spacing(12);
-    // One click where the browser can: Firefox's signed add-on, or the store page.
+    // One click where the browser's store has the extension.
     if browser.one_click() {
         let hint = match browser {
-            Browser::Firefox => "Firefox opens and asks whether to add BDownloader: click Add.".to_owned(),
+            Browser::Firefox => "Firefox opens the add-on's page: click Add to Firefox.".to_owned(),
             Browser::Opera => "Opera opens the store page. The first time, it offers Install Chrome Extensions; then click Add to Opera.".to_owned(),
             _ => format!("{} opens the store page: click Add (or Get) there.", browser.name()),
         };
@@ -394,11 +394,11 @@ pub fn extension<'a>(browser: Browser, connected: bool, copied: Option<&str>) ->
         );
     }
     body = if browser == Browser::Firefox {
-        // Signed by Mozilla, so Firefox installs it like any add-on and keeps it.
-        let file = crate::browser::firefox_addon().map_or("bdownloader-firefox.xpi next to BDownloader.exe".to_owned(), |f| f.display().to_string());
-        let file_copied = copied == Some(file.as_str());
-        body.push(muted("Firefox didn't open? Drag this file into a Firefox window:").size(13))
-            .push(copy_field(file, file_copied))
+        // Firefox only keeps add-ons from its store, so there's no manual way.
+        let page = crate::browser::FIREFOX_STORE_PAGE.to_owned();
+        let page_copied = copied == Some(page.as_str());
+        body.push(muted("Firefox didn't open? Open this page in Firefox:").size(13))
+            .push(copy_field(page, page_copied))
     } else {
         let page = browser.extensions_page().to_owned();
         let folder =

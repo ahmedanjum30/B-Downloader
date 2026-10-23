@@ -1,7 +1,7 @@
 # Builds the Firefox version of the browser extension from the same files:
 # dist\firefox-extension\ (for trying changes with "Load Temporary Add-on")
-# and dist\bdownloader-firefox-<version>-unsigned.xpi (for Mozilla to sign,
-# scripts\sign-firefox.ps1).
+# and dist\bdownloader-firefox-<version>-unsigned.xpi (for Firefox Add-ons,
+# scripts\publish-firefox.ps1).
 #
 #   powershell -ExecutionPolicy Bypass -File scripts\firefox-extension.ps1
 #
@@ -35,10 +35,6 @@ $manifest | Add-Member -NotePropertyName browser_specific_settings -NoteProperty
         # reads data_collection_permissions, which Mozilla requires.
         strict_min_version = '140.0'
         data_collection_permissions = [pscustomobject]@{ required = @('none') }
-        # Firefox checks this daily and installs newer versions it lists. The
-        # release workflow attaches the file to each GitHub release; "latest"
-        # always leads to the newest one.
-        update_url = 'https://github.com/ahmedanjum30/BDownloader/releases/latest/download/firefox-updates.json'
     }
 })
 $json = $manifest | ConvertTo-Json -Depth 10

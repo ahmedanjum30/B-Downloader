@@ -6,6 +6,15 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+## [1.0.11] - 2026-10-23
+
+### Changed
+- The Firefox add-on is on Firefox Add-ons:
+  https://addons.mozilla.org/firefox/addon/bdownloader/. Add to Firefox in
+  BDownloader opens its page there, and Firefox keeps it up to date. Already
+  have the add-on? Add it once more from that page to get its updates.
+- The installer no longer includes a copy of the Firefox add-on.
+
 ## [1.0.10] - 2026-10-21
 
 ### Added

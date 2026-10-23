@@ -34,17 +34,13 @@ jobs:
       - name: Build the installer
         shell: pwsh
         run: ./scripts/build-installer.ps1
-        env:
-          # Mozilla signs the Firefox add-on (scripts/sign-firefox.ps1).
-          AMO_JWT_ISSUER: ${{ secrets.AMO_JWT_ISSUER }}
-          AMO_JWT_SECRET: ${{ secrets.AMO_JWT_SECRET }}
 
       - name: Package
         shell: pwsh
         run: |
           # The extension on its own, for the Chrome Web Store and Edge Add-ons.
           ./scripts/package-extension.ps1
-          Get-ChildItem dist -File -Include *.zip, *.exe, bdownloader-firefox-*.xpi -Exclude *-unsigned.xpi -Recurse | ForEach-Object {
+          Get-ChildItem dist -File -Include *.zip, *.exe -Recurse | ForEach-Object {
             "$((Get-FileHash $_.FullName -Algorithm SHA256).Hash.ToLower())  $($_.Name)"
           } | Set-Content dist/SHA256SUMS.txt
 
@@ -54,11 +50,6 @@ jobs:
           path: |
             dist/BDownloader-Setup-*.exe
             dist/bdownloader-extension-*.zip
-            # The signed Firefox add-on, and the file installed copies check
-            # for updates (its update_url leads to the latest release's copy).
-            dist/bdownloader-firefox-*.xpi
-            !dist/*-unsigned.xpi
-            dist/firefox-updates.json
             dist/SHA256SUMS.txt
           if-no-files-found: error
 
@@ -82,8 +73,26 @@ jobs:
 
             > **Windows says "Windows protected your PC"?** Click **More info**, then **Run anyway**. BDownloader isn't code-signed yet, so Windows doesn't know the publisher. The installer is the one built by this repository's release workflow; you can check it against `SHA256SUMS.txt`.
 
-            To add the browser extension, open **Browser extension** in BDownloader; Firefox takes one click there. The extension zip is for the Chrome Web Store and Edge Add-ons.
+            To add the browser extension, open **Browser extension** in BDownloader. It's on [Firefox Add-ons](https://addons.mozilla.org/firefox/addon/bdownloader/) and [Edge Add-ons](https://microsoftedge.microsoft.com/addons/detail/kfbjnlpmchkeaphhdeidpdpcomoohdfa). The extension zip is for loading it unpacked in other Chromium browsers.
           generate_release_notes: true
+
+  # A changed extension goes to Firefox Add-ons for review; Firefox then
+  # updates it by itself. Skipped when the extension is unchanged or the
+  # secrets aren't set.
+  firefox:
+    needs: publish
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          # The tags, to compare with the previous release's extension.
+          fetch-depth: 0
+      - name: Submit to Firefox Add-ons
+        shell: pwsh
+        run: ./scripts/publish-firefox.ps1
+        env:
+          AMO_JWT_ISSUER: ${{ secrets.AMO_JWT_ISSUER }}
+          AMO_JWT_SECRET: ${{ secrets.AMO_JWT_SECRET }}
 
   # A changed extension goes to Edge Add-ons for review; Edge then updates it
   # by itself. Skipped when the extension is unchanged or the secrets aren't set.
@@ -167,7 +176,11 @@ jobs:
   # The new version goes to the Microsoft Store: its package points to the
   # installer on GitHub Pages, then it's submitted for certification.
   # Skipped without the MSSTORE_* secrets, or while a submission is in review.
+  # Paused: this Store listing takes only signed installers. The Store version
+  # is now the MSIX package (scripts/build-msix.ps1), submitted by hand until
+  # its submission is automated.
   msstore:
+    if: false
     needs: pages
     runs-on: ubuntu-latest
     steps:
