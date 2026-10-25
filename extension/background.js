@@ -145,13 +145,12 @@ async function takeOver(item, url, suggest, saved) {
     // connection open, and sites that limit connections count it against BDownloader.
     await chrome.downloads.cancel(item.id).catch(() => {});
     await chrome.downloads.erase({ id: item.id }).catch(() => {});
+    // Gone from the browser, so there's nothing to name: suggest() would
+    // only log "Invalid downloadId".
+    return;
   }
   // BDownloader didn't take it (or isn't available): the browser carries on.
-  try {
-    suggest();
-  } catch {
-    // Already cancelled; nothing left to release.
-  }
+  suggest();
 }
 
 chrome.runtime.onInstalled.addListener(() => {

@@ -6,6 +6,14 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+## [1.0.12] - 2026-10-26
+
+### Fixed
+- The browser extension no longer logs "Invalid downloadId" after
+  BDownloader takes a download.
+- The extension stays out of Cloudflare's "are you human?" checks, which
+  logged blocked connections under its name.
+
 ## [1.0.11] - 2026-10-23
 
 ### Changed

@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "BDownloader",
-  "version": "1.0.6",
+  "version": "1.0.7",
   "description": "Sends your downloads and the videos you watch to BDownloader, a fast multi-connection download manager.",
   "key": "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEArGb7QZ7PYR2w7OAFuQGsv3ais4oZTVSlS2Q6e7zziOKhP2BcFlplAuJarKESyk9biW5VKMEahxTGQ/LZQw0ztDd1g89i33mFNWp3YafVzFzIjA/OX1jxO7rgL7ElTLNMoivm9A9ECTPebA8O1NFRJjJb2FivAtsGDm749nRfc1LWZz+7aBKmVQs1BUecuznXZCyrrkQcbjMR2vF0iiyaECvqSQ5CrujNNA1sX5iEjm2odSFfij5qO42jWJvDeMcPQcNHcAmSlocJAshhkhbTw6VSch7gi5LkGIa2GfEBrJePQGYAtktYkZiJgvdmb8LyrTgC9/MlNMq1MhgaFkmyfwIDAQAB",
   "permissions": ["downloads", "contextMenus", "nativeMessaging", "cookies", "webRequest", "webNavigation", "storage", "declarativeNetRequestWithHostAccess"],
@@ -18,7 +18,7 @@
     },
     {
       "matches": ["<all_urls>"],
-      "exclude_matches": ["*://*.youtube.com/*", "*://*.youtube-nocookie.com/*"],
+      "exclude_matches": ["*://*.youtube.com/*", "*://*.youtube-nocookie.com/*", "*://challenges.cloudflare.com/*"],
       "js": ["hook.js"],
       "run_at": "document_start",
       "all_frames": true,
