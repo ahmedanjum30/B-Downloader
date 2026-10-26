@@ -6,6 +6,14 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+## [1.0.14] - 2026-10-26
+
+### Added
+- Sleep or shut down the PC when downloads are done, chosen in the top bar.
+  A 60-second countdown comes first, with Cancel; it stops by itself if a
+  download starts again. The choice lasts until it's used once and is never
+  kept after BDownloader restarts.
+
 ## [1.0.13] - 2026-10-26
 
 ### Added

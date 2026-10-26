@@ -6,6 +6,7 @@
 
 mod add;
 mod downloads;
+mod power;
 mod refresh;
 mod settings;
 mod updates;
@@ -21,6 +22,7 @@ use iced::theme::Mode;
 use iced::{Subscription, Task, Theme, clipboard, system, time, window};
 
 pub use add::{AddDialog, Probe};
+pub use power::WhenDone;
 pub use refresh::RefreshDialog;
 pub use updates::Update;
 
@@ -103,6 +105,11 @@ pub enum Modal {
         id: u64,
         delete_file: bool,
     },
+    /// The downloads are done; the PC sleeps or shuts down at `deadline`.
+    PowerCountdown {
+        action: WhenDone,
+        deadline: std::time::Instant,
+    },
 }
 
 #[derive(Debug, Clone)]
@@ -165,6 +172,12 @@ pub enum Message {
     SettingsAutoUpdate(bool),
     SettingsSortByType(bool),
     SaveSettings,
+
+    WhenDone(WhenDone),
+    /// Each second of the countdown before sleeping or shutting down.
+    PowerTick,
+    /// Don't wait for the countdown.
+    PowerNow,
 
     /// `manual`: from the Check now button, so report "up to date" and errors.
     CheckForUpdates {
@@ -232,6 +245,9 @@ pub struct App {
     pub speed_limit_text: String,
     /// The window's width, so the layout can adapt to it.
     pub width: f32,
+    /// What the PC does once the downloads are done. Never saved, so it
+    /// can't turn the PC off unexpectedly after a restart.
+    pub when_done: WhenDone,
 }
 
 impl App {
@@ -263,6 +279,7 @@ impl App {
             covered: Vec::new(),
             speed_limit_text,
             width: crate::WINDOW_SIZE.width,
+            when_done: WhenDone::Nothing,
         };
         // `BDownloader.exe URL...` starts those downloads right away.
         for url in std::env::args().skip(1).filter(|a| a.starts_with("http://") || a.starts_with("https://")) {
@@ -334,6 +351,9 @@ impl App {
         ];
         if self.items.iter().any(|i| i.handle.is_some()) || matches!(self.update, Update::Downloading { .. }) {
             subscriptions.push(time::every(REFRESH).map(|_| Message::Tick));
+        }
+        if matches!(self.modal, Some(Modal::PowerCountdown { .. })) {
+            subscriptions.push(time::every(Duration::from_secs(1)).map(|_| Message::PowerTick));
         }
         Subscription::batch(subscriptions)
     }
@@ -436,6 +456,7 @@ impl App {
             | Message::SettingsAutoUpdate(_)
             | Message::SettingsSortByType(_)
             | Message::SaveSettings) => return self.handle_settings(m),
+            m @ (Message::WhenDone(_) | Message::PowerTick | Message::PowerNow) => return self.handle_power(m),
             m @ (Message::CheckForUpdates { .. }
             | Message::UpdateChecked(_)
             | Message::UpdateNow
@@ -452,6 +473,7 @@ impl App {
             Message::Tick => return self.tick(),
             Message::Finished(id, result) => {
                 let engine = self.engine.clone();
+                let paused = matches!(result, Ok(Outcome::Paused));
                 if let Some(item) = self.item(id) {
                     item.segments.clear();
                     item.active_connections = 0;
@@ -475,6 +497,9 @@ impl App {
                 self.save();
                 // The tick that keeps the tray up to date stops with the last download.
                 self.update_tray();
+                if let Some(countdown) = self.downloads_done(paused) {
+                    return Task::batch([countdown, trim_memory_soon()]);
+                }
                 return Task::batch([self.install_if_idle(), trim_memory_soon()]);
             }
             Message::TrimMemory => {
@@ -539,7 +564,10 @@ impl App {
                             add.cookie_names()
                         );
                         // The newest download's dialog goes on top of what's open.
-                        if let Some(open) = self.modal.take() {
+                        // A new download means the PC stays on: the countdown goes.
+                        if let Some(open) = self.modal.take()
+                            && !matches!(open, Modal::PowerCountdown { .. })
+                        {
                             self.covered.push(open);
                         }
                         self.pending.push_back(add);

@@ -6,7 +6,7 @@ use bdownloader_core::MAX_CONNECTIONS;
 use iced::widget::{button, checkbox, column, container, pick_list, row, scrollable, slider, space, text, text_input};
 use iced::{Center, Element, Fill, Shrink};
 
-use crate::app::{AddDialog, Message, Probe, RefreshDialog};
+use crate::app::{AddDialog, Message, Probe, RefreshDialog, WhenDone};
 use crate::browser::Browser;
 use crate::format;
 use crate::icons::{self, icon};
@@ -289,6 +289,27 @@ pub fn settings(draft: &Settings, update_status: String) -> Element<'_, Message>
     .spacing(18);
 
     frame("Settings", body.into(), footer("Save", Some(Message::SaveSettings)))
+}
+
+/// The downloads are done; the PC sleeps or shuts down unless cancelled.
+pub fn power_countdown<'a>(action: WhenDone, seconds: u64) -> Element<'a, Message> {
+    let (title, verb, now) = match action {
+        WhenDone::Sleep => ("Going to sleep", "go to sleep", "Sleep now"),
+        _ => ("Shutting down", "shut down", "Shut down now"),
+    };
+    let body = column![
+        row![
+            icon(&icons::POWER, 20.0, |c| c.accent),
+            text(format!("Downloads are done. Your PC will {verb} in {seconds} seconds."))
+                .size(15)
+                .width(Fill),
+        ]
+        .spacing(12)
+        .align_y(Center),
+        muted("Cancel to keep it on.").size(13),
+    ]
+    .spacing(10);
+    frame(title, body.into(), footer(now, Some(Message::PowerNow)))
 }
 
 /// A value to paste somewhere else, with a button that copies it.

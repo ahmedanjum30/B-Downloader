@@ -3,11 +3,11 @@
 use bdownloader_core::Category;
 use iced::font::Weight;
 use iced::widget::{
-    Space, button, center, column, container, mouse_area, opaque, progress_bar, row, scrollable, space, stack, text, text_input, tooltip,
+    Space, button, center, column, container, mouse_area, opaque, pick_list, progress_bar, row, scrollable, space, stack, text, text_input, tooltip,
 };
 use iced::{Center, Color, Element, Fill, FillPortion, Font, Padding};
 
-use crate::app::{App, Filter, Message, Modal, Update};
+use crate::app::{App, Filter, Message, Modal, Update, WhenDone};
 use crate::format;
 use crate::icons::{self, icon};
 use crate::item::{Item, State};
@@ -17,8 +17,8 @@ use crate::{dialogs, update};
 /// The sidebar's width.
 const SIDEBAR_WIDTH: f32 = 236.0;
 /// Room the header needs for everything in one row, and with "Add download" as "+".
-const WIDE_HEADER: f32 = 920.0;
-const MEDIUM_HEADER: f32 = 760.0;
+const WIDE_HEADER: f32 = 1140.0;
+const MEDIUM_HEADER: f32 = 980.0;
 
 pub const FONT: Font = Font::with_name("Segoe UI");
 pub const SEMIBOLD: Font = Font {
@@ -52,6 +52,10 @@ pub fn view(app: &App) -> Element<'_, Message> {
             base,
             dialogs::extension(*browser, app.settings.extension_connected, app.copied.as_deref()),
         ),
+        Some(Modal::PowerCountdown { action, deadline }) => {
+            let left = deadline.saturating_duration_since(std::time::Instant::now());
+            modal(base, dialogs::power_countdown(*action, left.as_secs_f64().ceil() as u64))
+        }
     }
 }
 
@@ -193,20 +197,20 @@ fn main_panel(app: &App) -> Element<'_, Message> {
     // Room next to the sidebar, without the panel's padding.
     let room = app.width - SIDEBAR_WIDTH - 50.0;
     let header: Element<'_, Message> = if room >= WIDE_HEADER {
-        row![title, speed_limit(app), search.width(260), add_button(true)]
+        row![title, speed_limit(app), when_done(app), search.width(260), add_button(true)]
             .spacing(12)
             .align_y(Center)
             .into()
     } else if room >= MEDIUM_HEADER {
         // "Add download" turns into a + button to make room.
-        row![title, speed_limit(app), search.width(220), add_button(false)]
+        row![title, speed_limit(app), when_done(app), search.width(220), add_button(false)]
             .spacing(12)
             .align_y(Center)
             .into()
     } else {
         column![
             row![title, add_button(true)].spacing(12).align_y(Center),
-            row![speed_limit(app), search.width(Fill)].spacing(12).align_y(Center),
+            row![speed_limit(app), when_done(app), search.width(Fill)].spacing(12).align_y(Center),
         ]
         .spacing(14)
         .into()
@@ -325,6 +329,27 @@ fn speed_limit(app: &App) -> Element<'_, Message> {
         }));
     }
     container(control).padding(3).style(style::panel).into()
+}
+
+/// Sleep or shut down the PC once the downloads are done.
+fn when_done(app: &App) -> Element<'_, Message> {
+    let on = app.when_done != WhenDone::Nothing;
+    let choice = pick_list(&WhenDone::ALL[..], Some(app.when_done), Message::WhenDone)
+        .padding([6, 8])
+        .text_size(14);
+    container(
+        row![icon(&icons::POWER, 16.0, if on { |c| c.accent } else { |c| c.muted }), choice]
+            .spacing(6)
+            .align_y(Center),
+    )
+    .padding(Padding {
+        top: 3.0,
+        right: 3.0,
+        bottom: 3.0,
+        left: 10.0,
+    })
+    .style(style::panel)
+    .into()
 }
 
 /// "+ Add download", or just "+" where space is short.
