@@ -10,6 +10,7 @@ use reqwest::{Client, Response, StatusCode, Url};
 use tokio::task::JoinSet;
 use tokio_util::sync::CancellationToken;
 
+use crate::category::sorted_dir;
 use crate::checksum::Checksum;
 use crate::error::{Error, Result};
 use crate::fsutil::{make_sparse, sanitize_file_name, sidecar, unique_path, write_all_at};
@@ -164,6 +165,9 @@ pub struct DownloadOptions {
     /// Where to keep the progress files that let a download continue later.
     /// `None` keeps them next to the download (`<file>.bdl`).
     pub state_dir: Option<PathBuf>,
+    /// Save into a folder in `dir` for the kind of file (`Video`, `Music`,
+    /// …), picked from its final name. See [`crate::Category`].
+    pub sort_by_type: bool,
 }
 
 impl DownloadOptions {
@@ -178,6 +182,16 @@ impl DownloadOptions {
             new_link: false,
             youtube: None,
             state_dir: None,
+            sort_by_type: false,
+        }
+    }
+
+    /// The folder a file of this name is saved in.
+    pub(crate) fn dir_for(&self, file_name: &str) -> PathBuf {
+        if self.sort_by_type {
+            sorted_dir(&self.dir, file_name)
+        } else {
+            self.dir.clone()
         }
     }
 }
@@ -546,9 +560,10 @@ struct Target {
 
 impl Target {
     async fn resolve(options: &DownloadOptions, info: &ProbeInfo) -> Result<Self> {
-        let name = options.file_name.as_deref().or(info.file_name.as_deref()).unwrap_or_default();
-        tokio::fs::create_dir_all(&options.dir).await?;
-        let path = options.dir.join(sanitize_file_name(name));
+        let name = sanitize_file_name(options.file_name.as_deref().or(info.file_name.as_deref()).unwrap_or_default());
+        let dir = options.dir_for(&name);
+        tokio::fs::create_dir_all(&dir).await?;
+        let path = dir.join(name);
 
         let state_dir = options.state_dir.as_deref();
         if let Some(dir) = state_dir {

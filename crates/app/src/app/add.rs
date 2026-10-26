@@ -3,7 +3,7 @@
 
 use std::path::PathBuf;
 
-use bdownloader_core::{MAX_CONNECTIONS, ProbeInfo, YoutubeSource};
+use bdownloader_core::{Category, MAX_CONNECTIONS, ProbeInfo, YoutubeSource, sorted_dir};
 use bdownloader_ipc::AddRequest;
 use iced::{Task, clipboard};
 
@@ -28,6 +28,9 @@ pub struct AddDialog {
     /// The user typed their own name, so don't replace it with the server's.
     pub name_edited: bool,
     pub dir: PathBuf,
+    /// Save into the folder in `dir` for the kind of file. Off once the user
+    /// picks a folder, which is used as it is.
+    pub sort_by_type: bool,
     pub connections: usize,
     pub verify: bool,
     pub hash_kind: HashKind,
@@ -48,6 +51,7 @@ impl AddDialog {
             file_name: String::new(),
             name_edited: false,
             dir: settings.download_dir.clone(),
+            sort_by_type: settings.sort_by_type,
             connections: settings.connections,
             verify: false,
             hash_kind: HashKind::Sha256,
@@ -68,15 +72,29 @@ impl AddDialog {
         if let (Some(source), Some(name)) = (&youtube, &mut file_name) {
             name.push_str(if source.video.is_some() { ".mp4" } else { ".m4a" });
         }
+        let (dir, sort_by_type) = destination(settings, request.dir.as_deref());
         Self {
             url: request.url.trim().to_owned(),
             name_edited: file_name.is_some(),
             file_name: file_name.unwrap_or_default(),
-            dir: browser_dir(settings, request.dir.as_deref()),
+            dir,
+            sort_by_type,
             headers,
             youtube,
             ..Self::new(settings)
         }
+    }
+
+    /// The folder the file goes in, for the dialog to show.
+    pub fn save_dir(&self) -> PathBuf {
+        if !self.sort_by_type {
+            return self.dir.clone();
+        }
+        // A stream's name has no extension yet; it becomes a video.
+        if matches!(&self.probe, Probe::Ready(info) if info.is_stream()) {
+            return self.dir.join(Category::Video.name());
+        }
+        sorted_dir(&self.dir, self.file_name.trim())
     }
 
     pub fn url_is_valid(&self) -> bool {
@@ -193,6 +211,7 @@ impl App {
                         |item| {
                             item.headers = dialog.headers;
                             item.youtube = dialog.youtube;
+                            item.sort_by_type = dialog.sort_by_type;
                         },
                     );
                     if let Probe::Ready(info) = &dialog.probe {
@@ -232,11 +251,12 @@ impl App {
         }
         let headers = request.headers();
         let file_name = request.file_name.filter(|n| !n.trim().is_empty());
-        let (dir, connections) = (browser_dir(&self.settings, request.dir.as_deref()), self.settings.connections);
+        let (dir, sort_by_type) = destination(&self.settings, request.dir.as_deref());
         let youtube = request.youtube.map(|y| youtube_source(*y));
-        self.add_with(request.url.trim().to_owned(), dir, file_name, connections, None, |item| {
+        self.add_with(request.url.trim().to_owned(), dir, file_name, self.settings.connections, None, |item| {
             item.headers = headers;
             item.youtube = youtube;
+            item.sort_by_type = sort_by_type;
         });
     }
 
@@ -296,11 +316,20 @@ impl App {
     }
 }
 
-/// Where to save a download from the browser: the folder the browser already
-/// asked the user for (Firefox asks before the extension gets the download),
-/// unless that's just the usual Downloads folder, which the browser uses
-/// without asking. Otherwise the folder from Settings.
-fn browser_dir(settings: &Settings, chosen: Option<&str>) -> PathBuf {
+/// Where to save a download from the browser, and whether into the folder for
+/// its kind of file: the folder the user picked in the browser, as it is, or
+/// the one from Settings.
+fn destination(settings: &Settings, chosen: Option<&str>) -> (PathBuf, bool) {
+    match browser_dir(chosen) {
+        Some(dir) => (dir, false),
+        None => (settings.download_dir.clone(), settings.sort_by_type),
+    }
+}
+
+/// The folder the browser already asked the user for (Firefox asks before the
+/// extension gets the download), unless that's just the usual Downloads
+/// folder, which the browser uses without asking.
+fn browser_dir(chosen: Option<&str>) -> Option<PathBuf> {
     let same = |a: &std::path::Path, b: &std::path::Path| {
         let key = |p: &std::path::Path| p.to_string_lossy().trim_end_matches(['\\', '/']).to_lowercase();
         key(a) == key(b)
@@ -317,7 +346,6 @@ fn browser_dir(settings: &Settings, chosen: Option<&str>) -> PathBuf {
         })
         .filter(|dir| dir.is_absolute() && dir.is_dir())
         .filter(|dir| !same(dir, &store::default_download_dir()))
-        .unwrap_or_else(|| settings.download_dir.clone())
 }
 
 #[cfg(all(test, windows))]
@@ -328,16 +356,19 @@ mod tests {
     fn the_browsers_folder_is_used_unless_its_the_usual_downloads() {
         let settings = Settings {
             download_dir: PathBuf::from(r"C:\Elsewhere"),
+            sort_by_type: true,
             ..Settings::default()
         };
+        // Picked in the browser: used as it is, not sorted.
         let temp = std::env::temp_dir();
-        assert_eq!(browser_dir(&settings, temp.to_str()), temp);
+        assert_eq!(destination(&settings, temp.to_str()), (temp.clone(), false));
         // A file at the top of a drive.
         let drive = &temp.to_str().unwrap()[..2];
-        assert_eq!(browser_dir(&settings, Some(drive)), PathBuf::from(format!("{drive}\\")));
+        assert_eq!(destination(&settings, Some(drive)), (PathBuf::from(format!("{drive}\\")), false));
+        let default = (settings.download_dir.clone(), true);
         let downloads = store::default_download_dir();
-        assert_eq!(browser_dir(&settings, downloads.to_str()), settings.download_dir);
-        assert_eq!(browser_dir(&settings, None), settings.download_dir);
-        assert_eq!(browser_dir(&settings, Some("relative")), settings.download_dir);
+        assert_eq!(destination(&settings, downloads.to_str()), default);
+        assert_eq!(destination(&settings, None), default);
+        assert_eq!(destination(&settings, Some("relative")), default);
     }
 }

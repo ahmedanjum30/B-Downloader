@@ -57,6 +57,9 @@ pub struct Item {
     /// A YouTube video captured from its player: downloaded over YouTube's
     /// own streaming protocol.
     pub youtube: Option<YoutubeSource>,
+    /// The engine saves it into the folder for its kind of file, in `dir`;
+    /// once it has, `dir` is that folder and this is off.
+    pub sort_by_type: bool,
 }
 
 impl Item {
@@ -82,6 +85,7 @@ impl Item {
             new_link: false,
             awaiting_link: false,
             youtube: None,
+            sort_by_type: false,
         }
     }
 
@@ -98,6 +102,7 @@ impl Item {
             headers: saved.headers,
             resume: saved.resume,
             youtube: saved.youtube,
+            sort_by_type: saved.sort_by_type,
             ..Self::new(saved.id, saved.url, saved.dir, saved.file_name, saved.connections, saved.checksum)
         }
     }
@@ -129,6 +134,7 @@ impl Item {
                 .collect(),
             resume: self.resume,
             youtube: self.youtube.clone(),
+            sort_by_type: self.sort_by_type,
         }
     }
 
@@ -146,6 +152,7 @@ impl Item {
             new_link: std::mem::take(&mut self.new_link),
             youtube: self.youtube.clone(),
             state_dir: Some(crate::store::resume_dir()),
+            sort_by_type: self.sort_by_type,
         };
         self.awaiting_link = false;
         self.handle = Some(engine.start(options));
@@ -169,8 +176,18 @@ impl Item {
             // Final states arrive through the finished message.
             _ => State::Downloading,
         };
-        if let Some(name) = progress.path.as_ref().and_then(|p| p.file_name()) {
+        if let Some(path) = &progress.path
+            && let Some(name) = path.file_name()
+        {
             self.file_name = Some(name.to_string_lossy().into_owned());
+            // The engine has picked the folder for its kind of file; a later
+            // start uses that folder as it is.
+            if self.sort_by_type
+                && let Some(dir) = path.parent()
+            {
+                self.dir = dir.to_owned();
+                self.sort_by_type = false;
+            }
         }
         self.size = progress.total.or(self.size);
         self.downloaded = progress.downloaded;

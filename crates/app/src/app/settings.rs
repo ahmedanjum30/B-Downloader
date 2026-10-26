@@ -45,6 +45,11 @@ impl App {
                     draft.auto_update = auto_update;
                 }
             }
+            Message::SettingsSortByType(sort_by_type) => {
+                if let Some(Modal::Settings(draft)) = &mut self.modal {
+                    draft.sort_by_type = sort_by_type;
+                }
+            }
             Message::SaveSettings => {
                 if let Some(Modal::Settings(draft)) = self.modal.take() {
                     self.settings = draft;

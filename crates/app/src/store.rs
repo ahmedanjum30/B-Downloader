@@ -19,6 +19,9 @@ pub enum ThemeChoice {
 #[serde(default)]
 pub struct Settings {
     pub download_dir: PathBuf,
+    /// Save each download into a folder in `download_dir` for its kind of
+    /// file (Compressed, Documents, Music, Programs, Video), as IDM does.
+    pub sort_by_type: bool,
     pub connections: usize,
     pub theme: ThemeChoice,
     /// The browser extension has talked to the app at least once.
@@ -38,6 +41,7 @@ impl Default for Settings {
     fn default() -> Self {
         Self {
             download_dir: default_download_dir(),
+            sort_by_type: true,
             connections: DEFAULT_CONNECTIONS,
             theme: ThemeChoice::System,
             extension_connected: false,
@@ -118,6 +122,9 @@ pub struct SavedDownload {
     /// paused download can continue after a restart.
     #[serde(default)]
     pub youtube: Option<bdownloader_core::YoutubeSource>,
+    /// The folder for its kind of file is still to be picked, once its name is known.
+    #[serde(default)]
+    pub sort_by_type: bool,
 }
 
 /// `BDOWNLOADER_DATA` overrides the folder, so development builds can use a

@@ -307,11 +307,12 @@ pub(crate) async fn download(
     }
     let ext = if source.video.is_some() { "mp4" } else { "m4a" };
     let name = video_name(options.file_name.as_deref(), &source.video_id, ext);
-    tokio::fs::create_dir_all(&options.dir).await?;
+    let dir = options.dir_for(&name);
+    tokio::fs::create_dir_all(&dir).await?;
 
     // Continue in the same folder if it holds this video in these formats.
     let itags: Vec<u32> = formats.iter().map(|f| f.itag).collect();
-    let mut path = options.dir.join(&name);
+    let mut path = dir.join(&name);
     let saved = load_state(&sidecar(&path, "parts"))
         .await
         .filter(|s| s.video_id == source.video_id && s.itags == itags);

@@ -14,7 +14,7 @@ use std::collections::VecDeque;
 use std::path::PathBuf;
 use std::time::Duration;
 
-use bdownloader_core::{Engine, Outcome, ProbeInfo};
+use bdownloader_core::{Category, Engine, Outcome, ProbeInfo};
 use bdownloader_ipc::{AddRequest, Request};
 use iced::keyboard::{self, Key, key::Named};
 use iced::theme::Mode;
@@ -60,6 +60,8 @@ pub enum Filter {
     Completed,
     Paused,
     Failed,
+    /// Downloads of one kind of file.
+    Category(Category),
 }
 
 impl Filter {
@@ -72,6 +74,7 @@ impl Filter {
             Filter::Completed => "Completed",
             Filter::Paused => "Paused",
             Filter::Failed => "Failed",
+            Filter::Category(category) => category.name(),
         }
     }
 
@@ -82,6 +85,7 @@ impl Filter {
             Filter::Completed => item.state == State::Completed,
             Filter::Paused => item.state == State::Paused,
             Filter::Failed => matches!(item.state, State::Failed(_)),
+            Filter::Category(category) => Category::of(&item.display_name()) == Some(category),
         }
     }
 }
@@ -159,6 +163,7 @@ pub enum Message {
     SettingsTheme(ThemeChoice),
     SettingsCloseToTray(bool),
     SettingsAutoUpdate(bool),
+    SettingsSortByType(bool),
     SaveSettings,
 
     /// `manual`: from the Check now button, so report "up to date" and errors.
@@ -429,6 +434,7 @@ impl App {
             | Message::SettingsTheme(_)
             | Message::SettingsCloseToTray(_)
             | Message::SettingsAutoUpdate(_)
+            | Message::SettingsSortByType(_)
             | Message::SaveSettings) => return self.handle_settings(m),
             m @ (Message::CheckForUpdates { .. }
             | Message::UpdateChecked(_)
@@ -587,7 +593,11 @@ impl App {
                 );
             }
             Message::FolderPicked(Some(dir)) => match &mut self.modal {
-                Some(Modal::Add(dialog)) => dialog.dir = dir,
+                Some(Modal::Add(dialog)) => {
+                    // A folder picked for this download is used as it is.
+                    dialog.dir = dir;
+                    dialog.sort_by_type = false;
+                }
                 Some(Modal::Settings(draft)) => draft.download_dir = dir,
                 _ => {}
             },

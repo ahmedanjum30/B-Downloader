@@ -9,6 +9,7 @@
 //! saved next to the file every few seconds, so a paused or interrupted
 //! download continues where it stopped.
 
+mod category;
 mod checksum;
 mod download;
 mod error;
@@ -23,6 +24,7 @@ mod sabr;
 mod segment;
 mod state;
 
+pub use category::{Category, sorted_dir};
 pub use checksum::Checksum;
 pub use download::{
     DEFAULT_CONNECTIONS, DownloadHandle, DownloadOptions, Engine, MAX_CONNECTIONS, Outcome, Progress, STALL_TIMEOUT, SegmentProgress, Status,

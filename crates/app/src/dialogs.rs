@@ -40,7 +40,7 @@ fn input<'a>(placeholder: &'a str, value: &'a str) -> text_input::TextInput<'a, 
     text_input(placeholder, value).padding(12).size(14).style(style::input)
 }
 
-fn folder_picker(dir: &Path) -> Element<'_, Message> {
+fn folder_picker<'a>(dir: &Path) -> Element<'a, Message> {
     row![
         container(text(format::middle_ellipsis(&dir.display().to_string(), 52)).size(14))
             .padding(12)
@@ -172,7 +172,7 @@ pub fn add(dialog: &AddDialog, existing: Option<(u64, u64)>) -> Element<'_, Mess
         "Save as",
         input("Name from the server", &dialog.file_name).on_input(Message::AddName),
     ));
-    body = body.push(field("Save to", folder_picker(&dialog.dir)));
+    body = body.push(field("Save to", folder_picker(&dialog.save_dir())));
     body = body.push(row![field("Connections", stepper(dialog.connections, Message::AddConnections))]);
 
     let verify = checkbox(dialog.verify)
@@ -273,8 +273,14 @@ pub fn settings(draft: &Settings, update_status: String) -> Element<'_, Message>
     }))
     .spacing(4);
 
+    let sort = checkbox(draft.sort_by_type)
+        .label("Sort into folders by type: Compressed, Documents, Music, Programs, Video")
+        .on_toggle(Message::SettingsSortByType)
+        .size(18)
+        .text_size(14)
+        .spacing(10);
     let body = column![
-        field("Default download folder", folder_picker(&draft.download_dir)),
+        field("Default download folder", column![folder_picker(&draft.download_dir), sort].spacing(10)),
         field("Connections per download", stepper(draft.connections, Message::SettingsConnections)),
         field("Theme", container(themes).padding(4).style(style::panel)),
         field("When I close the window", container(on_close).padding(4).style(style::panel)),

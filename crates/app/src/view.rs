@@ -1,5 +1,6 @@
 //! The main window: sidebar, header and the download list.
 
+use bdownloader_core::Category;
 use iced::font::Weight;
 use iced::widget::{
     Space, button, center, column, container, mouse_area, opaque, progress_bar, row, scrollable, space, stack, text, text_input, tooltip,
@@ -82,13 +83,18 @@ fn sidebar(app: &App) -> Element<'_, Message> {
     .spacing(12)
     .align_y(Center);
 
-    let filters = column(Filter::ALL.map(|filter| {
+    let filter_item = |filter: Filter| {
         let handle = match filter {
             Filter::All => &icons::INBOX,
             Filter::Active => &icons::ACTIVE,
             Filter::Completed => &icons::DONE,
             Filter::Paused => &icons::PAUSED,
             Filter::Failed => &icons::FAILED,
+            Filter::Category(Category::Compressed) => &icons::COMPRESSED,
+            Filter::Category(Category::Documents) => &icons::DOCUMENT,
+            Filter::Category(Category::Music) => &icons::MUSIC,
+            Filter::Category(Category::Programs) => &icons::PROGRAM,
+            Filter::Category(Category::Video) => &icons::VIDEO,
         };
         nav_item(
             handle,
@@ -97,8 +103,18 @@ fn sidebar(app: &App) -> Element<'_, Message> {
             app.filter == filter,
             Message::Filter(filter),
         )
-    }))
-    .spacing(4);
+    };
+    let filters = column(Filter::ALL.map(filter_item))
+        .spacing(4)
+        .push(container(muted("Categories").size(12).font(SEMIBOLD)).padding(Padding {
+            top: 18.0,
+            right: 12.0,
+            bottom: 6.0,
+            left: 12.0,
+        }))
+        .extend(Category::ALL.map(|category| filter_item(Filter::Category(category))));
+    // Scrolls when the window is too short for every entry.
+    let filters = scrollable(filters).height(Fill).spacing(4);
 
     let footer = column![
         nav_item(&icons::HEART, "Support BDownloader", None, false, Message::OpenSupport),
@@ -107,7 +123,7 @@ fn sidebar(app: &App) -> Element<'_, Message> {
     ]
     .spacing(4);
 
-    container(column![logo, space().height(32), filters, space().height(Fill), footer])
+    container(column![logo, space().height(32), filters, space().height(12), footer])
         .padding(Padding {
             top: 24.0,
             right: 14.0,

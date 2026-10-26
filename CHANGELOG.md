@@ -6,6 +6,15 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+## [1.0.13] - 2026-10-26
+
+### Added
+- Downloads are sorted into folders by type, as in IDM: Compressed,
+  Documents, Music, Programs and Video, inside your download folder. Other
+  files stay in the download folder itself, and a folder you pick yourself
+  is used as it is. Turn it off in Settings.
+- A Categories section in the sidebar shows the downloads of each type.
+
 ## [1.0.12] - 2026-10-26
 
 ### Fixed

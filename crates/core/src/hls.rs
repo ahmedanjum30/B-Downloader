@@ -53,14 +53,15 @@ pub(crate) async fn download(
     let media = load_media(engine, &info.final_url, headers).await?;
     let ext = if media.is_mp4() { "mp4" } else { "ts" };
     let name = video_name(options.file_name.as_deref().or(info.file_name.as_deref()), ext);
-    tokio::fs::create_dir_all(&options.dir).await?;
+    let dir = options.dir_for(&name);
+    tokio::fs::create_dir_all(&dir).await?;
 
     // Continue in the same folder if it holds parts of this stream.
     let state = StreamState {
         url: options.url.clone(),
         parts: media.parts.len(),
     };
-    let mut path = options.dir.join(&name);
+    let mut path = dir.join(&name);
     let resuming = load_state(&sidecar(&path, "parts")).await.as_ref() == Some(&state);
     if !resuming {
         path = unique_path(&path, |p| p.exists() || sidecar(p, "parts").exists());
