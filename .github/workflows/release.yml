@@ -116,36 +116,6 @@ jobs:
           EDGE_API_KEY: ${{ secrets.EDGE_API_KEY }}
           EDGE_PRODUCT_ID: ${{ secrets.EDGE_PRODUCT_ID }}
 
-  # Each new version goes to winget (Windows Package Manager) as a pull
-  # request from the winget-pkgs fork, so `winget install BDownloader` and
-  # `winget upgrade` get it. Skipped without the WINGET_TOKEN secret.
-  winget:
-    needs: publish
-    runs-on: windows-latest
-    env:
-      WINGET_TOKEN: ${{ secrets.WINGET_TOKEN }}
-    steps:
-      # New versions can only be added once the package is in winget (its
-      # first version was submitted by hand).
-      - name: Check the package is in winget
-        id: listed
-        if: env.WINGET_TOKEN != ''
-        shell: pwsh
-        run: |
-          try {
-            Invoke-RestMethod https://api.github.com/repos/microsoft/winget-pkgs/contents/manifests/a/AhmadAnjum/BDownloader -Headers @{ Authorization = "Bearer $env:WINGET_TOKEN" } | Out-Null
-            "yes=true" >> $env:GITHUB_OUTPUT
-          } catch {
-            "Not in winget yet; skipping."
-          }
-      - name: Submit to winget
-        if: steps.listed.outputs.yes == 'true'
-        uses: vedantmgoyal9/winget-releaser@v2
-        with:
-          identifier: AhmadAnjum.BDownloader
-          installers-regex: '^BDownloader-Setup-.*\.exe$'
-          token: ${{ secrets.WINGET_TOKEN }}
-
   # The installer, also at a fixed link without redirects, on GitHub Pages:
   # https://ahmedanjum30.github.io/BDownloader/download/<version>/. The
   # Microsoft Store installs from such a link (GitHub's release links redirect).
