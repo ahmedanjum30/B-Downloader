@@ -363,6 +363,14 @@ impl App {
                 tasks.push(focus_window());
             }
         }
+        // Development builds only: open a dialog at start, for screenshots.
+        #[cfg(debug_assertions)]
+        match std::env::var("BDOWNLOADER_OPEN").as_deref() {
+            Ok("extension") => app.modal = Some(Modal::Extension(browser::Browser::Firefox)),
+            Ok("settings") => app.modal = Some(Modal::Settings(app.settings.clone())),
+            Ok("add") => app.modal = Some(Modal::Add(Box::new(AddDialog::new(&app.settings)))),
+            _ => {}
+        }
         (app, Task::batch(tasks))
     }
 

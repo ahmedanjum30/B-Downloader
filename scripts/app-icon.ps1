@@ -26,7 +26,7 @@ function Draw-Icon([int]$size) {
     $path.AddArc($x + $w - 2 * $r, $y + $w - 2 * $r, 2 * $r, 2 * $r, 0, 90)
     $path.AddArc($x, $y + $w - 2 * $r, 2 * $r, 2 * $r, 90, 90)
     $path.CloseFigure()
-    $g.FillPath((New-Object Drawing.SolidBrush ([Drawing.Color]::FromArgb(255, 0x6e, 0x7b, 0xff))), $path)
+    $g.FillPath((New-Object Drawing.SolidBrush ([Drawing.Color]::FromArgb(255, 0x25, 0x63, 0xeb))), $path)
     $pen = New-Object Drawing.Pen ([Drawing.Color]::White), ([Math]::Max(1.6, 2.3 * $s))
     $pen.StartCap = 'Round'; $pen.EndCap = 'Round'; $pen.LineJoin = 'Round'
     $p = { param($a, $b) New-Object Drawing.PointF ($x + $a * $s), ($y + $b * $s) }

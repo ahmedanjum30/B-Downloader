@@ -9,7 +9,7 @@ Add-Type -AssemblyName System.Drawing
 $out = Join-Path (Split-Path $PSScriptRoot -Parent) 'store\images'
 New-Item -ItemType Directory -Force $out | Out-Null
 
-$accent = [Drawing.Color]::FromArgb(255, 0x6e, 0x7b, 0xff)
+$accent = [Drawing.Color]::FromArgb(255, 0x25, 0x63, 0xeb)
 
 function New-Canvas([int]$w, [int]$h) {
     $bmp = New-Object Drawing.Bitmap $w, $h
@@ -45,15 +45,15 @@ function Draw-Icon($g, [float]$x, [float]$y, [float]$size) {
 function Draw-Promo([int]$w, [int]$h, [string]$file) {
     $bmp, $g = New-Canvas $w $h
     $rect = New-Object Drawing.Rectangle 0, 0, $w, $h
-    $bg = New-Object Drawing.Drawing2D.LinearGradientBrush $rect, ([Drawing.Color]::FromArgb(255, 0x14, 0x17, 0x1d)), ([Drawing.Color]::FromArgb(255, 0x23, 0x26, 0x4a)), 20.0
+    $bg = New-Object Drawing.Drawing2D.LinearGradientBrush $rect, ([Drawing.Color]::FromArgb(255, 0x02, 0x06, 0x17)), ([Drawing.Color]::FromArgb(255, 0x0f, 0x17, 0x2a)), 20.0
     $g.FillRectangle($bg, $rect)
     # A soft accent glow behind the icon.
     $glow = New-Object Drawing.Drawing2D.GraphicsPath
     $gs = $h * 1.1
     $glow.AddEllipse([float](-$gs * 0.25), [float](($h - $gs) / 2), [float]$gs, [float]$gs)
     $pgb = New-Object Drawing.Drawing2D.PathGradientBrush $glow
-    $pgb.CenterColor = [Drawing.Color]::FromArgb(90, 0x6e, 0x7b, 0xff)
-    $pgb.SurroundColors = [Drawing.Color[]]@([Drawing.Color]::FromArgb(0, 0x6e, 0x7b, 0xff))
+    $pgb.CenterColor = [Drawing.Color]::FromArgb(90, 0x3b, 0x82, 0xf6)
+    $pgb.SurroundColors = [Drawing.Color[]]@([Drawing.Color]::FromArgb(0, 0x3b, 0x82, 0xf6))
     $g.FillPath($pgb, $glow)
 
     # Sized by the smaller of height and width, so narrow tiles fit too.
@@ -65,7 +65,7 @@ function Draw-Promo([int]$w, [int]$h, [string]$file) {
     $title = New-Object Drawing.Font 'Segoe UI', ([float]($k * 0.15)), ([Drawing.FontStyle]::Bold), ([Drawing.GraphicsUnit]::Pixel)
     $sub = New-Object Drawing.Font 'Segoe UI', ([float]($k * 0.068)), ([Drawing.FontStyle]::Regular), ([Drawing.GraphicsUnit]::Pixel)
     $g.DrawString('BDownloader', $title, [Drawing.Brushes]::White, [float]$tx, [float]($h / 2 - $k * 0.2))
-    $muted = New-Object Drawing.SolidBrush ([Drawing.Color]::FromArgb(255, 0xb4, 0xba, 0xcc))
+    $muted = New-Object Drawing.SolidBrush ([Drawing.Color]::FromArgb(255, 0x94, 0xa3, 0xb8))
     $g.DrawString("Faster downloads over many connections.`nPause and resume any time.", $sub, $muted, [float]($tx + $k * 0.01), [float]($h / 2 + $k * 0.02))
     $bmp.Save((Join-Path $out $file), [Drawing.Imaging.ImageFormat]::Png)
     $g.Dispose(); $bmp.Dispose()
@@ -76,13 +76,13 @@ function Draw-Promo([int]$w, [int]$h, [string]$file) {
 function Draw-BoxArt([int]$size, [string]$file) {
     $bmp, $g = New-Canvas $size $size
     $rect = New-Object Drawing.Rectangle 0, 0, $size, $size
-    $bg = New-Object Drawing.Drawing2D.LinearGradientBrush $rect, ([Drawing.Color]::FromArgb(255, 0x14, 0x17, 0x1d)), ([Drawing.Color]::FromArgb(255, 0x23, 0x26, 0x4a)), 45.0
+    $bg = New-Object Drawing.Drawing2D.LinearGradientBrush $rect, ([Drawing.Color]::FromArgb(255, 0x02, 0x06, 0x17)), ([Drawing.Color]::FromArgb(255, 0x0f, 0x17, 0x2a)), 45.0
     $g.FillRectangle($bg, $rect)
     $glow = New-Object Drawing.Drawing2D.GraphicsPath
     $glow.AddEllipse([float]($size * 0.1), [float]($size * 0.02), [float]($size * 0.8), [float]($size * 0.8))
     $pgb = New-Object Drawing.Drawing2D.PathGradientBrush $glow
-    $pgb.CenterColor = [Drawing.Color]::FromArgb(90, 0x6e, 0x7b, 0xff)
-    $pgb.SurroundColors = [Drawing.Color[]]@([Drawing.Color]::FromArgb(0, 0x6e, 0x7b, 0xff))
+    $pgb.CenterColor = [Drawing.Color]::FromArgb(90, 0x3b, 0x82, 0xf6)
+    $pgb.SurroundColors = [Drawing.Color[]]@([Drawing.Color]::FromArgb(0, 0x3b, 0x82, 0xf6))
     $g.FillPath($pgb, $glow)
     $icon = $size * 0.42
     Draw-Icon $g (($size - $icon) / 2) ($size * 0.21) $icon
@@ -100,13 +100,13 @@ Draw-BoxArt 2160 'boxart-2160.png'
 function New-Backdrop([int]$w, [int]$h, [float]$cx, [float]$cy, [float]$glowSize) {
     $bmp, $g = New-Canvas $w $h
     $rect = New-Object Drawing.Rectangle 0, 0, $w, $h
-    $bg = New-Object Drawing.Drawing2D.LinearGradientBrush $rect, ([Drawing.Color]::FromArgb(255, 0x14, 0x17, 0x1d)), ([Drawing.Color]::FromArgb(255, 0x23, 0x26, 0x4a)), 45.0
+    $bg = New-Object Drawing.Drawing2D.LinearGradientBrush $rect, ([Drawing.Color]::FromArgb(255, 0x02, 0x06, 0x17)), ([Drawing.Color]::FromArgb(255, 0x0f, 0x17, 0x2a)), 45.0
     $g.FillRectangle($bg, $rect)
     $glow = New-Object Drawing.Drawing2D.GraphicsPath
     $glow.AddEllipse([float]($cx - $glowSize / 2), [float]($cy - $glowSize / 2), $glowSize, $glowSize)
     $pgb = New-Object Drawing.Drawing2D.PathGradientBrush $glow
-    $pgb.CenterColor = [Drawing.Color]::FromArgb(90, 0x6e, 0x7b, 0xff)
-    $pgb.SurroundColors = [Drawing.Color[]]@([Drawing.Color]::FromArgb(0, 0x6e, 0x7b, 0xff))
+    $pgb.CenterColor = [Drawing.Color]::FromArgb(90, 0x3b, 0x82, 0xf6)
+    $pgb.SurroundColors = [Drawing.Color[]]@([Drawing.Color]::FromArgb(0, 0x3b, 0x82, 0xf6))
     $g.FillPath($pgb, $glow)
     return $bmp, $g
 }
