@@ -6,6 +6,11 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+## [1.1.1] - 2026-10-28
+
+### Changed
+- The app icon is now blue, matching the new look.
+
 ## [1.1.0] - 2026-10-27
 
 ### Added
