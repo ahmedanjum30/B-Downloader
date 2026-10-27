@@ -6,6 +6,14 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+## [1.0.16] - 2026-10-27
+
+### Fixed
+- After an automatic update, BDownloader came back running as
+  administrator when installed in Program Files. The browser can't reach
+  it then, so downloads opened a second, unconnected window and ended up
+  in the browser. It now always comes back as you.
+
 ## [1.0.15] - 2026-10-27
 
 ### Fixed

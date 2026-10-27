@@ -36,8 +36,13 @@ pub fn listen() -> impl Stream<Item = Message> {
     iced::stream::channel(32, async |output: Sender<Message>| {
         let name = pipe_name();
         // `first_pipe_instance` fails if another copy already owns the pipe.
-        let Ok(mut server) = ServerOptions::new().first_pipe_instance(true).create(&name) else {
-            return;
+        let mut server = match ServerOptions::new().first_pipe_instance(true).create(&name) {
+            Ok(server) => server,
+            Err(e) => {
+                // Usually a copy running as administrator, which this one couldn't hand over to.
+                log::warn!("another BDownloader owns the browser's connection; downloads from the browser won't reach this window: {e}");
+                return;
+            }
         };
         loop {
             if server.connect().await.is_err() {
