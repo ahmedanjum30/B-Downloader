@@ -56,4 +56,9 @@ impl Error {
     pub(crate) fn is_overloaded(&self) -> bool {
         matches!(self, Error::Status(429 | 503))
     }
+
+    /// HTTP 403: an expired link, or a connection over the server's limit.
+    pub(crate) fn is_forbidden(&self) -> bool {
+        matches!(self, Error::Status(403))
+    }
 }

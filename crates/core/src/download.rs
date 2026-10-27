@@ -350,8 +350,8 @@ pub(crate) struct Shared {
     pub(crate) stream: Mutex<Option<StreamProgress>>,
     /// `info.problem` is set, so the next data that arrives should clear it.
     has_problem: AtomicBool,
-    /// The server refused a connection as one too many (HTTP 429 or 503), so
-    /// no more connections are added.
+    /// The server refused a connection as one too many (HTTP 429 or 503, or
+    /// 403 while others work), so no more connections are added.
     refused: AtomicBool,
 }
 
@@ -726,6 +726,16 @@ impl Worker {
                 (segments.get(i).written, segments.get(i).end)
             };
             let url = redact(&self.url);
+            // Some servers (pixeldrain) turn away a connection over their
+            // limit with 403, as they would an expired link. While other
+            // connections are downloading, it's the limit: this one drops
+            // out and no more are added. The last connection's 403 is the
+            // real answer.
+            if err.is_forbidden() && lock(&self.shared.segments).leave(i) {
+                self.shared.refused.store(true, Ordering::Relaxed);
+                log::info!("{url}: bytes {written}-{end}: {err}; taken as the server's connection limit, the others carry on");
+                return Ok(Ended::Left);
+            }
             // Without range requests a retry would have to start from the beginning.
             if !err.is_retryable() || (!self.ranged && written > 0) {
                 log::warn!("{url}: bytes {written}-{end}: {err} (not retrying)");

@@ -6,6 +6,14 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+## [1.0.15] - 2026-10-27
+
+### Fixed
+- Downloads from pixeldrain (and other sites that turn away extra
+  connections with "403 Forbidden") no longer pause every few seconds
+  saying the link may have expired. BDownloader now keeps the connections
+  the site allows and carries on with those.
+
 ## [1.0.14] - 2026-10-26
 
 ### Added

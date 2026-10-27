@@ -19,8 +19,10 @@ struct Server {
     /// Pause after every 16 KiB, to make downloads slow enough to interrupt.
     delay: Option<Duration>,
     file_name: Option<&'static str>,
-    /// Answer with 429 while more than this many connections are open.
+    /// Answer with `limit_status` while more than this many connections are open.
     max_connections: Option<usize>,
+    /// 429, or 403 like pixeldrain.
+    limit_status: u16,
     /// Answer with 403 unless the request has this `Cookie` header (lowercase).
     require_cookie: Option<&'static str>,
     /// Add bytes to the body when the request has a `Range` header, like
@@ -59,6 +61,7 @@ impl Server {
             delay: None,
             file_name: None,
             max_connections: None,
+            limit_status: 429,
             require_cookie: None,
             echo_range: false,
             stall_after: None,
@@ -95,8 +98,9 @@ impl Server {
         let open = self.open.fetch_add(1, Ordering::SeqCst) + 1;
         let _guard = OpenGuard(&self.open);
         if self.max_connections.is_some_and(|max| open > max) {
+            let status = self.limit_status;
             let _ = socket
-                .write_all(b"HTTP/1.1 429 Too Many Requests\r\nContent-Length: 0\r\nConnection: close\r\n\r\n")
+                .write_all(format!("HTTP/1.1 {status} Refused\r\nContent-Length: 0\r\nConnection: close\r\n\r\n").as_bytes())
                 .await;
             return;
         }
@@ -245,6 +249,30 @@ async fn connections_refused_with_429_hand_over_their_part() {
         .wait()
         .await
         .unwrap();
+
+    let Outcome::Completed(path) = outcome else { panic!("not completed") };
+    assert!(std::fs::read(path).unwrap() == data);
+    assert_no_leftovers(dir.path());
+}
+
+/// Like pixeldrain: connections over the limit get 403, as an expired link
+/// would. The download carries on with the connections that work.
+#[tokio::test(flavor = "multi_thread")]
+async fn connections_refused_with_403_while_others_work_hand_over_their_part() {
+    let data = test_data(8 * MB);
+    let addr = Server {
+        max_connections: Some(2),
+        limit_status: 403,
+        delay: Some(Duration::from_millis(1)),
+        ..Server::new(data.clone())
+    }
+    .start()
+    .await;
+    let dir = tempfile::tempdir().unwrap();
+
+    let mut options = DownloadOptions::new(format!("http://{addr}/limited.bin"), dir.path());
+    options.connections = 16;
+    let outcome = Engine::new().unwrap().start(options).wait().await.unwrap();
 
     let Outcome::Completed(path) = outcome else { panic!("not completed") };
     assert!(std::fs::read(path).unwrap() == data);
