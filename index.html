@@ -32,22 +32,23 @@
 }
 </script>
 <style>
+  /* The app's palette: shadcn/ui's slate scale with one blue. */
   :root {
-    --bg: #ffffff; --bg-soft: #f4f5fb; --card: #ffffff; --line: #e3e5ef;
-    --fg: #161a22; --muted: #5b6273; --accent: #5b67f0; --accent-fg: #ffffff;
-    --hero: linear-gradient(160deg, #eef0ff 0%, #ffffff 60%);
+    --bg: #ffffff; --bg-soft: #f8fafc; --card: #ffffff; --line: #e2e8f0;
+    --fg: #0f172a; --muted: #64748b; --accent: #2563eb; --accent-fg: #ffffff;
+    --hero: linear-gradient(160deg, #eff6ff 0%, #ffffff 60%);
   }
   @media (prefers-color-scheme: dark) {
     :root:not([data-theme="light"]) {
-      --bg: #14171d; --bg-soft: #1a1e27; --card: #1c2029; --line: #2a2f3b;
-      --fg: #eceef4; --muted: #a2a8b8; --accent: #6e7bff; --accent-fg: #ffffff;
-      --hero: linear-gradient(160deg, #23264a 0%, #14171d 60%);
+      --bg: #020617; --bg-soft: #0b1222; --card: #0f172a; --line: #1e293b;
+      --fg: #f8fafc; --muted: #94a3b8; --accent: #3b82f6; --accent-fg: #ffffff;
+      --hero: linear-gradient(160deg, #0f1d3d 0%, #020617 60%);
     }
   }
   :root[data-theme="dark"] {
-    --bg: #14171d; --bg-soft: #1a1e27; --card: #1c2029; --line: #2a2f3b;
-    --fg: #eceef4; --muted: #a2a8b8; --accent: #6e7bff; --accent-fg: #ffffff;
-    --hero: linear-gradient(160deg, #23264a 0%, #14171d 60%);
+    --bg: #020617; --bg-soft: #0b1222; --card: #0f172a; --line: #1e293b;
+    --fg: #f8fafc; --muted: #94a3b8; --accent: #3b82f6; --accent-fg: #ffffff;
+    --hero: linear-gradient(160deg, #0f1d3d 0%, #020617 60%);
   }
   * { box-sizing: border-box; }
   html { scroll-behavior: smooth; }
@@ -131,8 +132,8 @@
         </a>
         <a class="button secondary" href="https://github.com/ahmedanjum30/BDownloader">View on GitHub</a>
       </div>
-      <p class="meta">Windows 10 and 11 · Under 5 MB · No admin rights needed · Free for personal use</p>
-      <div class="shot"><img src="images/app.png" width="1600" height="990" alt="BDownloader downloading three files over 16 connections each, with three finished downloads below"></div>
+      <p class="meta">Windows 10 and 11 · About 5 MB · No admin rights needed · Free for personal use</p>
+      <div class="shot"><img src="images/app.png" width="1418" height="947" alt="BDownloader downloading a file over 8 connections, with a queued download, a failed one offering Refresh link, and finished downloads below"></div>
     </div>
   </div>
 
@@ -163,8 +164,23 @@
         </div>
         <div class="card">
           <div class="icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m12 14 4-4"/><path d="M3.3 19a10 10 0 1 1 17.4 0"/></svg></div>
-          <h3>Speed limit</h3>
-          <p>Cap all downloads together from the top bar, so a big download doesn't slow down everything else. It applies instantly.</p>
+          <h3>Speed limits</h3>
+          <p>Cap all downloads together from the top bar, or just one download from its details, so a big download doesn't slow down everything else. Both apply instantly.</p>
+        </div>
+        <div class="card">
+          <div class="icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg></div>
+          <h3>Queue and schedule</h3>
+          <p>Choose Download later to queue a download, then start the queue yourself or every night at a set time, a few downloads at a time.</p>
+        </div>
+        <div class="card">
+          <div class="icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 20a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-8l-2-3H4a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2z"/></svg></div>
+          <h3>Sorted by type</h3>
+          <p>Downloads land in Compressed, Documents, Music, Programs and Video folders, and the sidebar lists each kind, like IDM.</p>
+        </div>
+        <div class="card">
+          <div class="icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2v10"/><path d="M18.4 6.6a9 9 0 1 1-12.8 0"/></svg></div>
+          <h3>Sleep or shut down when done</h3>
+          <p>Leave a big download running and let the PC sleep or turn off once it's finished, after a countdown you can cancel.</p>
         </div>
         <div class="card">
           <div class="icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M13 2 4 14h7l-1 8 9-12h-7z"/></svg></div>
@@ -186,7 +202,7 @@
           <li><b>Chrome, Brave, Opera, Vivaldi</b>a few guided steps inside BDownloader</li>
         </ul>
       </div>
-      <img class="rounded" src="images/extension.png" width="671" height="500" alt="BDownloader's browser extension window, showing it connected, with tabs for Chrome, Edge, Brave, Opera, Vivaldi and Firefox">
+      <img class="rounded" src="images/extension.png" width="676" height="742" alt="BDownloader's browser extension window, showing it connected, with tabs for Chrome, Edge, Brave, Opera, Vivaldi and Firefox and an Add to Firefox button">
     </div>
   </section>
 
