@@ -686,6 +686,36 @@ async fn speed_limit_caps_all_connections_together() {
 }
 
 #[tokio::test(flavor = "multi_thread")]
+async fn a_downloads_own_limit_caps_it_and_can_be_lifted() {
+    let data = test_data(2 * MB);
+    let addr = Server::new(data.clone()).start().await;
+    let dir = tempfile::tempdir().unwrap();
+    let engine = Engine::new().unwrap();
+
+    // Capped at 1 MB/s, about half of it arrives in the first second.
+    let mut options = DownloadOptions::new(format!("http://{addr}/own.bin"), dir.path());
+    options.connections = 4;
+    options.speed_limit = Some(MB as u64);
+    let handle = engine.start(options);
+    tokio::time::sleep(Duration::from_secs(1)).await;
+    let downloaded = handle.progress().downloaded;
+    assert!(downloaded < (3 * MB / 2) as u64, "{downloaded} bytes in the first second");
+
+    // Lifted: the rest comes at full speed.
+    handle.set_speed_limit(None);
+    let started = std::time::Instant::now();
+    let Outcome::Completed(path) = handle.wait().await.unwrap() else {
+        panic!("not completed")
+    };
+    assert!(
+        started.elapsed() < Duration::from_millis(700),
+        "took {:?} after lifting",
+        started.elapsed()
+    );
+    assert!(std::fs::read(path).unwrap() == data);
+}
+
+#[tokio::test(flavor = "multi_thread")]
 async fn waiting_for_the_speed_limit_is_not_a_stall() {
     // Eight connections share 256 KB/s, so each waits far longer than the
     // stall timeout between reads. That must not count as the server stalling.

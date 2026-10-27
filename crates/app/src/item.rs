@@ -60,6 +60,10 @@ pub struct Item {
     /// The engine saves it into the folder for its kind of file, in `dir`;
     /// once it has, `dir` is that folder and this is off.
     pub sort_by_type: bool,
+    /// Waiting in the download queue, or running as part of it.
+    pub queued: bool,
+    /// This download's own speed limit, in MB/s.
+    pub speed_limit_mb: Option<f64>,
 }
 
 impl Item {
@@ -86,6 +90,8 @@ impl Item {
             awaiting_link: false,
             youtube: None,
             sort_by_type: false,
+            queued: false,
+            speed_limit_mb: None,
         }
     }
 
@@ -103,6 +109,8 @@ impl Item {
             resume: saved.resume,
             youtube: saved.youtube,
             sort_by_type: saved.sort_by_type,
+            queued: saved.queued,
+            speed_limit_mb: saved.speed_limit_mb,
             ..Self::new(saved.id, saved.url, saved.dir, saved.file_name, saved.connections, saved.checksum)
         }
     }
@@ -135,6 +143,8 @@ impl Item {
             resume: self.resume,
             youtube: self.youtube.clone(),
             sort_by_type: self.sort_by_type,
+            queued: self.queued,
+            speed_limit_mb: self.speed_limit_mb,
         }
     }
 
@@ -153,6 +163,7 @@ impl Item {
             youtube: self.youtube.clone(),
             state_dir: Some(crate::store::resume_dir()),
             sort_by_type: self.sort_by_type,
+            speed_limit: self.speed_limit_mb.map(mb_per_second),
         };
         self.awaiting_link = false;
         self.handle = Some(engine.start(options));
@@ -164,6 +175,19 @@ impl Item {
         if let Some(handle) = &self.handle {
             handle.pause();
         }
+    }
+
+    /// Sets or removes this download's own speed limit, at once if it's running.
+    pub fn set_speed_limit(&mut self, mb: Option<f64>) {
+        self.speed_limit_mb = mb.filter(|mb| mb.is_finite() && *mb > 0.0);
+        if let Some(handle) = &self.handle {
+            handle.set_speed_limit(self.speed_limit_mb.map(mb_per_second));
+        }
+    }
+
+    /// Waiting in the queue for its turn.
+    pub fn is_waiting_in_queue(&self) -> bool {
+        self.queued && self.handle.is_none() && self.state == State::Paused
     }
 
     /// Copies the engine's latest progress into the item.
@@ -254,6 +278,10 @@ impl Item {
             .unwrap_or("")
             .to_owned()
     }
+}
+
+fn mb_per_second(mb: f64) -> u64 {
+    (mb * 1024.0 * 1024.0) as u64
 }
 
 /// Download speed averaged over the last few seconds.

@@ -35,6 +35,14 @@ pub struct Settings {
     pub limit_speed: bool,
     /// MB/s. Kept while the limit is off, so turning it back on restores it.
     pub speed_limit_mb: f64,
+    /// How many downloads of the queue run at the same time.
+    pub queue_at_once: usize,
+    /// Start the queue every day at `queue_start` ("HH:MM").
+    pub queue_start_daily: bool,
+    pub queue_start: String,
+    /// Stop the queue every day at `queue_stop` ("HH:MM").
+    pub queue_stop_daily: bool,
+    pub queue_stop: String,
 }
 
 impl Default for Settings {
@@ -49,8 +57,20 @@ impl Default for Settings {
             auto_update: true,
             limit_speed: false,
             speed_limit_mb: 5.0,
+            queue_at_once: 2,
+            queue_start_daily: false,
+            queue_start: "01:00".to_owned(),
+            queue_stop_daily: false,
+            queue_stop: "07:00".to_owned(),
         }
     }
+}
+
+/// Minutes since midnight of an "HH:MM" time, if it is one.
+pub fn parse_time(time: &str) -> Option<u32> {
+    let (hours, minutes) = time.trim().split_once(':')?;
+    let (hours, minutes): (u32, u32) = (hours.parse().ok()?, minutes.parse().ok()?);
+    (hours < 24 && minutes < 60).then_some(hours * 60 + minutes)
 }
 
 impl Settings {
@@ -125,6 +145,12 @@ pub struct SavedDownload {
     /// The folder for its kind of file is still to be picked, once its name is known.
     #[serde(default)]
     pub sort_by_type: bool,
+    /// Waiting in the download queue.
+    #[serde(default)]
+    pub queued: bool,
+    /// This download's own speed limit, in MB/s.
+    #[serde(default)]
+    pub speed_limit_mb: Option<f64>,
 }
 
 /// `BDOWNLOADER_DATA` overrides the folder, so development builds can use a
@@ -200,4 +226,20 @@ pub fn show_in_folder(path: &Path) {
     #[cfg(not(windows))]
     command.arg(path.parent().unwrap_or(path));
     let _ = command.spawn();
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn times_are_24_hour_hh_mm() {
+        assert_eq!(parse_time("01:30"), Some(90));
+        assert_eq!(parse_time(" 23:59 "), Some(23 * 60 + 59));
+        assert_eq!(parse_time("7:05"), Some(7 * 60 + 5));
+        assert_eq!(parse_time("24:00"), None);
+        assert_eq!(parse_time("12:60"), None);
+        assert_eq!(parse_time("1:30 PM"), None);
+        assert_eq!(parse_time(""), None);
+    }
 }

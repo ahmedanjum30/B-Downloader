@@ -12,14 +12,19 @@ use crate::store;
 impl App {
     pub(super) fn handle_downloads(&mut self, message: Message) -> Task<Message> {
         match message {
+            // Pausing or starting a download by hand takes it out of the
+            // queue, so the queue doesn't start or stop it again.
             Message::Pause(id) => {
                 if let Some(item) = self.item(id) {
+                    item.queued = false;
                     item.pause();
                 }
+                self.save();
             }
             Message::Resume(id) => {
                 let engine = self.engine.clone();
                 if let Some(item) = self.item(id) {
+                    item.queued = false;
                     item.start(&engine);
                 }
                 self.save();
@@ -45,7 +50,11 @@ impl App {
                     store::show_in_folder(&path);
                 }
             }
-            Message::ShowDetails(id) => self.modal = Some(Modal::Details(id)),
+            Message::ShowDetails(id) => {
+                let limit = self.item(id).and_then(|i| i.speed_limit_mb);
+                self.item_limit_text = crate::format::number(limit.unwrap_or(1.0));
+                self.modal = Some(Modal::Details(id));
+            }
             Message::OpenDownloadFolder(id) => {
                 if let Some(item) = self.item(id) {
                     // The file once it's there; until then, its folder.

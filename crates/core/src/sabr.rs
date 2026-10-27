@@ -660,7 +660,7 @@ async fn exchange(job: &Job, session: &mut Session, body: &[u8]) -> Result<u64> 
                 saved += take_part(job, session, kind, payload, &mut incoming, &mut in_flight)?;
             }
             pending.drain(..used);
-            let wait = engine.limiter.delay(chunk.len() as u64);
+            let wait = job.shared.throttle(engine, chunk.len() as u64);
             if !wait.is_zero() {
                 tokio::select! {
                     _ = job.stop.cancelled() => return Ok(()),

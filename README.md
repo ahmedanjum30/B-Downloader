@@ -9,26 +9,29 @@
 
 Free for personal and other non-commercial use. See [License](#license).
 
-**[Download the latest version](https://github.com/ahmedanjum30/BDownloader/releases/latest)** for Windows 10 and 11.
+**[Download the latest version](https://github.com/ahmedanjum30/BDownloader/releases/latest)** for Windows 10 and 11, or get it from the [Microsoft Store](https://apps.microsoft.com/detail/xp89fxjjf4j45w).
 
 ## Features
 
 - **Multi-connection downloads.** Each file is split into parts that download in parallel, starting with one connection and adding more while the server keeps up. When a part finishes, its connection takes over half of the biggest remaining one, so no connection sits idle.
 - **Pause and resume**, including after closing the app, a crash or a restart. Expired links can be refreshed and the download continues where it stopped.
-- **Browser extension** for Chrome, Edge, Brave, Opera, Vivaldi and Firefox: downloads you start in the browser go to BDownloader, and links get a "Download with BDownloader" right-click entry. Downloads that need a login work, because the browser's cookies come along (they're never saved to disk).
+- **Browser extension** for Chrome, Edge, Brave, Opera, Vivaldi and Firefox: downloads you start in the browser go to BDownloader, and links get a "Download with BDownloader" right-click entry. Downloads that need a login work, because the browser's cookies come along (they're never saved to disk). Get it from [Edge Add-ons](https://microsoftedge.microsoft.com/addons/detail/kfbjnlpmchkeaphhdeidpdpcomoohdfa) or [Firefox Add-ons](https://addons.mozilla.org/firefox/addon/bdownloader/); for the other browsers, BDownloader walks you through adding it.
 - **Video downloads.** A "Download this video" bar appears on videos in web pages, like IDM's: video files and HLS streams (`.m3u8`), including encrypted (AES-128) ones, downloaded over several connections.
 - **YouTube**, on youtube.com and in YouTube players embedded in other sites: pick any quality up to 4K, or sound only. Picture and sound are joined into one MP4. No extra programs needed.
-- **Speed limit** for all downloads together, from the top bar; it applies at once.
+- **Sorted by type**, like IDM: downloads go into Compressed, Documents, Music, Programs and Video folders inside your download folder, and the sidebar lists each kind.
+- **Download queue with a scheduler.** Choose "Download later" to queue a download, then start the queue by hand or every day at a set time (and stop it at another), a few downloads at a time.
+- **Speed limits** for all downloads together, from the top bar, and for any single download, from its details. Both apply at once.
+- **Sleep or shut down when done**, with a 60-second countdown you can cancel.
 - **Optional integrity check.** Verify a finished file's MD5 or SHA-256 checksum.
 - **Stays out of the way.** Runs in the tray, uses little memory while idle, and updates itself.
-- **Native and lightweight.** Written in Rust with the [iced](https://iced.rs) GUI toolkit; the installer is under 5 MB. No bundled browser engine.
+- **Native and lightweight.** Written in Rust with the [iced](https://iced.rs) GUI toolkit; the installer is about 5 MB. No bundled browser engine.
 - **Modern interface** with dark and light themes, live speed and time left, and a progress bar that shows what each connection is downloading.
-
-**Coming later:** a download queue with a scheduler, and per-download speed limits.
 
 ## Installing
 
-Download `BDownloader-Setup-<version>.exe` from [Releases](https://github.com/ahmedanjum30/BDownloader/releases) and run it. It installs for your user only, into `%LOCALAPPDATA%\Programs\BDownloader`, so it doesn't need admin rights. After that, BDownloader keeps itself up to date (from version 0.1.1 on).
+Download `BDownloader-Setup-<version>.exe` from [Releases](https://github.com/ahmedanjum30/BDownloader/releases) and run it. By default it installs for your user only, into `%LOCALAPPDATA%\Programs\BDownloader`, so it doesn't need admin rights; it can also install for everyone on the PC, into Program Files. After that, BDownloader keeps itself up to date (from version 0.1.1 on). For a silent install, run the installer with `/VERYSILENT`.
+
+The [Microsoft Store version](https://apps.microsoft.com/detail/xp89fxjjf4j45w) installs without the "Windows protected your PC" warning and is updated through the Store.
 
 ### "Windows protected your PC"
 

@@ -379,7 +379,7 @@ impl Fetcher {
             data.extend_from_slice(&chunk);
             *received += chunk.len() as u64;
             self.with_progress(|p| p.in_flight += chunk.len() as u64);
-            let wait = self.engine.limiter.delay(chunk.len() as u64);
+            let wait = self.shared.throttle(&self.engine, chunk.len() as u64);
             if !wait.is_zero() {
                 tokio::select! {
                     _ = self.stop.cancelled() => return Ok(None),

@@ -6,6 +6,17 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+## [1.1.0] - 2026-10-27
+
+### Added
+- A download queue with a scheduler. "Download later" in the Add dialog
+  (or the clock button on a paused or failed download) puts a download in
+  the queue. Start the queue from Queue in the sidebar, or every day at a
+  set time, and stop it at another, in Settings. It runs 2 downloads at a
+  time by default (up to 10), and starts the next as each one finishes.
+- A speed limit for a single download, in its details. It applies at once,
+  together with the limit for all downloads in the top bar.
+
 ## [1.0.16] - 2026-10-27
 
 ### Fixed

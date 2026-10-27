@@ -134,6 +134,7 @@ impl Engine {
     /// the same name, it continues from where it stopped.
     pub fn start(&self, options: DownloadOptions) -> DownloadHandle {
         let shared = Arc::new(Shared::default());
+        shared.limiter.set(options.speed_limit);
         let pause = CancellationToken::new();
         let task = tokio::spawn(run(self.clone(), options, shared.clone(), pause.clone()));
         DownloadHandle { shared, pause, task }
@@ -168,6 +169,9 @@ pub struct DownloadOptions {
     /// Save into a folder in `dir` for the kind of file (`Video`, `Music`,
     /// …), picked from its final name. See [`crate::Category`].
     pub sort_by_type: bool,
+    /// Caps this download's speed, in bytes per second, on top of the limit
+    /// for all downloads. See [`DownloadHandle::set_speed_limit`].
+    pub speed_limit: Option<u64>,
 }
 
 impl DownloadOptions {
@@ -183,6 +187,7 @@ impl DownloadOptions {
             youtube: None,
             state_dir: None,
             sort_by_type: false,
+            speed_limit: None,
         }
     }
 
@@ -270,6 +275,12 @@ impl DownloadHandle {
         self.pause.cancel();
     }
 
+    /// Caps this download's speed, in bytes per second; `None` removes the
+    /// cap. Applies right away. The limit for all downloads still applies.
+    pub fn set_speed_limit(&self, bytes_per_second: Option<u64>) {
+        self.shared.limiter.set(bytes_per_second);
+    }
+
     pub fn progress(&self) -> Progress {
         let info = lock(&self.shared.info).clone();
         if let Some(stream) = *lock(&self.shared.stream) {
@@ -353,9 +364,17 @@ pub(crate) struct Shared {
     /// The server refused a connection as one too many (HTTP 429 or 503, or
     /// 403 while others work), so no more connections are added.
     refused: AtomicBool,
+    /// This download's own speed limit.
+    limiter: Limiter,
 }
 
 impl Shared {
+    /// How long to wait after receiving `bytes`: the stricter of the limit
+    /// for all downloads and this download's own.
+    pub(crate) fn throttle(&self, engine: &Engine, bytes: u64) -> Duration {
+        engine.limiter.delay(bytes).max(self.limiter.delay(bytes))
+    }
+
     pub(crate) fn report_problem(&self, problem: String) {
         lock(&self.info).problem = Some(problem);
         self.has_problem.store(true, Ordering::Relaxed);
@@ -810,7 +829,7 @@ impl Worker {
             let (take, complete) = lock(&self.shared.segments).claim(i, chunk.len() as u64);
             buf.extend_from_slice(&chunk[..take as usize]);
             // Reading more slowly makes the server send more slowly.
-            let wait = self.engine.limiter.delay(take);
+            let wait = self.shared.throttle(&self.engine, take);
             if !wait.is_zero() {
                 tokio::select! {
                     _ = self.stop.cancelled() => break Ok(()),

@@ -8,11 +8,11 @@ use iced::widget::{
 use iced::{Center, Color, Element, Fill, FillPortion, Font, Padding};
 
 use crate::app::{App, Filter, Message, Modal, Update, WhenDone};
-use crate::format;
 use crate::icons::{self, icon};
 use crate::item::{Item, State};
 use crate::style::{self, Colors, Pick};
 use crate::{dialogs, update};
+use crate::{format, store};
 
 /// The sidebar's width.
 const SIDEBAR_WIDTH: f32 = 236.0;
@@ -45,7 +45,7 @@ pub fn view(app: &App) -> Element<'_, Message> {
             None => base.into(),
         },
         Some(Modal::Details(id)) => match app.items.iter().find(|i| i.id == *id) {
-            Some(item) => modal(base, dialogs::details(item, app.copied.as_deref())),
+            Some(item) => modal(base, dialogs::details(item, app.copied.as_deref(), &app.item_limit_text)),
             None => base.into(),
         },
         Some(Modal::Extension(browser)) => modal(
@@ -94,6 +94,7 @@ fn sidebar(app: &App) -> Element<'_, Message> {
             Filter::Completed => &icons::DONE,
             Filter::Paused => &icons::PAUSED,
             Filter::Failed => &icons::FAILED,
+            Filter::Queue => &icons::CLOCK,
             Filter::Category(Category::Compressed) => &icons::COMPRESSED,
             Filter::Category(Category::Documents) => &icons::DOCUMENT,
             Filter::Category(Category::Music) => &icons::MUSIC,
@@ -236,6 +237,9 @@ fn main_panel(app: &App) -> Element<'_, Message> {
     if let Some(banner) = update_banner(app) {
         content = content.push(banner);
     }
+    if app.filter == Filter::Queue {
+        content = content.push(queue_bar(app));
+    }
     content
         .push(list)
         .spacing(24)
@@ -331,6 +335,63 @@ fn speed_limit(app: &App) -> Element<'_, Message> {
     container(control).padding(3).style(style::panel).into()
 }
 
+/// Starts and stops the queue, and says how it runs.
+fn queue_bar(app: &App) -> Element<'_, Message> {
+    let settings = &app.settings;
+    let waiting = app.items.iter().filter(|i| i.is_waiting_in_queue()).count();
+    let mut line = if app.queue_running {
+        format!("Running, {} at a time", settings.queue_at_once)
+    } else {
+        match waiting {
+            0 => "Empty: add downloads with Download later".to_owned(),
+            1 => "1 download waiting".to_owned(),
+            n => format!("{n} downloads waiting"),
+        }
+    };
+    if settings.queue_start_daily && store::parse_time(&settings.queue_start).is_some() {
+        line += &format!(" · Starts every day at {}", settings.queue_start.trim());
+    }
+    if settings.queue_stop_daily && store::parse_time(&settings.queue_stop).is_some() {
+        line += &format!(" · Stops at {}", settings.queue_stop.trim());
+    }
+    let control = if app.queue_running {
+        button(
+            row![icon(&icons::PAUSE, 15.0, |c| c.text), text("Stop queue").size(14)]
+                .spacing(8)
+                .align_y(Center),
+        )
+        .padding([8, 14])
+        .style(style::secondary)
+        .on_press(Message::StopQueue)
+    } else {
+        button(
+            row![icon(&icons::PLAY, 15.0, |c| c.on_accent), text("Start queue").size(14).font(SEMIBOLD)]
+                .spacing(8)
+                .align_y(Center),
+        )
+        .padding([8, 14])
+        .style(style::primary)
+        .on_press_maybe((waiting > 0).then_some(Message::StartQueue))
+    };
+    container(
+        row![
+            icon(&icons::CLOCK, 18.0, if app.queue_running { |c| c.accent } else { |c| c.muted }),
+            text(line).size(14).width(Fill),
+            button(text("Schedule").size(14))
+                .padding([8, 14])
+                .style(style::secondary)
+                .on_press(Message::OpenSettings),
+            control,
+        ]
+        .spacing(12)
+        .align_y(Center),
+    )
+    .padding([10, 14])
+    .width(Fill)
+    .style(style::panel)
+    .into()
+}
+
 /// Sleep or shut down the PC once the downloads are done.
 fn when_done(app: &App) -> Element<'_, Message> {
     let on = app.when_done != WhenDone::Nothing;
@@ -420,6 +481,15 @@ fn download_card(item: &Item) -> Element<'_, Message> {
         ),
         State::Downloading => (|c| c.accent, downloading_text(item)),
         State::Verifying => (|c| c.accent, "Verifying checksum…".into()),
+        State::Paused if item.queued => (
+            |c| c.muted,
+            match (item.downloaded, item.size) {
+                (0, Some(size)) => format!("Waiting in the queue · {}", format::size(size)),
+                (0, None) => "Waiting in the queue".into(),
+                (done, Some(size)) => format!("Waiting in the queue · {} of {}", format::size(done), format::size(size)),
+                (done, None) => format!("Waiting in the queue · {}", format::size(done)),
+            },
+        ),
         State::Paused => (
             |c| c.warning,
             match (item.downloaded, item.size) {
@@ -463,14 +533,19 @@ fn download_card(item: &Item) -> Element<'_, Message> {
     // A fresh link only helps a download that already has part of a known-size file.
     let refreshable = item.size.is_some() && item.downloaded > 0 && item.file_name.is_some();
     match &item.state {
+        State::Paused if item.queued => {
+            actions = actions.push(action(&icons::PLAY, "Start now", Message::Resume(id)));
+        }
         State::Paused => {
             actions = actions.push(action(&icons::PLAY, "Resume", Message::Resume(id)));
+            actions = actions.push(action(&icons::CLOCK, "Download later (add to queue)", Message::Enqueue(id)));
             if refreshable {
                 actions = actions.push(action(&icons::LINK, "Refresh link", Message::OpenRefresh(id)));
             }
         }
         State::Failed(_) => {
             actions = actions.push(action(&icons::RETRY, "Try again", Message::Resume(id)));
+            actions = actions.push(action(&icons::CLOCK, "Try again later (add to queue)", Message::Enqueue(id)));
             if refreshable {
                 actions = actions.push(action(&icons::LINK, "Refresh link", Message::OpenRefresh(id)));
             }
@@ -513,6 +588,9 @@ fn downloading_text(item: &Item) -> String {
     }
     if let Some(eta) = item.eta() {
         parts.push(format::eta(eta));
+    }
+    if let Some(mb) = item.speed_limit_mb {
+        parts.push(format!("limited to {} MB/s", format::number(mb)));
     }
     // Connections that are open but get no data are worth knowing about.
     match (item.active_connections, item.receiving) {

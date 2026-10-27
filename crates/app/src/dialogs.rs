@@ -6,12 +6,12 @@ use bdownloader_core::MAX_CONNECTIONS;
 use iced::widget::{button, checkbox, column, container, pick_list, row, scrollable, slider, space, text, text_input};
 use iced::{Center, Element, Fill, Shrink};
 
-use crate::app::{AddDialog, Message, Probe, RefreshDialog, WhenDone};
+use crate::app::{AddDialog, MAX_AT_ONCE, Message, Probe, RefreshDialog, WhenDone};
 use crate::browser::Browser;
 use crate::format;
 use crate::icons::{self, icon};
 use crate::item::{Item, State};
-use crate::store::{HashKind, Settings, ThemeChoice};
+use crate::store::{self, HashKind, Settings, ThemeChoice};
 use crate::style;
 use crate::view::{BOLD, SEMIBOLD, colored, file_badge, muted};
 
@@ -56,8 +56,8 @@ fn folder_picker<'a>(dir: &Path) -> Element<'a, Message> {
     .into()
 }
 
-/// Number of connections: a slider for big changes, buttons for exact ones.
-fn stepper<'a>(value: usize, on_change: fn(usize) -> Message) -> Element<'a, Message> {
+/// A number from 1 to `max`: a slider for big changes, buttons for exact ones.
+fn stepper<'a>(value: usize, max: usize, on_change: fn(usize) -> Message) -> Element<'a, Message> {
     let step = |handle, enabled: bool, next: usize| {
         button(icon(handle, 15.0, |c| c.text))
             .padding(10)
@@ -67,8 +67,8 @@ fn stepper<'a>(value: usize, on_change: fn(usize) -> Message) -> Element<'a, Mes
     row![
         step(&icons::MINUS, value > 1, value.saturating_sub(1)),
         container(text(value.to_string()).size(15).font(SEMIBOLD)).center_x(44),
-        step(&icons::PLUS, value < MAX_CONNECTIONS, value + 1),
-        slider(1..=MAX_CONNECTIONS as u32, value as u32, move |n| on_change(n as usize)).width(Fill),
+        step(&icons::PLUS, value < max, value + 1),
+        slider(1..=max as u32, value as u32, move |n| on_change(n as usize)).width(Fill),
     ]
     .spacing(8)
     .align_y(Center)
@@ -173,7 +173,10 @@ pub fn add(dialog: &AddDialog, existing: Option<(u64, u64)>) -> Element<'_, Mess
         input("Name from the server", &dialog.file_name).on_input(Message::AddName),
     ));
     body = body.push(field("Save to", folder_picker(&dialog.save_dir())));
-    body = body.push(row![field("Connections", stepper(dialog.connections, Message::AddConnections))]);
+    body = body.push(row![field(
+        "Connections",
+        stepper(dialog.connections, MAX_CONNECTIONS, Message::AddConnections)
+    )]);
 
     let verify = checkbox(dialog.verify)
         .label("Verify checksum when finished")
@@ -196,11 +199,23 @@ pub fn add(dialog: &AddDialog, existing: Option<(u64, u64)>) -> Element<'_, Mess
     }
     body = body.push(checksum);
 
-    frame(
-        "Add download",
-        body.into(),
-        footer("Download", dialog.can_submit().then_some(Message::ConfirmAdd)),
-    )
+    let footer = row![
+        space().width(Fill),
+        button(text("Cancel").size(14))
+            .padding([10, 18])
+            .style(style::secondary)
+            .on_press(Message::CloseModal),
+        button(text("Download later").size(14))
+            .padding([10, 18])
+            .style(style::secondary)
+            .on_press_maybe(dialog.can_submit().then_some(Message::ConfirmAddLater)),
+        button(text("Download").size(14).font(SEMIBOLD))
+            .padding([10, 20])
+            .style(style::primary)
+            .on_press_maybe(dialog.can_submit().then_some(Message::ConfirmAdd)),
+    ]
+    .spacing(10);
+    frame("Add download", body.into(), footer.into())
 }
 
 fn updates<'a>(draft: &Settings, status: String) -> Element<'a, Message> {
@@ -247,6 +262,53 @@ fn updates<'a>(draft: &Settings, status: String) -> Element<'a, Message> {
     .into()
 }
 
+/// How many of the queue's downloads run at once, and when it starts and stops by itself.
+fn queue_settings(draft: &Settings) -> Element<'_, Message> {
+    let time = |enabled: bool, label: &'static str, value: &str, on_toggle: fn(bool) -> Message, on_input: fn(String) -> Message| {
+        let valid = store::parse_time(value).is_some();
+        let mut line = row![
+            checkbox(enabled).label(label).on_toggle(on_toggle).size(18).text_size(14).spacing(10),
+            text_input("HH:MM", value)
+                .on_input(on_input)
+                .padding([6, 8])
+                .size(14)
+                .width(70)
+                .style(style::input),
+        ]
+        .spacing(10)
+        .align_y(Center);
+        if enabled && !valid {
+            line = line.push(colored("Use 24-hour time, like 01:30", |c| c.danger).size(12));
+        }
+        line
+    };
+    column![
+        row![
+            muted("At the same time").size(13).width(120),
+            stepper(draft.queue_at_once, MAX_AT_ONCE, Message::SettingsQueueAtOnce),
+        ]
+        .spacing(12)
+        .align_y(Center),
+        time(
+            draft.queue_start_daily,
+            "Start the queue every day at",
+            &draft.queue_start,
+            Message::SettingsQueueStartDaily,
+            Message::SettingsQueueStart,
+        ),
+        time(
+            draft.queue_stop_daily,
+            "Stop it every day at",
+            &draft.queue_stop,
+            Message::SettingsQueueStopDaily,
+            Message::SettingsQueueStop,
+        ),
+        muted("Add downloads to the queue with Download later. BDownloader must be running (it can be in the tray).").size(12),
+    ]
+    .spacing(10)
+    .into()
+}
+
 pub fn settings(draft: &Settings, update_status: String) -> Element<'_, Message> {
     let themes = row([
         (ThemeChoice::System, "System"),
@@ -281,7 +343,11 @@ pub fn settings(draft: &Settings, update_status: String) -> Element<'_, Message>
         .spacing(10);
     let body = column![
         field("Default download folder", column![folder_picker(&draft.download_dir), sort].spacing(10)),
-        field("Connections per download", stepper(draft.connections, Message::SettingsConnections)),
+        field(
+            "Connections per download",
+            stepper(draft.connections, MAX_CONNECTIONS, Message::SettingsConnections)
+        ),
+        field("Download queue", queue_settings(draft)),
         field("Theme", container(themes).padding(4).style(style::panel)),
         field("When I close the window", container(on_close).padding(4).style(style::panel)),
         field("Updates", updates(draft, update_status)),
@@ -611,11 +677,12 @@ pub fn remove(item: &Item, delete_file: bool) -> Element<'_, Message> {
 }
 
 /// A download's details: where it's saved, where it came from, and how it's going.
-pub fn details<'a>(item: &'a Item, copied: Option<&str>) -> Element<'a, Message> {
+pub fn details<'a>(item: &'a Item, copied: Option<&str>, limit_text: &'a str) -> Element<'a, Message> {
     let status = match &item.state {
         State::Starting => "Starting".to_owned(),
         State::Downloading => "Downloading".to_owned(),
         State::Verifying => "Checking the file".to_owned(),
+        State::Paused if item.queued => "Waiting in the queue".to_owned(),
         State::Paused => "Paused".to_owned(),
         State::Completed => "Completed".to_owned(),
         State::Failed(error) => format!("Failed: {error}"),
@@ -662,6 +729,34 @@ pub fn details<'a>(item: &'a Item, copied: Option<&str>) -> Element<'a, Message>
     }
     if let Some((kind, hash)) = &item.checksum {
         body = body.push(line("Checksum", format!("{kind:?} {hash}")));
+    }
+    if item.state != State::Completed {
+        let id = item.id;
+        let on = item.speed_limit_mb.is_some();
+        let mut limit = row![
+            muted("Speed").size(13).width(110),
+            checkbox(on)
+                .label("Limit this download to")
+                .on_toggle(move |on| Message::ItemLimit(id, on))
+                .size(18)
+                .text_size(14)
+                .spacing(10),
+        ]
+        .spacing(12)
+        .align_y(Center);
+        if on {
+            limit = limit
+                .push(
+                    text_input("1", limit_text)
+                        .on_input(move |typed| Message::ItemLimitText(id, typed))
+                        .padding([6, 8])
+                        .size(14)
+                        .width(64)
+                        .style(style::input),
+                )
+                .push(muted("MB/s").size(13));
+        }
+        body = body.push(limit);
     }
     body = body
         .push(muted("Saved in").size(13).font(SEMIBOLD))

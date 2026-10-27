@@ -193,14 +193,18 @@ impl App {
                     dialog.hash = hash;
                 }
             }
-            Message::ConfirmAdd => {
+            Message::ConfirmAdd | Message::ConfirmAddLater => {
+                // "Download later": into the queue instead of starting now.
+                let later = matches!(message, Message::ConfirmAddLater);
                 if let Some(Modal::Add(dialog)) = self.modal.take() {
                     if !dialog.can_submit() {
                         self.modal = Some(Modal::Add(dialog));
                         return Task::none();
                     }
                     let dialog = *dialog;
-                    let file_name = dialog.name_edited.then(|| dialog.file_name.trim().to_owned());
+                    // A queued download shows the checked name while it waits.
+                    let named = dialog.name_edited || (later && !dialog.file_name.trim().is_empty());
+                    let file_name = named.then(|| dialog.file_name.trim().to_owned());
                     let checksum = dialog.verify.then(|| (dialog.hash_kind, dialog.hash.trim().to_owned()));
                     let item = self.add_with(
                         dialog.url.trim().to_owned(),
@@ -212,6 +216,7 @@ impl App {
                             item.headers = dialog.headers;
                             item.youtube = dialog.youtube;
                             item.sort_by_type = dialog.sort_by_type;
+                            item.queued = later;
                         },
                     );
                     if let Probe::Ready(info) = &dialog.probe {
@@ -220,7 +225,12 @@ impl App {
                     if let Some(source) = &item.youtube {
                         item.size = source.video.iter().chain(&source.audio).map(|f| f.content_length).sum();
                     }
-                    self.filter = Filter::All;
+                    if later {
+                        self.filter = Filter::Queue;
+                        self.run_queue();
+                    } else {
+                        self.filter = Filter::All;
+                    }
                 }
             }
             Message::ContinueExisting(id) => {
@@ -273,7 +283,10 @@ impl App {
         let mut item = Item::new(self.next_id, url, dir, file_name, connections, checksum);
         setup(&mut item);
         self.next_id += 1;
-        item.start(&self.engine);
+        // A queued download waits for its turn.
+        if !item.queued {
+            item.start(&self.engine);
+        }
         self.items.push(item);
         self.save();
         self.items.last_mut().expect("just pushed")

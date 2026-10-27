@@ -7,6 +7,7 @@
 mod add;
 mod downloads;
 mod power;
+mod queue;
 mod refresh;
 mod settings;
 mod updates;
@@ -24,6 +25,7 @@ use iced::{Subscription, Task, Theme, clipboard, system, time, window};
 pub use add::{AddDialog, Probe};
 pub use power::WhenDone;
 pub use refresh::RefreshDialog;
+pub use settings::MAX_AT_ONCE;
 pub use updates::Update;
 
 use crate::item::{Item, State};
@@ -62,12 +64,21 @@ pub enum Filter {
     Completed,
     Paused,
     Failed,
+    /// The download queue: waiting, or running as part of it.
+    Queue,
     /// Downloads of one kind of file.
     Category(Category),
 }
 
 impl Filter {
-    pub const ALL: [Filter; 5] = [Filter::All, Filter::Active, Filter::Completed, Filter::Paused, Filter::Failed];
+    pub const ALL: [Filter; 6] = [
+        Filter::All,
+        Filter::Active,
+        Filter::Queue,
+        Filter::Completed,
+        Filter::Paused,
+        Filter::Failed,
+    ];
 
     pub fn label(self) -> &'static str {
         match self {
@@ -76,6 +87,7 @@ impl Filter {
             Filter::Completed => "Completed",
             Filter::Paused => "Paused",
             Filter::Failed => "Failed",
+            Filter::Queue => "Queue",
             Filter::Category(category) => category.name(),
         }
     }
@@ -85,7 +97,9 @@ impl Filter {
             Filter::All => true,
             Filter::Active => item.state.is_running(),
             Filter::Completed => item.state == State::Completed,
-            Filter::Paused => item.state == State::Paused,
+            // Downloads waiting in the queue are under Queue instead.
+            Filter::Paused => item.state == State::Paused && !item.queued,
+            Filter::Queue => item.queued,
             Filter::Failed => matches!(item.state, State::Failed(_)),
             Filter::Category(category) => Category::of(&item.display_name()) == Some(category),
         }
@@ -173,6 +187,24 @@ pub enum Message {
     SettingsSortByType(bool),
     SaveSettings,
 
+    /// Save the download in the Add dialog to the queue instead of starting it.
+    ConfirmAddLater,
+    /// Put a stopped download in the queue.
+    Enqueue(u64),
+    StartQueue,
+    StopQueue,
+    /// Checks the time, for starting and stopping the queue on schedule.
+    QueueClock,
+    SettingsQueueAtOnce(usize),
+    SettingsQueueStartDaily(bool),
+    SettingsQueueStart(String),
+    SettingsQueueStopDaily(bool),
+    SettingsQueueStop(String),
+    /// Turn a download's own speed limit on or off.
+    ItemLimit(u64, bool),
+    /// A download's own speed limit, in MB/s, as typed.
+    ItemLimitText(u64, String),
+
     WhenDone(WhenDone),
     /// Each second of the countdown before sleeping or shutting down.
     PowerTick,
@@ -248,6 +280,12 @@ pub struct App {
     /// What the PC does once the downloads are done. Never saved, so it
     /// can't turn the PC off unexpectedly after a restart.
     pub when_done: WhenDone,
+    /// The queue is running: its downloads start in turn.
+    pub queue_running: bool,
+    /// The local time (minutes since midnight) the queue's schedule last looked at.
+    clock_minute: Option<u32>,
+    /// The speed limit in a download's details, as typed.
+    pub item_limit_text: String,
 }
 
 impl App {
@@ -280,6 +318,9 @@ impl App {
             speed_limit_text,
             width: crate::WINDOW_SIZE.width,
             when_done: WhenDone::Nothing,
+            queue_running: false,
+            clock_minute: Some(queue::local_minute()),
+            item_limit_text: String::new(),
         };
         // `BDownloader.exe URL...` starts those downloads right away.
         for url in std::env::args().skip(1).filter(|a| a.starts_with("http://") || a.starts_with("https://")) {
@@ -351,6 +392,9 @@ impl App {
         ];
         if self.items.iter().any(|i| i.handle.is_some()) || matches!(self.update, Update::Downloading { .. }) {
             subscriptions.push(time::every(REFRESH).map(|_| Message::Tick));
+        }
+        if self.settings.queue_start_daily || self.settings.queue_stop_daily {
+            subscriptions.push(time::every(Duration::from_secs(20)).map(|_| Message::QueueClock));
         }
         if matches!(self.modal, Some(Modal::PowerCountdown { .. })) {
             subscriptions.push(time::every(Duration::from_secs(1)).map(|_| Message::PowerTick));
@@ -446,7 +490,14 @@ impl App {
             | Message::AddHashKind(_)
             | Message::AddHash(_)
             | Message::ConfirmAdd
+            | Message::ConfirmAddLater
             | Message::ContinueExisting(_)) => return self.handle_add(m),
+            m @ (Message::Enqueue(_)
+            | Message::StartQueue
+            | Message::StopQueue
+            | Message::QueueClock
+            | Message::ItemLimit(..)
+            | Message::ItemLimitText(..)) => return self.handle_queue(m),
             m @ (Message::OpenSettings
             | Message::SettingsConnections(_)
             | Message::LimitSpeed(_)
@@ -455,6 +506,11 @@ impl App {
             | Message::SettingsCloseToTray(_)
             | Message::SettingsAutoUpdate(_)
             | Message::SettingsSortByType(_)
+            | Message::SettingsQueueAtOnce(_)
+            | Message::SettingsQueueStartDaily(_)
+            | Message::SettingsQueueStart(_)
+            | Message::SettingsQueueStopDaily(_)
+            | Message::SettingsQueueStop(_)
             | Message::SaveSettings) => return self.handle_settings(m),
             m @ (Message::WhenDone(_) | Message::PowerTick | Message::PowerNow) => return self.handle_power(m),
             m @ (Message::CheckForUpdates { .. }
@@ -488,12 +544,20 @@ impl App {
                         Ok(Outcome::Paused) => item.state = State::Paused,
                         Err(e) => item.state = State::Failed(e),
                     }
+                    // Done with the queue once finished or failed; a paused
+                    // one (the queue was stopped) waits for its next turn.
+                    if item.state != State::Paused {
+                        item.queued = false;
+                    }
                     // A refreshed link was confirmed while the old one was still stopping.
                     if item.resume && item.state != State::Completed {
                         item.resume = false;
                         item.start(&engine);
                     }
                 }
+                // The queue's next download starts before anything checks
+                // whether the downloads are done.
+                self.run_queue();
                 self.save();
                 // The tick that keeps the tray up to date stops with the last download.
                 self.update_tray();
