@@ -5,20 +5,19 @@ use iced::font::Weight;
 use iced::widget::{
     Space, button, center, column, container, mouse_area, opaque, pick_list, progress_bar, row, scrollable, space, stack, text, text_input, tooltip,
 };
-use iced::{Center, Color, Element, Fill, FillPortion, Font, Padding};
+use iced::{Center, Element, Fill, FillPortion, Font, Padding};
 
-use crate::app::{App, Filter, Message, Modal, Update, WhenDone};
+use crate::app::{App, Filter, Message, Modal, SettingsTab, Update, WhenDone};
 use crate::icons::{self, icon};
 use crate::item::{Item, State};
-use crate::style::{self, Colors, Pick};
+use crate::style::{self, Pick};
 use crate::{dialogs, update};
 use crate::{format, store};
 
 /// The sidebar's width.
 const SIDEBAR_WIDTH: f32 = 236.0;
-/// Room the header needs for everything in one row, and with "Add download" as "+".
-const WIDE_HEADER: f32 = 1140.0;
-const MEDIUM_HEADER: f32 = 980.0;
+/// Room the status tabs and the speed and when-done controls need side by side.
+const TOOLBAR_ONE_ROW: f32 = 840.0;
 
 pub const FONT: Font = Font::with_name("Segoe UI");
 pub const SEMIBOLD: Font = Font {
@@ -38,7 +37,8 @@ pub fn view(app: &App) -> Element<'_, Message> {
     match &app.modal {
         None => base.into(),
         Some(Modal::Add(dialog)) => modal(base, dialogs::add(dialog, app.existing_partial(dialog))),
-        Some(Modal::Settings(draft)) => modal(base, dialogs::settings(draft, app.update.status())),
+        Some(Modal::Settings(draft)) => modal(base, dialogs::settings(draft, app.update.status(), app.settings_tab)),
+        Some(Modal::Report(dialog)) => modal(base, dialogs::report(dialog)),
         Some(Modal::Refresh(dialog)) => modal(base, dialogs::refresh(dialog)),
         Some(Modal::Remove { id, delete_file }) => match app.items.iter().find(|i| i.id == *id) {
             Some(item) => modal(base, dialogs::remove(item, *delete_file)),
@@ -80,12 +80,15 @@ pub fn muted<'a>(content: impl text::IntoFragment<'a>) -> text::Text<'a> {
 }
 
 fn sidebar(app: &App) -> Element<'_, Message> {
-    let logo = row![
-        container(icon(&icons::DOWNLOAD, 18.0, |c| c.on_accent)).padding(8).style(style::logo),
-        text("BDownloader").size(18).font(BOLD),
-    ]
-    .spacing(12)
-    .align_y(Center);
+    let logo = container(
+        row![
+            container(icon(&icons::DOWNLOAD, 16.0, |c| c.on_accent)).center(28).style(style::logo),
+            text("BDownloader").size(16).font(SEMIBOLD),
+        ]
+        .spacing(10)
+        .align_y(Center),
+    )
+    .padding([0, 8]);
 
     let filter_item = |filter: Filter| {
         let handle = match filter {
@@ -109,31 +112,41 @@ fn sidebar(app: &App) -> Element<'_, Message> {
             Message::Filter(filter),
         )
     };
-    let filters = column(Filter::ALL.map(filter_item))
-        .spacing(4)
-        .push(container(muted("Categories").size(12).font(SEMIBOLD)).padding(Padding {
-            top: 18.0,
-            right: 12.0,
-            bottom: 6.0,
-            left: 12.0,
-        }))
-        .extend(Category::ALL.map(|category| filter_item(Filter::Category(category))));
+    // Only the kinds of file there are downloads of (and the one shown).
+    let kinds: Vec<Filter> = Category::ALL
+        .map(Filter::Category)
+        .into_iter()
+        .filter(|&kind| app.filter == kind || app.count(kind) > 0)
+        .collect();
+    let mut filters = column![filter_item(Filter::All), filter_item(Filter::Queue)].spacing(2);
+    if !kinds.is_empty() {
+        filters = filters
+            .push(container(muted("Types").size(12)).padding(Padding {
+                top: 16.0,
+                right: 10.0,
+                bottom: 6.0,
+                left: 10.0,
+            }))
+            .extend(kinds.into_iter().map(filter_item));
+    }
     // Scrolls when the window is too short for every entry.
-    let filters = scrollable(filters).height(Fill).spacing(4);
+    let filters = scrollable(filters).height(Fill).spacing(4).style(style::scrollbar);
 
     let footer = column![
-        nav_item(&icons::HEART, "Support BDownloader", None, false, Message::OpenSupport),
+        container(space()).width(Fill).height(1).style(style::rule),
+        space().height(8),
         nav_item(&icons::GLOBE, "Browser extension", None, false, Message::OpenExtension),
         nav_item(&icons::SETTINGS, "Settings", None, false, Message::OpenSettings),
+        nav_item(&icons::HEART, "Support BDownloader", None, false, Message::OpenSupport),
     ]
-    .spacing(4);
+    .spacing(2);
 
-    container(column![logo, space().height(32), filters, space().height(12), footer])
+    container(column![logo, space().height(26), filters, space().height(12), footer])
         .padding(Padding {
-            top: 24.0,
-            right: 14.0,
-            bottom: 18.0,
-            left: 14.0,
+            top: 20.0,
+            right: 12.0,
+            bottom: 14.0,
+            left: 12.0,
         })
         .width(SIDEBAR_WIDTH)
         .height(Fill)
@@ -142,18 +155,18 @@ fn sidebar(app: &App) -> Element<'_, Message> {
 }
 
 fn nav_item<'a>(handle: &icons::Handle, label: &'a str, count: Option<usize>, selected: bool, message: Message) -> Element<'a, Message> {
-    let pick: Pick = if selected { |c| c.accent } else { |c| c.muted };
+    let pick: Pick = if selected { |c| c.text } else { |c| c.muted };
     let mut content = row![
-        icon(handle, 18.0, pick),
+        icon(handle, 16.0, pick),
         text(label).size(14).font(if selected { SEMIBOLD } else { FONT }).width(Fill)
     ]
-    .spacing(12)
+    .spacing(10)
     .align_y(Center);
     if let Some(count) = count.filter(|&n| n > 0) {
-        content = content.push(colored(count.to_string(), pick).size(12).font(SEMIBOLD));
+        content = content.push(colored(count.to_string(), pick).size(12));
     }
     button(content)
-        .padding([9, 12])
+        .padding([8, 10])
         .width(Fill)
         .style(style::nav(selected))
         .on_press(message)
@@ -177,44 +190,47 @@ fn main_panel(app: &App) -> Element<'_, Message> {
         text_input("Search downloads", &app.search)
             .on_input(Message::Search)
             .padding(Padding {
-                top: 10.0,
+                top: 8.0,
                 right: 12.0,
-                bottom: 10.0,
-                left: 38.0,
+                bottom: 8.0,
+                left: 36.0,
             })
             .size(14)
             .style(style::input),
         container(icon(&icons::SEARCH, 16.0, |c| c.muted)).padding(Padding {
-            top: 12.0,
+            top: 10.0,
             right: 0.0,
             bottom: 0.0,
-            left: 13.0,
+            left: 12.0,
         }),
     ];
 
-    let title = column![text(app.filter.label()).size(26).font(BOLD), muted(subtitle).size(13)]
+    let title = column![text(app.filter.label()).size(20).font(SEMIBOLD), muted(subtitle).size(13)]
         .spacing(2)
         .width(Fill);
-    // Room next to the sidebar, without the panel's padding.
-    let room = app.width - SIDEBAR_WIDTH - 50.0;
-    let header: Element<'_, Message> = if room >= WIDE_HEADER {
-        row![title, speed_limit(app), when_done(app), search.width(260), add_button(true)]
-            .spacing(12)
-            .align_y(Center)
-            .into()
-    } else if room >= MEDIUM_HEADER {
-        // "Add download" turns into a + button to make room.
-        row![title, speed_limit(app), when_done(app), search.width(220), add_button(false)]
-            .spacing(12)
-            .align_y(Center)
-            .into()
+    // Room next to the sidebar.
+    let room = app.width - SIDEBAR_WIDTH;
+    let header = container(
+        row![title, search.width(if room >= 760.0 { 240 } else { 180 }), add_button(room >= 680.0)]
+            .spacing(8)
+            .align_y(Center),
+    )
+    .padding([16, 24]);
+    let divider = container(space()).width(Fill).height(1).style(style::rule);
+
+    // Under the header: the status tabs and the controls for all downloads,
+    // or the queue's own controls.
+    let toolbar: Element<'_, Message> = if app.filter == Filter::Queue {
+        queue_bar(app)
     } else {
-        column![
-            row![title, add_button(true)].spacing(12).align_y(Center),
-            row![speed_limit(app), when_done(app), search.width(Fill)].spacing(12).align_y(Center),
-        ]
-        .spacing(14)
-        .into()
+        let controls = row![speed_limit(app), when_done(app)].spacing(8).align_y(Center);
+        if app.items.is_empty() {
+            row![space().width(Fill), controls].into()
+        } else if room >= TOOLBAR_ONE_ROW {
+            row![status_tabs(app), space().width(Fill), controls].align_y(Center).into()
+        } else {
+            column![status_tabs(app), controls].spacing(10).into()
+        }
     };
 
     let items: Vec<&Item> = app.visible().collect();
@@ -223,34 +239,35 @@ fn main_panel(app: &App) -> Element<'_, Message> {
     } else if items.is_empty() {
         center(muted("Nothing here.").size(14)).into()
     } else {
-        scrollable(column(items.into_iter().map(download_card)).spacing(10).padding(Padding {
+        scrollable(column(items.into_iter().map(download_card)).spacing(8).padding(Padding {
             top: 0.0,
-            right: 14.0,
-            bottom: 8.0,
+            right: 12.0,
+            bottom: 14.0,
             left: 0.0,
         }))
         .height(Fill)
+        .style(style::scrollbar)
         .into()
     };
 
-    let mut content = column![header].spacing(24);
+    // Lined up with the cards, which leave room for the scrollbar.
+    let toolbar = container(toolbar).padding(Padding {
+        top: 0.0,
+        right: 12.0,
+        bottom: 0.0,
+        left: 0.0,
+    });
+    let mut body = column![toolbar].spacing(14);
     if let Some(banner) = update_banner(app) {
-        content = content.push(banner);
+        body = body.push(banner);
     }
-    if app.filter == Filter::Queue {
-        content = content.push(queue_bar(app));
-    }
-    content
-        .push(list)
-        .spacing(24)
-        .padding(Padding {
-            top: 28.0,
-            right: 18.0,
-            bottom: 18.0,
-            left: 32.0,
-        })
-        .width(Fill)
-        .into()
+    let body = body.push(list).padding(Padding {
+        top: 14.0,
+        right: 12.0,
+        bottom: 0.0,
+        left: 24.0,
+    });
+    column![header, divider, body].width(Fill).into()
 }
 
 /// Offers an update. Automatic updates stay silent unless the user started
@@ -307,20 +324,20 @@ fn speed_limit(app: &App) -> Element<'_, Message> {
     let toggle = button(
         row![
             icon(&icons::GAUGE, 16.0, if on { |c| c.accent } else { |c| c.muted }),
-            text(if on { "Limit" } else { "No speed limit" }).size(14),
+            text(if on { "Limit to" } else { "No speed limit" }).size(14).font(SEMIBOLD),
         ]
         .spacing(8)
         .align_y(Center),
     )
-    .padding([7, 10])
-    .style(style::nav(on))
+    .padding([5, 8])
+    .style(style::icon_button)
     .on_press(Message::LimitSpeed(!on));
     let mut control = row![toggle].spacing(6).align_y(Center);
     if on {
         control = control.push(
             text_input("5", &app.speed_limit_text)
                 .on_input(Message::SpeedLimit)
-                .padding([6, 8])
+                .padding([4, 8])
                 .size(14)
                 .width(56)
                 .style(style::input),
@@ -332,7 +349,27 @@ fn speed_limit(app: &App) -> Element<'_, Message> {
             left: 0.0,
         }));
     }
-    container(control).padding(3).style(style::panel).into()
+    container(control).padding(2).style(style::outline).into()
+}
+
+/// All · Downloading · Completed · Paused · Failed, within what the sidebar shows.
+fn status_tabs(app: &App) -> Element<'_, Message> {
+    let tabs = row(Filter::STATUSES.map(|status| {
+        let selected = app.status == status;
+        let label = if status == Filter::All { "All" } else { status.label() };
+        let mut content = row![text(label).size(14).font(SEMIBOLD)].spacing(6).align_y(Center);
+        let count = app.count_status(status);
+        if count > 0 {
+            content = content.push(muted(count.to_string()).size(12));
+        }
+        button(content)
+            .padding([5, 12])
+            .style(style::tab(selected))
+            .on_press(Message::Status(status))
+            .into()
+    }))
+    .spacing(2);
+    container(tabs).padding(4).style(style::panel).into()
 }
 
 /// Starts and stops the queue, and says how it runs.
@@ -356,11 +393,11 @@ fn queue_bar(app: &App) -> Element<'_, Message> {
     }
     let control = if app.queue_running {
         button(
-            row![icon(&icons::PAUSE, 15.0, |c| c.text), text("Stop queue").size(14)]
+            row![icon(&icons::PAUSE, 15.0, |c| c.text), text("Stop queue").size(14).font(SEMIBOLD)]
                 .spacing(8)
                 .align_y(Center),
         )
-        .padding([8, 14])
+        .padding([8, 12])
         .style(style::secondary)
         .on_press(Message::StopQueue)
     } else {
@@ -369,26 +406,21 @@ fn queue_bar(app: &App) -> Element<'_, Message> {
                 .spacing(8)
                 .align_y(Center),
         )
-        .padding([8, 14])
+        .padding([8, 12])
         .style(style::primary)
         .on_press_maybe((waiting > 0).then_some(Message::StartQueue))
     };
-    container(
-        row![
-            icon(&icons::CLOCK, 18.0, if app.queue_running { |c| c.accent } else { |c| c.muted }),
-            text(line).size(14).width(Fill),
-            button(text("Schedule").size(14))
-                .padding([8, 14])
-                .style(style::secondary)
-                .on_press(Message::OpenSettings),
-            control,
-        ]
-        .spacing(12)
-        .align_y(Center),
-    )
-    .padding([10, 14])
-    .width(Fill)
-    .style(style::panel)
+    row![
+        icon(&icons::CLOCK, 16.0, if app.queue_running { |c| c.accent } else { |c| c.muted }),
+        muted(line).size(14).width(Fill),
+        button(text("Schedule").size(14).font(SEMIBOLD))
+            .padding([8, 12])
+            .style(style::secondary)
+            .on_press(Message::SettingsTab(SettingsTab::Queue)),
+        control,
+    ]
+    .spacing(10)
+    .align_y(Center)
     .into()
 }
 
@@ -396,20 +428,22 @@ fn queue_bar(app: &App) -> Element<'_, Message> {
 fn when_done(app: &App) -> Element<'_, Message> {
     let on = app.when_done != WhenDone::Nothing;
     let choice = pick_list(&WhenDone::ALL[..], Some(app.when_done), Message::WhenDone)
-        .padding([6, 8])
-        .text_size(14);
+        .padding([5, 8])
+        .text_size(14)
+        .font(SEMIBOLD)
+        .style(style::bare_pick_list);
     container(
         row![icon(&icons::POWER, 16.0, if on { |c| c.accent } else { |c| c.muted }), choice]
-            .spacing(6)
+            .spacing(2)
             .align_y(Center),
     )
     .padding(Padding {
-        top: 3.0,
-        right: 3.0,
-        bottom: 3.0,
+        top: 2.0,
+        right: 2.0,
+        bottom: 2.0,
         left: 10.0,
     })
-    .style(style::panel)
+    .style(style::outline)
     .into()
 }
 
@@ -420,7 +454,7 @@ fn add_button<'a>(with_label: bool) -> Element<'a, Message> {
         content = content.push(text("Add download").size(14).font(SEMIBOLD));
     }
     button(content)
-        .padding(if with_label { [10, 18] } else { [10, 12] })
+        .padding(if with_label { [9, 14] } else { [9, 10] })
         .style(style::primary)
         .on_press(Message::OpenAdd)
         .into()
@@ -444,97 +478,96 @@ fn empty_state<'a>() -> Element<'a, Message> {
     .into()
 }
 
-/// Badge color by kind of file, the same in both themes.
-pub fn kind_color(extension: &str) -> Color {
-    let rgb = |r, g, b| Color::from_rgb8(r, g, b);
-    match extension {
-        "MP4" | "MKV" | "AVI" | "MOV" | "WEBM" | "WMV" | "FLV" | "M4V" => rgb(0xec, 0x48, 0x99),
-        "MP3" | "FLAC" | "WAV" | "AAC" | "OGG" | "M4A" | "OPUS" => rgb(0xf5, 0x9e, 0x0b),
-        "ZIP" | "RAR" | "7Z" | "TAR" | "GZ" | "XZ" | "BZ2" | "ZST" => rgb(0x8b, 0x5c, 0xf6),
-        "PDF" | "DOC" | "DOCX" | "TXT" | "XLS" | "XLSX" | "PPT" | "PPTX" | "EPUB" | "CSV" => rgb(0x3b, 0x82, 0xf6),
-        "EXE" | "MSI" | "APK" | "DMG" | "DEB" | "RPM" | "APPX" | "MSIX" => rgb(0x10, 0xb9, 0x81),
-        "JPG" | "JPEG" | "PNG" | "GIF" | "WEBP" | "SVG" | "BMP" | "HEIC" => rgb(0x14, 0xb8, 0xa6),
-        "ISO" | "IMG" | "BIN" | "VHD" | "VHDX" => rgb(0xef, 0x44, 0x44),
-        _ => rgb(0x64, 0x74, 0x8b),
-    }
+/// The file's type, in a quiet square.
+pub fn file_badge<'a>(extension: String) -> Element<'a, Message> {
+    badge(extension, false)
 }
 
-pub fn file_badge<'a>(extension: String) -> Element<'a, Message> {
-    let color = kind_color(&extension);
-    container(text(extension).size(11).font(BOLD))
-        .center(44)
-        .style(style::tinted(color, 12.0))
+fn badge<'a>(extension: String, failed: bool) -> Element<'a, Message> {
+    container(text(extension).size(10).font(BOLD))
+        .center(36)
+        .style(style::file_badge(failed))
         .into()
+}
+
+/// What a download is doing: the word in its status pill and its colour,
+/// then the details beside it and theirs.
+fn status(item: &Item) -> (&'static str, Pick, String, Pick) {
+    let sizes = || match (item.downloaded, item.size) {
+        (0, Some(size)) => format::size(size),
+        (0, None) => String::new(),
+        (done, Some(size)) => format!("{} of {}", format::size(done), format::size(size)),
+        (done, None) => format::size(done),
+    };
+    match &item.state {
+        State::Paused | State::Failed(_) if item.awaiting_link => (
+            "Waiting for link",
+            |c| c.accent,
+            "Click the download again in your browser".into(),
+            |c| c.muted,
+        ),
+        State::Starting => ("Connecting", |c| c.accent, sizes(), |c| c.muted),
+        // Only once data has stopped, so a brief reconnect while others keep going doesn't flash.
+        State::Downloading if item.problem.is_some() && item.speed.rate() < 1024.0 => (
+            "Reconnecting",
+            |c| c.warning,
+            capitalize(item.problem.as_deref().unwrap_or_default()),
+            |c| c.muted,
+        ),
+        State::Downloading => ("Downloading", |c| c.accent, downloading_text(item), |c| c.muted),
+        State::Verifying => ("Verifying", |c| c.accent, "Checking the checksum".into(), |c| c.muted),
+        State::Paused if item.queued => ("Queued", |c| c.muted, sizes(), |c| c.muted),
+        State::Paused => ("Paused", |c| c.warning, sizes(), |c| c.muted),
+        State::Completed => (
+            "Completed",
+            |c| c.success,
+            format!("{} · {}", item.size.map(format::size).unwrap_or_default(), item.host()),
+            |c| c.muted,
+        ),
+        State::Failed(error) if item.link_may_have_expired() => (
+            "Failed",
+            |c| c.danger,
+            format!("{} · the link may have expired", capitalize(error)),
+            |c| c.danger,
+        ),
+        State::Failed(error) => ("Failed", |c| c.danger, capitalize(error), |c| c.danger),
+    }
 }
 
 fn download_card(item: &Item) -> Element<'_, Message> {
     let id = item.id;
-    let (status_pick, status): (Pick, String) = match &item.state {
-        State::Paused | State::Failed(_) if item.awaiting_link => {
-            (|c| c.accent, "Waiting for a new link: click the download again in your browser".into())
-        }
-        State::Starting => (|c| c.accent, "Connecting…".into()),
-        // Only once data has stopped, so a brief reconnect while others keep going doesn't flash.
-        State::Downloading if item.problem.is_some() && item.speed.rate() < 1024.0 => (
-            |c| c.warning,
-            format!("Reconnecting… {}", capitalize(item.problem.as_deref().unwrap_or_default())),
-        ),
-        State::Downloading => (|c| c.accent, downloading_text(item)),
-        State::Verifying => (|c| c.accent, "Verifying checksum…".into()),
-        State::Paused if item.queued => (
-            |c| c.muted,
-            match (item.downloaded, item.size) {
-                (0, Some(size)) => format!("Waiting in the queue · {}", format::size(size)),
-                (0, None) => "Waiting in the queue".into(),
-                (done, Some(size)) => format!("Waiting in the queue · {} of {}", format::size(done), format::size(size)),
-                (done, None) => format!("Waiting in the queue · {}", format::size(done)),
-            },
-        ),
-        State::Paused => (
-            |c| c.warning,
-            match (item.downloaded, item.size) {
-                (0, _) => "Paused".into(),
-                (done, Some(size)) => format!("Paused · {} of {}", format::size(done), format::size(size)),
-                (done, None) => format!("Paused · {}", format::size(done)),
-            },
-        ),
-        State::Completed => (
-            |c| c.success,
-            format!("{} · {}", item.size.map(format::size).unwrap_or_default(), item.host()),
-        ),
-        State::Failed(error) if item.link_may_have_expired() => (
-            |c| c.danger,
-            format!("{} · The link may have expired: use Refresh link", capitalize(error)),
-        ),
-        State::Failed(error) => (|c| c.danger, capitalize(error)),
-    };
+    let failed = matches!(item.state, State::Failed(_));
+    let (word, word_pick, detail, detail_pick) = status(item);
 
     let name = text(format::middle_ellipsis(&item.display_name(), 70))
         .size(15)
         .font(SEMIBOLD)
         .wrapping(text::Wrapping::None);
-    let meta = colored(
-        status,
-        if item.state == State::Completed {
-            |c: &Colors| c.muted
-        } else {
-            status_pick
-        },
+    let pill = container(
+        row![
+            container(space()).width(6).height(6).style(style::dot(word_pick)),
+            text(word).size(12).font(SEMIBOLD)
+        ]
+        .spacing(6)
+        .align_y(Center),
     )
-    .size(13)
-    .wrapping(text::Wrapping::None);
+    .padding([1, 8])
+    .style(style::pill);
+    let meta = row![pill, colored(detail, detail_pick).size(13).wrapping(text::Wrapping::None)]
+        .spacing(8)
+        .align_y(Center);
 
     let mut actions = row![].spacing(2).align_y(Center);
     if item.state.is_running() {
-        actions = actions.push(colored(format!("{:.0}%", item.fraction() * 100.0), |c| c.accent).size(14).font(SEMIBOLD));
-        actions = actions.push(Space::new().width(8));
+        actions = actions.push(text(format!("{:.0}%", item.fraction() * 100.0)).size(14).font(SEMIBOLD));
+        actions = actions.push(Space::new().width(6));
         actions = actions.push(action(&icons::PAUSE, "Pause", Message::Pause(id)));
     }
     // A fresh link only helps a download that already has part of a known-size file.
     let refreshable = item.size.is_some() && item.downloaded > 0 && item.file_name.is_some();
     match &item.state {
         State::Paused if item.queued => {
-            actions = actions.push(action(&icons::PLAY, "Start now", Message::Resume(id)));
+            actions = actions.push(text_action(None, "Start now", Message::Resume(id)));
         }
         State::Paused => {
             actions = actions.push(action(&icons::PLAY, "Resume", Message::Resume(id)));
@@ -543,12 +576,14 @@ fn download_card(item: &Item) -> Element<'_, Message> {
                 actions = actions.push(action(&icons::LINK, "Refresh link", Message::OpenRefresh(id)));
             }
         }
-        State::Failed(_) => {
+        State::Failed(_) if refreshable => {
+            actions = actions.push(text_action(Some(&icons::LINK), "Refresh link", Message::OpenRefresh(id)));
             actions = actions.push(action(&icons::RETRY, "Try again", Message::Resume(id)));
             actions = actions.push(action(&icons::CLOCK, "Try again later (add to queue)", Message::Enqueue(id)));
-            if refreshable {
-                actions = actions.push(action(&icons::LINK, "Refresh link", Message::OpenRefresh(id)));
-            }
+        }
+        State::Failed(_) => {
+            actions = actions.push(text_action(Some(&icons::RETRY), "Try again", Message::Resume(id)));
+            actions = actions.push(action(&icons::CLOCK, "Try again later (add to queue)", Message::Enqueue(id)));
         }
         State::Completed => {
             actions = actions.push(action(&icons::OPEN, "Open", Message::OpenFile(id)));
@@ -560,16 +595,33 @@ fn download_card(item: &Item) -> Element<'_, Message> {
     let remove_tip = if item.state == State::Completed { "Remove" } else { "Cancel and remove" };
     actions = actions.push(action(&icons::TRASH, remove_tip, Message::Remove(id)));
 
-    let top = row![file_badge(item.extension()), column![name, meta].spacing(4).width(Fill), actions]
+    let top = row![badge(item.extension(), failed), column![name, meta].spacing(5).width(Fill), actions]
         .spacing(14)
         .align_y(Center);
 
-    let mut body = column![top].spacing(14);
-    let never_started = matches!(item.state, State::Failed(_)) && item.downloaded == 0;
-    if item.state != State::Completed && !never_started {
+    let mut body = column![top].spacing(12);
+    let never_started = failed && item.downloaded == 0;
+    if item.state != State::Completed && !never_started && !(item.queued && item.downloaded == 0) {
         body = body.push(progress(item));
     }
-    container(body).padding([16, 18]).width(Fill).style(style::card).into()
+    container(body)
+        .padding([14, 16])
+        .width(Fill)
+        .style(if failed { style::card_alert } else { style::card })
+        .into()
+}
+
+/// An outline button with words: the next step a download is waiting for.
+fn text_action<'a>(handle: Option<&icons::Handle>, label: &'a str, message: Message) -> Element<'a, Message> {
+    let mut content = row![].spacing(6).align_y(Center);
+    if let Some(handle) = handle {
+        content = content.push(icon(handle, 15.0, |c| c.text));
+    }
+    button(content.push(text(label).size(13).font(SEMIBOLD)))
+        .padding([6, 10])
+        .style(style::secondary)
+        .on_press(message)
+        .into()
 }
 
 fn capitalize(text: &str) -> String {
@@ -619,6 +671,7 @@ fn action<'a>(handle: &icons::Handle, tip: &'a str, message: Message) -> Element
 /// part of the file separately, so you can see the connections fill it in.
 fn progress(item: &Item) -> Element<'_, Message> {
     let pick: Pick = match item.state {
+        State::Paused if item.queued => |c| c.muted,
         State::Paused => |c| c.warning,
         State::Failed(_) => |c| c.danger,
         _ => |c| c.accent,

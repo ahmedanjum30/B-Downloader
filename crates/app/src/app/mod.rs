@@ -9,6 +9,7 @@ mod downloads;
 mod power;
 mod queue;
 mod refresh;
+mod report;
 mod settings;
 mod updates;
 
@@ -25,7 +26,8 @@ use iced::{Subscription, Task, Theme, clipboard, system, time, window};
 pub use add::{AddDialog, Probe};
 pub use power::WhenDone;
 pub use refresh::RefreshDialog;
-pub use settings::MAX_AT_ONCE;
+pub use report::ReportDialog;
+pub use settings::{MAX_AT_ONCE, SettingsTab};
 pub use updates::Update;
 
 use crate::item::{Item, State};
@@ -71,14 +73,8 @@ pub enum Filter {
 }
 
 impl Filter {
-    pub const ALL: [Filter; 6] = [
-        Filter::All,
-        Filter::Active,
-        Filter::Queue,
-        Filter::Completed,
-        Filter::Paused,
-        Filter::Failed,
-    ];
+    /// The tabs above the list, which narrow down what the sidebar shows.
+    pub const STATUSES: [Filter; 5] = [Filter::All, Filter::Active, Filter::Completed, Filter::Paused, Filter::Failed];
 
     pub fn label(self) -> &'static str {
         match self {
@@ -119,6 +115,8 @@ pub enum Modal {
         id: u64,
         delete_file: bool,
     },
+    /// Report a problem.
+    Report(Box<ReportDialog>),
     /// The downloads are done; the PC sleeps or shuts down at `deadline`.
     PowerCountdown {
         action: WhenDone,
@@ -134,7 +132,10 @@ pub enum Message {
     TrimMemory,
     Removed,
 
+    /// What the sidebar shows: all downloads, the queue or one type.
     Filter(Filter),
+    /// The status tab above the list.
+    Status(Filter),
     Search(String),
     Pause(u64),
     Resume(u64),
@@ -186,6 +187,14 @@ pub enum Message {
     SettingsAutoUpdate(bool),
     SettingsSortByType(bool),
     SaveSettings,
+
+    /// Show Settings at this section, opening it if needed.
+    SettingsTab(SettingsTab),
+    OpenReport,
+    ReportEdit(iced::widget::text_editor::Action),
+    ReportIncludeLog(bool),
+    /// Open the filled-in report on GitHub.
+    SendReport,
 
     /// Save the download in the Add dialog to the queue instead of starting it.
     ConfirmAddLater,
@@ -250,7 +259,10 @@ pub struct App {
     pub engine: Engine,
     pub settings: Settings,
     pub items: Vec<Item>,
+    /// What the sidebar shows.
     pub filter: Filter,
+    /// The status tab, within what the sidebar shows.
+    pub status: Filter,
     pub search: String,
     pub modal: Option<Modal>,
     system_dark: bool,
@@ -286,6 +298,8 @@ pub struct App {
     clock_minute: Option<u32>,
     /// The speed limit in a download's details, as typed.
     pub item_limit_text: String,
+    /// The section Settings shows.
+    pub settings_tab: SettingsTab,
 }
 
 impl App {
@@ -301,6 +315,7 @@ impl App {
             settings,
             items,
             filter: Filter::All,
+            status: Filter::All,
             search: String::new(),
             modal: None,
             system_dark: true,
@@ -321,6 +336,7 @@ impl App {
             queue_running: false,
             clock_minute: Some(queue::local_minute()),
             item_limit_text: String::new(),
+            settings_tab: SettingsTab::General,
         };
         // `BDownloader.exe URL...` starts those downloads right away.
         for url in std::env::args().skip(1).filter(|a| a.starts_with("http://") || a.starts_with("https://")) {
@@ -406,13 +422,23 @@ impl App {
         self.items.iter().filter(|i| filter.matches(i)).count()
     }
 
+    /// Downloads in a status tab, within what the sidebar shows.
+    pub fn count_status(&self, status: Filter) -> usize {
+        self.items.iter().filter(|i| self.filter.matches(i) && status.matches(i)).count()
+    }
+
+    /// Shows these downloads (from the sidebar), in every state.
+    fn show(&mut self, filter: Filter) {
+        self.filter = filter;
+        self.status = Filter::All;
+    }
+
     /// Items shown for the current filter and search, newest first.
     pub fn visible(&self) -> impl Iterator<Item = &Item> {
         let search = self.search.trim().to_lowercase();
-        self.items
-            .iter()
-            .rev()
-            .filter(move |i| self.filter.matches(i) && (search.is_empty() || i.display_name().to_lowercase().contains(&search)))
+        self.items.iter().rev().filter(move |i| {
+            self.filter.matches(i) && self.status.matches(i) && (search.is_empty() || i.display_name().to_lowercase().contains(&search))
+        })
     }
 
     fn item(&mut self, id: u64) -> Option<&mut Item> {
@@ -498,7 +524,11 @@ impl App {
             | Message::QueueClock
             | Message::ItemLimit(..)
             | Message::ItemLimitText(..)) => return self.handle_queue(m),
+            m @ (Message::OpenReport | Message::ReportEdit(_) | Message::ReportIncludeLog(_) | Message::SendReport) => {
+                return self.handle_report(m);
+            }
             m @ (Message::OpenSettings
+            | Message::SettingsTab(_)
             | Message::SettingsConnections(_)
             | Message::LimitSpeed(_)
             | Message::SpeedLimit(_)
@@ -573,7 +603,8 @@ impl App {
             }
             Message::Removed => {}
 
-            Message::Filter(filter) => self.filter = filter,
+            Message::Filter(filter) => self.show(filter),
+            Message::Status(status) => self.status = status,
             Message::Search(search) => self.search = search,
             Message::OpenExtension => self.modal = Some(Modal::Extension(browser::Browser::Chrome)),
             Message::OpenSupport => store::open_file(std::path::Path::new(SUPPORT_URL)),
@@ -606,7 +637,7 @@ impl App {
                 Request::Hello { .. } => self.extension_connected(),
                 Request::Add(add) if add.start => {
                     self.add(add);
-                    self.filter = Filter::All;
+                    self.show(Filter::All);
                     return self.show_window();
                 }
                 // From the browser: ask where to save it first. Several queue up.

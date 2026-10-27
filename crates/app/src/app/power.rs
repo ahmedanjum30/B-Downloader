@@ -27,9 +27,9 @@ impl WhenDone {
 impl std::fmt::Display for WhenDone {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.write_str(match self {
-            WhenDone::Nothing => "Do nothing when done",
-            WhenDone::Sleep => "Sleep when done",
-            WhenDone::ShutDown => "Shut down when done",
+            WhenDone::Nothing => "When done: nothing",
+            WhenDone::Sleep => "When done: sleep",
+            WhenDone::ShutDown => "When done: shut down",
         })
     }
 }

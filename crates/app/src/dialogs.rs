@@ -3,10 +3,10 @@
 use std::path::Path;
 
 use bdownloader_core::MAX_CONNECTIONS;
-use iced::widget::{button, checkbox, column, container, pick_list, row, scrollable, slider, space, text, text_input};
+use iced::widget::{button, checkbox, column, container, pick_list, row, scrollable, slider, space, text, text_editor, text_input};
 use iced::{Center, Element, Fill, Shrink};
 
-use crate::app::{AddDialog, MAX_AT_ONCE, Message, Probe, RefreshDialog, WhenDone};
+use crate::app::{AddDialog, MAX_AT_ONCE, Message, Probe, RefreshDialog, ReportDialog, SettingsTab, WhenDone};
 use crate::browser::Browser;
 use crate::format;
 use crate::icons::{self, icon};
@@ -16,6 +16,10 @@ use crate::style;
 use crate::view::{BOLD, SEMIBOLD, colored, file_badge, muted};
 
 fn frame<'a>(title: &'a str, body: Element<'a, Message>, footer: Element<'a, Message>) -> Element<'a, Message> {
+    sized_frame(title, body, footer, 540.0)
+}
+
+fn sized_frame<'a>(title: &'a str, body: Element<'a, Message>, footer: Element<'a, Message>, width: f32) -> Element<'a, Message> {
     let header = row![
         text(title).size(20).font(BOLD).width(Fill),
         button(icon(&icons::CLOSE, 18.0, |c| c.muted))
@@ -26,10 +30,12 @@ fn frame<'a>(title: &'a str, body: Element<'a, Message>, footer: Element<'a, Mes
     .align_y(Center);
     let dialog = container(column![header, body, footer].spacing(22))
         .padding(26)
-        .width(540)
+        .width(width)
         .style(style::dialog);
     // Scrolls when the window is too short for it, instead of being cut off.
-    container(scrollable(dialog).height(Shrink).spacing(6)).padding(16).into()
+    container(scrollable(dialog).height(Shrink).spacing(6).style(style::scrollbar))
+        .padding(16)
+        .into()
 }
 
 fn field<'a>(label: &'a str, content: impl Into<Element<'a, Message>>) -> Element<'a, Message> {
@@ -78,17 +84,22 @@ fn stepper<'a>(value: usize, max: usize, on_change: fn(usize) -> Message) -> Ele
 fn footer<'a>(confirm: &'a str, on_confirm: Option<Message>) -> Element<'a, Message> {
     row![
         space().width(Fill),
-        button(text("Cancel").size(14))
-            .padding([10, 18])
-            .style(style::secondary)
-            .on_press(Message::CloseModal),
+        cancel(),
         button(text(confirm).size(14).font(SEMIBOLD))
-            .padding([10, 20])
+            .padding([9, 16])
             .style(style::primary)
             .on_press_maybe(on_confirm),
     ]
-    .spacing(10)
+    .spacing(8)
     .into()
+}
+
+fn cancel<'a>() -> Element<'a, Message> {
+    button(text("Cancel").size(14).font(SEMIBOLD))
+        .padding([9, 14])
+        .style(style::ghost)
+        .on_press(Message::CloseModal)
+        .into()
 }
 
 /// `existing`: an unfinished download of the same file (its id and how much
@@ -201,12 +212,9 @@ pub fn add(dialog: &AddDialog, existing: Option<(u64, u64)>) -> Element<'_, Mess
 
     let footer = row![
         space().width(Fill),
-        button(text("Cancel").size(14))
-            .padding([10, 18])
-            .style(style::secondary)
-            .on_press(Message::CloseModal),
-        button(text("Download later").size(14))
-            .padding([10, 18])
+        cancel(),
+        button(text("Download later").size(14).font(SEMIBOLD))
+            .padding([9, 14])
             .style(style::secondary)
             .on_press_maybe(dialog.can_submit().then_some(Message::ConfirmAddLater)),
         button(text("Download").size(14).font(SEMIBOLD))
@@ -218,34 +226,43 @@ pub fn add(dialog: &AddDialog, existing: Option<(u64, u64)>) -> Element<'_, Mess
     frame("Add download", body.into(), footer.into())
 }
 
-fn updates<'a>(draft: &Settings, status: String) -> Element<'a, Message> {
-    let logs = row![
-        muted("Something not working? The log helps find out why.").size(12).width(Fill),
-        button(text("Open log folder").size(13))
-            .padding([7, 14])
-            .style(style::secondary)
-            .on_press(Message::OpenLogs),
-    ]
-    .spacing(12)
-    .align_y(Center);
-    let version = format!("Version {}", env!("CARGO_PKG_VERSION"));
-    if crate::update::is_packaged() {
-        return column![muted(format!("{version} · Updates come from the Microsoft Store.")).size(13), logs]
-            .spacing(8)
-            .into();
-    }
-    let mode = row([(true, "Install automatically"), (false, "Ask me first")].map(|(auto, label)| {
+/// A line explaining the setting above it.
+fn hint<'a>(content: &'a str) -> Element<'a, Message> {
+    muted(content).size(12).into()
+}
+
+fn choices<'a, T: Copy + PartialEq>(options: &[(T, &'a str)], current: T, on_press: fn(T) -> Message) -> Element<'a, Message> {
+    let buttons = row(options.iter().map(|&(value, label)| {
         button(text(label).size(14).width(Fill).center())
             .padding([8, 12])
             .width(Fill)
-            .style(style::nav(draft.auto_update == auto))
-            .on_press(Message::SettingsAutoUpdate(auto))
+            .style(style::tab(current == value))
+            .on_press(on_press(value))
             .into()
     }))
     .spacing(4);
+    container(buttons).padding(4).style(style::panel).into()
+}
+
+fn updates<'a>(draft: &Settings, status: String) -> Element<'a, Message> {
+    let version = format!("Version {}", env!("CARGO_PKG_VERSION"));
+    if crate::update::is_packaged() {
+        return column![muted(format!("{version} · Updates come from the Microsoft Store.")).size(13)].into();
+    }
     let status = if status.is_empty() { version } else { format!("{version} · {status}") };
     column![
-        container(mode).padding(4).style(style::panel),
+        field(
+            "New versions",
+            column![
+                choices(
+                    &[(true, "Install automatically"), (false, "Ask me first")],
+                    draft.auto_update,
+                    Message::SettingsAutoUpdate
+                ),
+                hint("Automatic updates install while nothing is downloading and no dialog is open."),
+            ]
+            .spacing(8)
+        ),
         row![
             muted(status).size(13).width(Fill),
             button(text("Check now").size(13))
@@ -255,10 +272,48 @@ fn updates<'a>(draft: &Settings, status: String) -> Element<'a, Message> {
         ]
         .spacing(12)
         .align_y(Center),
-        muted("Automatic updates install while nothing is downloading and no dialog is open.").size(12),
-        logs,
     ]
-    .spacing(8)
+    .spacing(18)
+    .into()
+}
+
+fn help<'a>() -> Element<'a, Message> {
+    column![
+        field(
+            "Something not working?",
+            column![
+                hint(
+                    "Tell us what happened. It opens a report on GitHub, filled in with your app and Windows \
+                     versions and BDownloader's log, for you to check before sending."
+                ),
+                row![
+                    button(text("Report a problem").size(14).font(SEMIBOLD))
+                        .padding([9, 16])
+                        .style(style::primary)
+                        .on_press(Message::OpenReport),
+                ],
+            ]
+            .spacing(10)
+        ),
+        field(
+            "Log",
+            column![
+                hint("A record of connection errors, retries and updates. Links are kept without their tokens, and cookies never."),
+                row![
+                    button(text("Open log folder").size(14))
+                        .padding([9, 16])
+                        .style(style::secondary)
+                        .on_press(Message::OpenLogs),
+                ],
+            ]
+            .spacing(10)
+        ),
+        field(
+            "Questions and ideas",
+            hint("Ask in Discussions on GitHub: github.com/ahmedanjum30/BDownloader/discussions"),
+        ),
+    ]
+    .spacing(22)
     .into()
 }
 
@@ -283,78 +338,171 @@ fn queue_settings(draft: &Settings) -> Element<'_, Message> {
         line
     };
     column![
-        row![
-            muted("At the same time").size(13).width(120),
-            stepper(draft.queue_at_once, MAX_AT_ONCE, Message::SettingsQueueAtOnce),
-        ]
-        .spacing(12)
-        .align_y(Center),
-        time(
-            draft.queue_start_daily,
-            "Start the queue every day at",
-            &draft.queue_start,
-            Message::SettingsQueueStartDaily,
-            Message::SettingsQueueStart,
+        hint("Downloads you add with Download later wait in the queue, under Queue in the sidebar."),
+        field(
+            "Downloads at the same time",
+            column![
+                stepper(draft.queue_at_once, MAX_AT_ONCE, Message::SettingsQueueAtOnce),
+                hint("The queue starts the next download as each one finishes."),
+            ]
+            .spacing(8)
         ),
-        time(
-            draft.queue_stop_daily,
-            "Stop it every day at",
-            &draft.queue_stop,
-            Message::SettingsQueueStopDaily,
-            Message::SettingsQueueStop,
+        field(
+            "Schedule",
+            column![
+                time(
+                    draft.queue_start_daily,
+                    "Start the queue every day at",
+                    &draft.queue_start,
+                    Message::SettingsQueueStartDaily,
+                    Message::SettingsQueueStart,
+                ),
+                time(
+                    draft.queue_stop_daily,
+                    "Stop it every day at",
+                    &draft.queue_stop,
+                    Message::SettingsQueueStopDaily,
+                    Message::SettingsQueueStop,
+                ),
+                hint("24-hour time. BDownloader has to be running then; it can be in the tray."),
+            ]
+            .spacing(10)
         ),
-        muted("Add downloads to the queue with Download later. BDownloader must be running (it can be in the tray).").size(12),
     ]
-    .spacing(10)
+    .spacing(22)
     .into()
 }
 
-pub fn settings(draft: &Settings, update_status: String) -> Element<'_, Message> {
-    let themes = row([
-        (ThemeChoice::System, "System"),
-        (ThemeChoice::Dark, "Dark"),
-        (ThemeChoice::Light, "Light"),
-    ]
-    .map(|(choice, label)| {
-        button(text(label).size(14).width(Fill).center())
-            .padding([8, 12])
-            .width(Fill)
-            .style(style::nav(draft.theme == choice))
-            .on_press(Message::SettingsTheme(choice))
-            .into()
-    }))
-    .spacing(4);
-
-    let on_close = row([(true, "Keep running in the tray"), (false, "Exit BDownloader")].map(|(to_tray, label)| {
-        button(text(label).size(14).width(Fill).center())
-            .padding([8, 12])
-            .width(Fill)
-            .style(style::nav(draft.close_to_tray == to_tray))
-            .on_press(Message::SettingsCloseToTray(to_tray))
-            .into()
-    }))
-    .spacing(4);
-
+fn general(draft: &Settings) -> Element<'_, Message> {
     let sort = checkbox(draft.sort_by_type)
-        .label("Sort into folders by type: Compressed, Documents, Music, Programs, Video")
+        .label("Sort downloads into folders by type")
         .on_toggle(Message::SettingsSortByType)
         .size(18)
         .text_size(14)
         .spacing(10);
-    let body = column![
-        field("Default download folder", column![folder_picker(&draft.download_dir), sort].spacing(10)),
+    column![
+        field(
+            "Download folder",
+            column![
+                folder_picker(&draft.download_dir),
+                sort,
+                hint("Compressed, Documents, Music, Programs and Video folders inside it. A folder you pick for a download is used as it is."),
+            ]
+            .spacing(10)
+        ),
+        field(
+            "Theme",
+            choices(
+                &[
+                    (ThemeChoice::System, "System"),
+                    (ThemeChoice::Dark, "Dark"),
+                    (ThemeChoice::Light, "Light")
+                ],
+                draft.theme,
+                Message::SettingsTheme
+            )
+        ),
+        field(
+            "When I close the window",
+            column![
+                choices(
+                    &[(true, "Keep running in the tray"), (false, "Exit BDownloader")],
+                    draft.close_to_tray,
+                    Message::SettingsCloseToTray
+                ),
+                hint("In the tray, BDownloader still takes downloads from the browser and runs the queue's schedule."),
+            ]
+            .spacing(8)
+        ),
+    ]
+    .spacing(22)
+    .into()
+}
+
+fn downloads(draft: &Settings) -> Element<'_, Message> {
+    column![
         field(
             "Connections per download",
-            stepper(draft.connections, MAX_CONNECTIONS, Message::SettingsConnections)
+            column![
+                stepper(draft.connections, MAX_CONNECTIONS, Message::SettingsConnections),
+                hint(
+                    "Each file downloads in parts over up to this many connections, adding them while the server keeps up. \
+                     Sites that allow fewer get fewer."
+                ),
+            ]
+            .spacing(8)
         ),
-        field("Download queue", queue_settings(draft)),
-        field("Theme", container(themes).padding(4).style(style::panel)),
-        field("When I close the window", container(on_close).padding(4).style(style::panel)),
-        field("Updates", updates(draft, update_status)),
+        field(
+            "Speed limits",
+            hint("For all downloads together: the gauge button in the top bar. For one download: its details (the i button)."),
+        ),
+    ]
+    .spacing(22)
+    .into()
+}
+
+pub fn settings(draft: &Settings, update_status: String, tab: SettingsTab) -> Element<'_, Message> {
+    let tabs = column(SettingsTab::ALL.map(|t| {
+        button(text(t.label()).size(14).font(if t == tab { SEMIBOLD } else { crate::view::FONT }))
+            .padding([8, 10])
+            .width(Fill)
+            .style(style::nav(t == tab))
+            .on_press(Message::SettingsTab(t))
+            .into()
+    }))
+    .spacing(2)
+    .width(140);
+    let (content, about) = match tab {
+        SettingsTab::General => (general(draft), "Where downloads go and how BDownloader looks."),
+        SettingsTab::Downloads => (downloads(draft), "How each download uses your connection."),
+        SettingsTab::Queue => (queue_settings(draft), "Downloads saved for later, and when they run."),
+        SettingsTab::Updates => (updates(draft, update_status), "How BDownloader stays up to date."),
+        SettingsTab::Help => (help(), "Report a problem, or find the log."),
+    };
+    let section = column![
+        column![text(tab.label()).size(18).font(SEMIBOLD), muted(about).size(13)].spacing(2),
+        container(space()).width(Fill).height(1).style(style::rule),
+        content,
     ]
     .spacing(18);
+    let body = row![tabs, container(section).width(Fill)].spacing(26);
+    sized_frame("Settings", body.into(), footer("Save changes", Some(Message::SaveSettings)), 760.0)
+}
 
-    frame("Settings", body.into(), footer("Save", Some(Message::SaveSettings)))
+/// Report a problem: what happened, and whether the log goes along.
+pub fn report(dialog: &ReportDialog) -> Element<'_, Message> {
+    let body = column![
+        field(
+            "What went wrong?",
+            column![
+                text_editor(&dialog.description)
+                    .placeholder("For example: the download from this site stops at 50% and says the link expired.")
+                    .on_action(Message::ReportEdit)
+                    .height(140)
+                    .padding(12)
+                    .size(14),
+                hint("The first line becomes the report's title."),
+            ]
+            .spacing(8)
+        ),
+        checkbox(dialog.include_log)
+            .label("Include BDownloader's log (the latest part)")
+            .on_toggle(Message::ReportIncludeLog)
+            .size(18)
+            .text_size(14)
+            .spacing(10),
+        hint(
+            "It opens on GitHub in your browser, with your app and Windows versions added. Reports are public: \
+             check it there, then click Submit. Your Windows user name is taken out of the log; you need a GitHub account."
+        ),
+    ]
+    .spacing(16);
+    let can_send = !dialog.description.text().trim().is_empty();
+    frame(
+        "Report a problem",
+        body.into(),
+        footer("Open on GitHub", can_send.then_some(Message::SendReport)),
+    )
 }
 
 /// The downloads are done; the PC sleeps or shuts down unless cancelled.
@@ -441,7 +589,7 @@ pub fn extension<'a>(browser: Browser, connected: bool, copied: Option<&str>) ->
         button(text(b.name()).size(13).width(Fill).center())
             .padding([7, 4])
             .width(Fill)
-            .style(style::nav(b == browser))
+            .style(style::tab(b == browser))
             .on_press(Message::ExtensionBrowser(b))
             .into()
     }))
@@ -781,7 +929,7 @@ pub fn details<'a>(item: &'a Item, copied: Option<&str>, limit_text: &'a str) ->
     ]
     .spacing(10);
 
-    frame("Download details", scrollable(body).into(), footer.into())
+    frame("Download details", scrollable(body).style(style::scrollbar).into(), footer.into())
 }
 
 /// What's about to be downloaded: a file-type badge, the size and how it downloads.

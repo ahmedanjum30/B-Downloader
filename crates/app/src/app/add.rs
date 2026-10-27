@@ -226,10 +226,10 @@ impl App {
                         item.size = source.video.iter().chain(&source.audio).map(|f| f.content_length).sum();
                     }
                     if later {
-                        self.filter = Filter::Queue;
+                        self.show(Filter::Queue);
                         self.run_queue();
                     } else {
-                        self.filter = Filter::All;
+                        self.show(Filter::All);
                     }
                 }
             }
@@ -245,7 +245,7 @@ impl App {
                         item.new_link = true;
                         item.start(&engine);
                     }
-                    self.filter = Filter::All;
+                    self.show(Filter::All);
                     self.save();
                 }
             }

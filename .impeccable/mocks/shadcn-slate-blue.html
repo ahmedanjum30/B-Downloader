@@ -1,0 +1,205 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><title>BDownloader · shadcn style, slate + blue</title>
+<link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700&family=Geist+Mono:wght@500&display=swap" rel="stylesheet">
+<style>
+.dark{--bg:#020617;--side:#020617;--card:#0F172A;--muted:#1E293B;--border:#1E293B;--fg:#F8FAFC;--mfg:#94A3B8;--primary:#3B82F6;--ok:#22C55E;--warn:#F59E0B;--bad:#EF4444;--ring:rgba(59,130,246,.45)}
+.light{--bg:#FFFFFF;--side:#F8FAFC;--card:#FFFFFF;--muted:#F1F5F9;--border:#E2E8F0;--fg:#0F172A;--mfg:#64748B;--primary:#2563EB;--ok:#16A34A;--warn:#D97706;--bad:#DC2626;--ring:rgba(37,99,235,.35)}
+*{box-sizing:border-box;margin:0}
+body{background:#94A3B8;font:400 14px/1.45 Geist,system-ui,sans-serif;padding:40px;display:flex;flex-direction:column;gap:18px;align-items:center}
+.cap{width:1120px;color:#0F172A;font-weight:600;font-size:15px;margin-top:22px}
+.cap span{font-weight:400;color:#1E293B}
+.win{width:1120px;height:720px;background:var(--bg);color:var(--fg);border-radius:10px;overflow:hidden;display:grid;grid-template-columns:232px 1fr;box-shadow:0 30px 60px rgba(2,6,23,.35);position:relative}
+.n{font-family:"Geist Mono",monospace;font-variant-numeric:tabular-nums;font-size:13px}
+svg{width:16px;height:16px;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round;flex:none}
+aside{background:var(--side);border-right:1px solid var(--border);padding:18px 12px;display:flex;flex-direction:column;gap:2px}
+.brand{display:flex;align-items:center;gap:10px;font-weight:600;font-size:15px;padding:4px 8px 22px}
+.brand i{width:28px;height:28px;border-radius:7px;background:var(--primary);display:grid;place-items:center;color:#fff}
+.nav{display:flex;align-items:center;gap:10px;padding:7px 10px;border-radius:6px;color:var(--mfg);font-weight:500}
+.nav.on{background:var(--muted);color:var(--fg)}
+.nav b{margin-left:auto;font-weight:500;font-size:12px}
+.group{padding:16px 10px 6px;font-size:12px;font-weight:500;color:var(--mfg)}
+.foot{margin-top:auto;border-top:1px solid var(--border);padding-top:10px}
+main{display:flex;flex-direction:column;min-width:0}
+.top{display:flex;align-items:center;gap:8px;padding:18px 24px;border-bottom:1px solid var(--border)}
+h1{font-size:20px;font-weight:600;letter-spacing:-.01em}
+.sub{color:var(--mfg);font-size:13px}
+.btn{height:36px;padding:0 12px;display:inline-flex;align-items:center;gap:8px;border-radius:6px;border:1px solid var(--border);background:var(--bg);color:var(--fg);font-weight:500;white-space:nowrap}
+.btn.primary{background:var(--primary);border-color:var(--primary);color:#fff}
+.btn.ghost{border-color:transparent;background:transparent;color:var(--mfg);padding:0 8px;height:32px}
+.input{height:36px;width:220px;padding:0 12px;display:flex;align-items:center;gap:8px;border-radius:6px;border:1px solid var(--border);color:var(--mfg)}
+.bar{display:flex;align-items:center;gap:8px;padding:14px 24px 0}
+.tabs{display:inline-flex;padding:4px;border-radius:8px;background:var(--muted);gap:2px}
+.tab{padding:5px 12px;border-radius:6px;color:var(--mfg);font-weight:500}
+.tab.on{background:var(--bg);color:var(--fg);box-shadow:0 1px 2px rgba(0,0,0,.12)}
+.tab b{font-weight:500;font-size:12px;margin-left:6px;color:var(--mfg)}
+.list{padding:14px 24px;display:flex;flex-direction:column;gap:8px}
+.row{border:1px solid var(--border);background:var(--card);border-radius:10px;padding:14px 16px;display:grid;grid-template-columns:36px 1fr auto;gap:2px 14px;align-items:center}
+.ext{grid-row:span 2;width:36px;height:36px;border-radius:8px;display:grid;place-items:center;font:600 10px Geist;background:var(--muted);color:var(--mfg)}
+.name{font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.meta{color:var(--mfg);font-size:13px;display:flex;align-items:center;gap:8px;white-space:nowrap}
+.acts{grid-row:span 2;display:flex;align-items:center;gap:2px;color:var(--mfg)}
+.ib{width:32px;height:32px;border-radius:6px;display:grid;place-items:center}
+.pct{font-weight:600;color:var(--fg);margin-right:6px}
+.badge{display:inline-flex;align-items:center;gap:6px;height:22px;padding:0 8px;border-radius:999px;border:1px solid var(--border);font-size:12px;font-weight:500;color:var(--fg)}
+.dot{width:6px;height:6px;border-radius:50%;background:var(--c)}
+.prog{grid-column:2/4;display:flex;gap:2px;height:6px;margin-top:10px}
+.prog i{flex:var(--w);border-radius:2px;background:var(--muted);position:relative;overflow:hidden}
+.prog i:after{content:"";position:absolute;inset:0;width:var(--f,0%);background:var(--primary);border-radius:2px}
+.bad-row{border-color:color-mix(in srgb,var(--bad) 40%,var(--border))}
+.overlay{position:absolute;inset:0;background:rgba(2,6,23,.6);display:grid;place-items:center}
+.dialog{width:520px;background:var(--bg);border:1px solid var(--border);border-radius:10px;padding:22px;display:flex;flex-direction:column;gap:16px;box-shadow:0 20px 40px rgba(0,0,0,.35)}
+.dialog h2{font-size:18px;font-weight:600}
+.dsub{color:var(--mfg);font-size:13px;margin-top:2px}
+.field{display:flex;flex-direction:column;gap:6px}
+.field label{font-weight:500;font-size:13px}
+.inp{height:36px;border:1px solid var(--border);border-radius:6px;padding:0 12px;display:flex;align-items:center;gap:8px}
+.inp.focus{border-color:var(--primary);box-shadow:0 0 0 3px var(--ring)}
+.summary{border:1px solid var(--border);border-radius:8px;padding:12px;display:flex;align-items:center;gap:12px}
+.hint{color:var(--mfg);font-size:12px}
+.right{display:flex;justify-content:flex-end;gap:8px;margin-top:4px}
+.stepper{display:flex;align-items:center;gap:10px}
+.track{flex:1;height:6px;border-radius:3px;background:var(--muted);position:relative}
+.track:before{content:"";position:absolute;inset:0;width:25%;background:var(--primary);border-radius:3px}
+.track:after{content:"";position:absolute;left:25%;top:50%;width:16px;height:16px;border-radius:50%;background:var(--bg);border:2px solid var(--primary);transform:translate(-50%,-50%)}
+.set{grid-template-columns:200px 1fr}
+.sec{padding:24px 32px;display:flex;flex-direction:column;gap:22px}
+.check{display:flex;align-items:center;gap:10px}
+.box{width:16px;height:16px;border-radius:4px;background:var(--primary);display:grid;place-items:center;color:#fff}
+.box svg{width:12px;height:12px;stroke-width:3}
+.sep{height:1px;background:var(--border)}
+</style></head><body>
+
+<div class="cap">1 · Main window, dark <span>(follows Windows; this is how most people will see it)</span></div>
+<div class="win dark">
+  <aside>
+    <div class="brand"><i><svg viewBox="0 0 24 24"><path d="M12 3v12"/><path d="m7 10 5 5 5-5"/><path d="M5 21h14"/></svg></i>BDownloader</div>
+    <div class="nav on"><svg viewBox="0 0 24 24"><path d="M22 12h-6l-2 3h-4l-2-3H2"/><path d="M5.5 5.1 2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.5-6.9A2 2 0 0 0 16.8 4H7.2a2 2 0 0 0-1.7 1.1z"/></svg>All downloads<b>9</b></div>
+    <div class="nav"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></svg>Queue<b>2</b></div>
+    <div class="group">Types</div>
+    <div class="nav"><svg viewBox="0 0 24 24"><path d="M21 8 12 3 3 8v8l9 5 9-5z"/><path d="m3 8 9 5 9-5"/><path d="M12 13v8"/></svg>Compressed<b>2</b></div>
+    <div class="nav"><svg viewBox="0 0 24 24"><rect x="2" y="4" width="20" height="16" rx="2"/><path d="M2 8h20"/></svg>Programs<b>4</b></div>
+    <div class="nav"><svg viewBox="0 0 24 24"><path d="m16 13 5 3V8l-5 3"/><rect x="2" y="6" width="14" height="12" rx="2"/></svg>Video<b>2</b></div>
+    <div class="foot">
+      <div class="nav"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M2 12h20"/></svg>Browser extension</div>
+      <div class="nav"><svg viewBox="0 0 24 24"><path d="M4 6h10M18 6h2M4 12h4M12 12h8M4 18h12M20 18h0"/></svg>Settings</div>
+      <div class="nav"><svg viewBox="0 0 24 24"><path d="M19 14c1.5-1.5 3-3.2 3-5.5A5.5 5.5 0 0 0 12 5a5.5 5.5 0 0 0-10 3.5c0 2.3 1.5 4 3 5.5l7 7z"/></svg>Support BDownloader</div>
+    </div>
+  </aside>
+  <main>
+    <div class="top">
+      <div style="flex:1"><h1>All downloads</h1><div class="sub">2 downloading · <span class="n">11.8 MB/s</span></div></div>
+      <div class="input"><svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>Search downloads</div>
+      <div class="btn primary"><svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg>Add download</div>
+    </div>
+    <div class="bar">
+      <div class="tabs"><div class="tab on">All<b>9</b></div><div class="tab">Downloading<b>2</b></div><div class="tab">Completed<b>5</b></div><div class="tab">Paused</div><div class="tab">Failed<b>1</b></div></div>
+      <div style="flex:1"></div>
+      <div class="btn"><svg viewBox="0 0 24 24"><path d="m12 14 4-4"/><path d="M3.3 19a10 10 0 1 1 17.4 0"/></svg>No speed limit</div>
+      <div class="btn"><svg viewBox="0 0 24 24"><path d="M12 2v10"/><path d="M18.4 6.6a9 9 0 1 1-12.8 0"/></svg>When done: shut down</div>
+    </div>
+    <div class="list">
+      <div class="row">
+        <div class="ext">ZIP</div><div class="name">Howitallbegan-V1.2-pc.zip</div>
+        <div class="acts"><span class="pct">57%</span><div class="ib"><svg viewBox="0 0 24 24"><rect x="14" y="4" width="4" height="16" rx="1"/><rect x="6" y="4" width="4" height="16" rx="1"/></svg></div><div class="ib"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4M12 8h0"/></svg></div></div>
+        <div class="meta"><span class="badge" style="--c:var(--primary)"><span class="dot"></span>Downloading</span><span class="n">198.2 / 347.6 MB · 6.4 MB/s · 32s left</span>· 4 connections</div>
+        <div class="prog"><i style="--w:25;--f:100%"></i><i style="--w:25;--f:100%"></i><i style="--w:25;--f:30%"></i><i style="--w:25;--f:12%"></i></div>
+      </div>
+      <div class="row">
+        <div class="ext">MP4</div><div class="name">Big Buck Bunny 4K.mp4</div>
+        <div class="acts"><span class="pct">23%</span><div class="ib"><svg viewBox="0 0 24 24"><rect x="14" y="4" width="4" height="16" rx="1"/><rect x="6" y="4" width="4" height="16" rx="1"/></svg></div><div class="ib"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4M12 8h0"/></svg></div></div>
+        <div class="meta"><span class="badge" style="--c:var(--primary)"><span class="dot"></span>Downloading</span><span class="n">212 / 920 MB · 5.4 MB/s · 2m 10s left</span>· YouTube</div>
+        <div class="prog"><i style="--w:40;--f:58%"></i><i style="--w:60;--f:0%"></i></div>
+      </div>
+      <div class="row">
+        <div class="ext">ISO</div><div class="name">ubuntu-24.04.1-desktop-amd64.iso</div>
+        <div class="acts"><div class="btn" style="height:32px">Start now</div><div class="ib"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4M12 8h0"/></svg></div></div>
+        <div class="meta"><span class="badge" style="--c:var(--mfg)"><span class="dot"></span>Queued</span><span class="n">5.8 GB</span>· starts at 01:00</div>
+      </div>
+      <div class="row">
+        <div class="ext">EXE</div><div class="name">B-Rar-Setup.exe</div>
+        <div class="acts"><div class="ib"><svg viewBox="0 0 24 24"><path d="M15 3h6v6M10 14 21 3"/><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/></svg></div><div class="ib"><svg viewBox="0 0 24 24"><path d="M20 20a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-8l-2-3H4a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2z"/></svg></div><div class="ib"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4M12 8h0"/></svg></div></div>
+        <div class="meta"><span class="badge" style="--c:var(--ok)"><span class="dot"></span>Completed</span><span class="n">6.1 MB</span>· ahmedanjum30.github.io</div>
+      </div>
+      <div class="row bad-row">
+        <div class="ext" style="color:var(--bad)">PDF</div><div class="name">report final.pdf</div>
+        <div class="acts"><div class="btn" style="height:32px"><svg viewBox="0 0 24 24"><path d="M10 13a5 5 0 0 0 7.5.5l3-3a5 5 0 0 0-7-7l-1.7 1.7"/><path d="M14 11a5 5 0 0 0-7.5-.5l-3 3a5 5 0 0 0 7 7l1.7-1.7"/></svg>Refresh link</div></div>
+        <div class="meta"><span class="badge" style="--c:var(--bad)"><span class="dot"></span>Failed</span><span style="color:var(--bad)">HTTP 403 · the link may have expired · 40% kept</span></div>
+      </div>
+    </div>
+  </main>
+</div>
+
+<div class="cap">2 · Main window, light</div>
+<div class="win light">
+  <aside>
+    <div class="brand"><i><svg viewBox="0 0 24 24"><path d="M12 3v12"/><path d="m7 10 5 5 5-5"/><path d="M5 21h14"/></svg></i>BDownloader</div>
+    <div class="nav"><svg viewBox="0 0 24 24"><path d="M22 12h-6l-2 3h-4l-2-3H2"/><path d="M5.5 5.1 2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.5-6.9A2 2 0 0 0 16.8 4H7.2a2 2 0 0 0-1.7 1.1z"/></svg>All downloads<b>9</b></div>
+    <div class="nav on"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></svg>Queue<b>2</b></div>
+    <div class="group">Types</div>
+    <div class="nav"><svg viewBox="0 0 24 24"><path d="M21 8 12 3 3 8v8l9 5 9-5z"/><path d="m3 8 9 5 9-5"/><path d="M12 13v8"/></svg>Compressed<b>2</b></div>
+    <div class="nav"><svg viewBox="0 0 24 24"><rect x="2" y="4" width="20" height="16" rx="2"/><path d="M2 8h20"/></svg>Programs<b>4</b></div>
+    <div class="nav"><svg viewBox="0 0 24 24"><path d="m16 13 5 3V8l-5 3"/><rect x="2" y="6" width="14" height="12" rx="2"/></svg>Video<b>2</b></div>
+    <div class="foot">
+      <div class="nav"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M2 12h20"/></svg>Browser extension</div>
+      <div class="nav"><svg viewBox="0 0 24 24"><path d="M4 6h10M18 6h2M4 12h4M12 12h8M4 18h12"/></svg>Settings</div>
+    </div>
+  </aside>
+  <main>
+    <div class="top">
+      <div style="flex:1"><h1>Queue</h1><div class="sub">2 waiting · runs 2 at a time · starts every day at 01:00</div></div>
+      <div class="btn">Schedule</div>
+      <div class="btn primary"><svg viewBox="0 0 24 24"><path d="M6 3l14 9-14 9z"/></svg>Start queue</div>
+    </div>
+    <div class="list">
+      <div class="row">
+        <div class="ext">ISO</div><div class="name">ubuntu-24.04.1-desktop-amd64.iso</div>
+        <div class="acts"><div class="btn" style="height:32px">Start now</div><div class="ib"><svg viewBox="0 0 24 24"><path d="M3 6h18M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg></div></div>
+        <div class="meta"><span class="badge" style="--c:var(--mfg)"><span class="dot"></span>Queued</span><span class="n">5.8 GB</span>· releases.ubuntu.com</div>
+      </div>
+      <div class="row">
+        <div class="ext">ZIP</div><div class="name">Cyberpunk-Mod-Pack-v2.zip</div>
+        <div class="acts"><div class="btn" style="height:32px">Start now</div><div class="ib"><svg viewBox="0 0 24 24"><path d="M3 6h18M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg></div></div>
+        <div class="meta"><span class="badge" style="--c:var(--mfg)"><span class="dot"></span>Queued</span><span class="n">1.2 of 3.4 GB</span>· paused at 35%, continues when its turn comes</div>
+        <div class="prog"><i style="--w:100;--f:35%;opacity:.55"></i></div>
+      </div>
+    </div>
+  </main>
+</div>
+
+<div class="cap">3 · Add download, dark</div>
+<div class="win dark">
+  <aside><div class="brand"><i><svg viewBox="0 0 24 24"><path d="M12 3v12"/><path d="m7 10 5 5 5-5"/><path d="M5 21h14"/></svg></i>BDownloader</div><div class="nav on">All downloads<b>9</b></div><div class="nav">Queue<b>2</b></div></aside>
+  <main><div class="top"><div style="flex:1"><h1>All downloads</h1><div class="sub">9 downloads</div></div></div></main>
+  <div class="overlay"><div class="dialog">
+    <div><h2>Add download</h2><div class="dsub">Paste a link. BDownloader checks it before downloading.</div></div>
+    <div class="field"><label>Link</label><div class="inp focus">https://pixeldrain.com/api/file/dimYRKan</div></div>
+    <div class="summary"><div class="ext" style="grid-row:auto">ZIP</div><div style="flex:1"><div style="font-weight:500">347.6 MB</div><div class="meta"><span class="dot" style="--c:var(--ok)"></span>Multiple connections · can resume</div></div></div>
+    <div class="field"><label>Save as</label><div class="inp">Howitallbegan-V1.2-pc.zip</div></div>
+    <div class="field"><label>Save to</label><div style="display:flex;gap:8px"><div class="inp" style="flex:1;color:var(--mfg)">C:\Users\Ahmad\Downloads\Compressed</div><div class="btn">Browse</div></div></div>
+    <div class="field"><label>Connections</label><div class="stepper"><div class="btn" style="width:36px;justify-content:center">−</div><span class="n" style="width:20px;text-align:center">8</span><div class="btn" style="width:36px;justify-content:center">+</div><div class="track"></div></div></div>
+    <div class="right"><div class="btn ghost">Cancel</div><div class="btn">Download later</div><div class="btn primary">Download</div></div>
+  </div></div>
+</div>
+
+<div class="cap">4 · Settings, light</div>
+<div class="win light set">
+  <aside>
+    <div style="font-weight:600;font-size:18px;padding:6px 10px 18px">Settings</div>
+    <div class="nav on">General</div><div class="nav">Downloads</div><div class="nav">Queue</div><div class="nav">Updates</div><div class="nav">Help</div>
+  </aside>
+  <main>
+    <div class="sec">
+      <div><h1>General</h1><div class="sub">Where downloads go and how BDownloader looks.</div></div>
+      <div class="sep"></div>
+      <div class="field"><label>Download folder</label><div style="display:flex;gap:8px;width:560px"><div class="inp" style="flex:1">C:\Users\Ahmad\Downloads</div><div class="btn">Browse</div></div>
+        <div class="check" style="margin-top:6px"><span class="box"><svg viewBox="0 0 24 24"><path d="M20 6 9 17l-5-5"/></svg></span>Sort downloads into folders by type</div>
+        <div class="hint">Compressed, Documents, Music, Programs and Video folders inside it. A folder you pick for a download is used as it is.</div></div>
+      <div class="field"><label>Theme</label><div class="tabs" style="width:fit-content"><div class="tab on">System</div><div class="tab">Dark</div><div class="tab">Light</div></div></div>
+      <div class="field"><label>When I close the window</label><div class="tabs" style="width:fit-content"><div class="tab on">Keep running in the tray</div><div class="tab">Exit BDownloader</div></div>
+        <div class="hint">In the tray, BDownloader still takes downloads from the browser and runs the queue's schedule.</div></div>
+      <div style="flex:1"></div>
+      <div class="right"><div class="btn ghost">Cancel</div><div class="btn primary">Save changes</div></div>
+    </div>
+  </main>
+</div>
+</body></html>

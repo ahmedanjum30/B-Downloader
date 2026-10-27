@@ -1,22 +1,26 @@
 //! Colors and widget styles. Everything visual lives here, so the look can be
 //! changed in one place.
+//!
+//! The look follows shadcn/ui on its slate scale with one blue: flat
+//! surfaces, 1px borders, small radii, and colour only where it means
+//! something (the primary action, progress, a download's state).
 
 use std::sync::LazyLock;
 
 use iced::theme::Palette;
-use iced::widget::{button, container, progress_bar, text_input};
+use iced::widget::{button, container, pick_list, progress_bar, scrollable, text_input};
 use iced::{Background, Border, Color, Shadow, Theme};
 
 pub struct Colors {
     pub background: Color,
     pub sidebar: Color,
     pub surface: Color,
+    /// Hover fills, the selected sidebar entry, and muted tracks and badges.
     pub surface_hover: Color,
     pub border: Color,
     pub text: Color,
     pub muted: Color,
     pub accent: Color,
-    pub accent_hover: Color,
     pub on_accent: Color,
     pub success: Color,
     pub warning: Color,
@@ -38,37 +42,35 @@ pub const fn alpha(color: Color, a: f32) -> Color {
 }
 
 pub const DARK: Colors = Colors {
-    background: rgb(0x0f1115),
-    sidebar: rgb(0x14171d),
-    surface: rgb(0x1a1e26),
-    surface_hover: rgb(0x21262f),
-    border: rgb(0x272c37),
-    text: rgb(0xe8eaf0),
-    muted: rgb(0x8b93a7),
-    accent: rgb(0x6e7bff),
-    accent_hover: rgb(0x8590ff),
+    background: rgb(0x020617),
+    sidebar: rgb(0x020617),
+    surface: rgb(0x0f172a),
+    surface_hover: rgb(0x1e293b),
+    border: rgb(0x1e293b),
+    text: rgb(0xf8fafc),
+    muted: rgb(0x94a3b8),
+    accent: rgb(0x3b82f6),
     on_accent: rgb(0xffffff),
-    success: rgb(0x34d399),
-    warning: rgb(0xfbbf24),
-    danger: rgb(0xf87171),
-    track: rgb(0x272c37),
+    success: rgb(0x22c55e),
+    warning: rgb(0xf59e0b),
+    danger: rgb(0xef4444),
+    track: rgb(0x1e293b),
 };
 
 pub const LIGHT: Colors = Colors {
-    background: rgb(0xf5f6fa),
-    sidebar: rgb(0xffffff),
+    background: rgb(0xffffff),
+    sidebar: rgb(0xf8fafc),
     surface: rgb(0xffffff),
-    surface_hover: rgb(0xf3f4f9),
-    border: rgb(0xe3e6ee),
-    text: rgb(0x151821),
-    muted: rgb(0x6b7280),
-    accent: rgb(0x4f5bff),
-    accent_hover: rgb(0x3f4af0),
+    surface_hover: rgb(0xf1f5f9),
+    border: rgb(0xe2e8f0),
+    text: rgb(0x0f172a),
+    muted: rgb(0x64748b),
+    accent: rgb(0x2563eb),
     on_accent: rgb(0xffffff),
-    success: rgb(0x10b981),
+    success: rgb(0x16a34a),
     warning: rgb(0xd97706),
-    danger: rgb(0xef4444),
-    track: rgb(0xe6e9f1),
+    danger: rgb(0xdc2626),
+    track: rgb(0xf1f5f9),
 };
 
 fn theme_from(name: &'static str, c: &Colors) -> Theme {
@@ -92,7 +94,10 @@ pub fn colors(theme: &Theme) -> &'static Colors {
     if theme.extended_palette().is_dark { &DARK } else { &LIGHT }
 }
 
-pub const RADIUS: f32 = 10.0;
+/// Controls: buttons, inputs, tabs.
+pub const RADIUS: f32 = 6.0;
+/// Cards and dialogs.
+const CARD_RADIUS: f32 = 10.0;
 
 fn border(color: Color, width: f32, radius: f32) -> Border {
     Border {
@@ -117,11 +122,15 @@ pub fn sidebar(theme: &Theme) -> container::Style {
     let c = colors(theme);
     container::Style {
         background: Some(c.sidebar.into()),
-        border: Border {
-            color: c.border,
-            width: 1.0,
-            radius: 0.0.into(),
-        },
+        border: border(c.border, 1.0, 0.0),
+        ..container::Style::default()
+    }
+}
+
+/// A 1px line between regions.
+pub fn rule(theme: &Theme) -> container::Style {
+    container::Style {
+        background: Some(colors(theme).border.into()),
         ..container::Style::default()
     }
 }
@@ -130,16 +139,27 @@ pub fn card(theme: &Theme) -> container::Style {
     let c = colors(theme);
     container::Style {
         background: Some(c.surface.into()),
-        border: border(c.border, 1.0, 14.0),
+        border: border(c.border, 1.0, CARD_RADIUS),
         ..container::Style::default()
     }
 }
 
+/// A card that needs the user: its border takes the danger colour.
+pub fn card_alert(theme: &Theme) -> container::Style {
+    let c = colors(theme);
+    container::Style {
+        border: border(alpha(c.danger, 0.45), 1.0, CARD_RADIUS),
+        ..card(theme)
+    }
+}
+
+/// No shadow: the software renderer repaints only what changes under the
+/// mouse, and a blurred shadow repainted in pieces smears over the dialog.
 pub fn dialog(theme: &Theme) -> container::Style {
     let c = colors(theme);
     container::Style {
-        background: Some(c.surface.into()),
-        border: border(c.border, 1.0, 16.0),
+        background: Some(c.background.into()),
+        border: border(c.border, 1.0, CARD_RADIUS),
         text_color: Some(c.text),
         ..container::Style::default()
     }
@@ -147,23 +167,56 @@ pub fn dialog(theme: &Theme) -> container::Style {
 
 pub fn backdrop(_theme: &Theme) -> container::Style {
     container::Style {
-        background: Some(alpha(Color::BLACK, 0.55).into()),
+        background: Some(alpha(Color::BLACK, 0.6).into()),
         ..container::Style::default()
     }
 }
 
-/// A soft tinted box, used for file-type badges and status pills.
+/// A soft tinted box, used for the empty state's icon and notices.
 pub fn tinted(color: Color, radius: f32) -> impl Fn(&Theme) -> container::Style {
     move |_| container::Style {
-        background: Some(alpha(color, 0.14).into()),
+        background: Some(alpha(color, 0.12).into()),
         border: border(Color::TRANSPARENT, 0.0, radius),
         text_color: Some(color),
         ..container::Style::default()
     }
 }
 
-/// An inset panel inside a dialog.
+/// The file-type badge: a quiet square, red when the download failed.
+pub fn file_badge(failed: bool) -> impl Fn(&Theme) -> container::Style {
+    move |theme| {
+        let c = colors(theme);
+        container::Style {
+            background: Some(c.surface_hover.into()),
+            border: border(Color::TRANSPARENT, 0.0, 8.0),
+            text_color: Some(if failed { c.danger } else { c.muted }),
+            ..container::Style::default()
+        }
+    }
+}
+
+/// A status pill: outlined, its dot carries the colour.
+pub fn pill(theme: &Theme) -> container::Style {
+    let c = colors(theme);
+    container::Style {
+        border: border(c.border, 1.0, 999.0),
+        text_color: Some(c.text),
+        ..container::Style::default()
+    }
+}
+
+/// A muted inset: the track behind segmented tabs, and read-only boxes.
 pub fn panel(theme: &Theme) -> container::Style {
+    let c = colors(theme);
+    container::Style {
+        background: Some(c.surface_hover.into()),
+        border: border(Color::TRANSPARENT, 0.0, RADIUS + 2.0),
+        ..container::Style::default()
+    }
+}
+
+/// An outlined box around a group of controls, like an outline button.
+pub fn outline(theme: &Theme) -> container::Style {
     let c = colors(theme);
     container::Style {
         background: Some(c.background.into()),
@@ -183,11 +236,20 @@ pub fn segment(pick: Pick) -> impl Fn(&Theme) -> container::Style {
     }
 }
 
+/// A dot in one of the theme's colours, for status pills.
+pub fn dot(pick: Pick) -> impl Fn(&Theme) -> container::Style {
+    move |theme| container::Style {
+        background: Some(pick(colors(theme)).into()),
+        border: border(Color::TRANSPARENT, 0.0, 999.0),
+        ..container::Style::default()
+    }
+}
+
 pub fn logo(theme: &Theme) -> container::Style {
     let c = colors(theme);
     container::Style {
         background: Some(c.accent.into()),
-        border: border(Color::TRANSPARENT, 0.0, RADIUS),
+        border: border(Color::TRANSPARENT, 0.0, 7.0),
         ..container::Style::default()
     }
 }
@@ -202,7 +264,7 @@ pub fn tooltip(theme: &Theme) -> container::Style {
     container::Style {
         background: Some(c.text.into()),
         text_color: Some(c.background),
-        border: border(Color::TRANSPARENT, 0.0, 6.0),
+        border: border(Color::TRANSPARENT, 0.0, RADIUS),
         ..container::Style::default()
     }
 }
@@ -212,8 +274,8 @@ pub fn tooltip(theme: &Theme) -> container::Style {
 pub fn primary(theme: &Theme, status: button::Status) -> button::Style {
     let c = colors(theme);
     let background = match status {
-        button::Status::Hovered | button::Status::Pressed => c.accent_hover,
-        button::Status::Disabled => alpha(c.accent, 0.4),
+        button::Status::Hovered | button::Status::Pressed => alpha(c.accent, 0.9),
+        button::Status::Disabled => alpha(c.accent, 0.5),
         button::Status::Active => c.accent,
     };
     button::Style {
@@ -233,7 +295,7 @@ pub fn primary(theme: &Theme, status: button::Status) -> button::Style {
 pub fn danger(theme: &Theme, status: button::Status) -> button::Style {
     let c = colors(theme);
     let background = match status {
-        button::Status::Hovered | button::Status::Pressed => alpha(c.danger, 0.85),
+        button::Status::Hovered | button::Status::Pressed => alpha(c.danger, 0.9),
         _ => c.danger,
     };
     button::Style {
@@ -245,16 +307,30 @@ pub fn danger(theme: &Theme, status: button::Status) -> button::Style {
     }
 }
 
+/// An outline button, as shadcn/ui's "outline" variant.
 pub fn secondary(theme: &Theme, status: button::Status) -> button::Style {
     let c = colors(theme);
     let background = match status {
         button::Status::Hovered | button::Status::Pressed => c.surface_hover,
-        _ => c.surface,
+        _ => c.background,
     };
     button::Style {
         background: Some(background.into()),
         text_color: if status == button::Status::Disabled { c.muted } else { c.text },
         border: border(c.border, 1.0, RADIUS),
+        shadow: Shadow::default(),
+        snap: true,
+    }
+}
+
+/// A borderless button, as shadcn/ui's "ghost" variant: Cancel and the like.
+pub fn ghost(theme: &Theme, status: button::Status) -> button::Style {
+    let c = colors(theme);
+    let hovered = matches!(status, button::Status::Hovered | button::Status::Pressed);
+    button::Style {
+        background: hovered.then_some(Background::Color(c.surface_hover)),
+        text_color: if hovered { c.text } else { c.muted },
+        border: border(Color::TRANSPARENT, 0.0, RADIUS),
         shadow: Shadow::default(),
         snap: true,
     }
@@ -270,25 +346,41 @@ pub fn icon_button(theme: &Theme, status: button::Status) -> button::Style {
     button::Style {
         background,
         text_color: c.text,
-        border: border(Color::TRANSPARENT, 0.0, 8.0),
+        border: border(Color::TRANSPARENT, 0.0, RADIUS),
         shadow: Shadow::default(),
         snap: true,
     }
 }
 
-/// Sidebar entry and segmented-control option.
+/// Sidebar entry: the selected one sits on a muted fill.
 pub fn nav(selected: bool) -> impl Fn(&Theme, button::Status) -> button::Style {
     move |theme, status| {
         let c = colors(theme);
         let background = match (selected, status) {
-            (true, _) => Some(Background::Color(alpha(c.accent, 0.14))),
-            (false, button::Status::Hovered | button::Status::Pressed) => Some(Background::Color(c.surface_hover)),
+            (true, _) | (false, button::Status::Hovered | button::Status::Pressed) => Some(Background::Color(c.surface_hover)),
             _ => None,
         };
         button::Style {
             background,
-            text_color: if selected { c.accent } else { c.text },
-            border: border(Color::TRANSPARENT, 0.0, 8.0),
+            text_color: if selected { c.text } else { c.muted },
+            border: border(Color::TRANSPARENT, 0.0, RADIUS),
+            shadow: Shadow::default(),
+            snap: true,
+        }
+    }
+}
+
+/// One option of a segmented control on a [`panel`] track: the chosen one
+/// sits on the page's own ground, as shadcn/ui's tabs (outlined rather than
+/// shadowed, for the same reason as [`dialog`]).
+pub fn tab(selected: bool) -> impl Fn(&Theme, button::Status) -> button::Style {
+    move |theme, status| {
+        let c = colors(theme);
+        let hovered = matches!(status, button::Status::Hovered | button::Status::Pressed);
+        button::Style {
+            background: selected.then_some(Background::Color(c.background)),
+            text_color: if selected || hovered { c.text } else { c.muted },
+            border: border(if selected { c.border } else { Color::TRANSPARENT }, 1.0, RADIUS),
             shadow: Shadow::default(),
             snap: true,
         }
@@ -305,12 +397,45 @@ pub fn input(theme: &Theme, status: text_input::Status) -> text_input::Style {
         _ => c.border,
     };
     text_input::Style {
-        background: c.background.into(),
+        background: Color::TRANSPARENT.into(),
         border: border(border_color, 1.0, RADIUS),
         icon: c.muted,
         placeholder: c.muted,
         value: c.text,
         selection: alpha(c.accent, 0.35),
+    }
+}
+
+/// A dropdown sitting inside an [`outline`] box: no frame of its own.
+pub fn bare_pick_list(theme: &Theme, status: pick_list::Status) -> pick_list::Style {
+    let c = colors(theme);
+    let hovered = matches!(status, pick_list::Status::Hovered | pick_list::Status::Opened { .. });
+    pick_list::Style {
+        text_color: c.text,
+        placeholder_color: c.muted,
+        handle_color: if hovered { c.text } else { c.muted },
+        background: Color::TRANSPARENT.into(),
+        border: border(Color::TRANSPARENT, 0.0, RADIUS),
+    }
+}
+
+/// A thin slate thumb with no track, darker while it's used.
+pub fn scrollbar(theme: &Theme, status: scrollable::Status) -> scrollable::Style {
+    let c = colors(theme);
+    let busy = !matches!(status, scrollable::Status::Active { .. });
+    let rail = scrollable::Rail {
+        background: None,
+        border: border(Color::TRANSPARENT, 0.0, 0.0),
+        scroller: scrollable::Scroller {
+            background: (if busy { c.muted } else { c.border }).into(),
+            border: border(Color::TRANSPARENT, 0.0, 999.0),
+        },
+    };
+    scrollable::Style {
+        vertical_rail: rail,
+        horizontal_rail: rail,
+        gap: None,
+        ..scrollable::default(theme, status)
     }
 }
 

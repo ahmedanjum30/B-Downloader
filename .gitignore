@@ -1,3 +1,7 @@
 /target
 /dist
 *.pdb
+# Design tool working files: screenshots, discarded rounds, the comparison page's state
+/.impeccable/review/
+/.impeccable/questions/
+/.impeccable/mocks/decision/

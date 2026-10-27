@@ -16,6 +16,18 @@ All notable changes to this project are documented here. The format follows
   time by default (up to 10), and starts the next as each one finishes.
 - A speed limit for a single download, in its details. It applies at once,
   together with the limit for all downloads in the top bar.
+- Report a problem, in Settings → Help: describe what happened and it
+  opens a GitHub issue filled in with your app and Windows versions and
+  the end of BDownloader's log, to check before sending.
+
+### Changed
+- A new, calmer look in slate and blue: flat surfaces with thin borders, a
+  status badge on every download, and the next step it needs (Start now,
+  Refresh link, Try again) as a labelled button. Downloading, Completed,
+  Paused and Failed are tabs above the list; the sidebar keeps All
+  downloads, Queue and the types you have.
+- Settings is split into sections (General, Downloads, Queue, Updates,
+  Help), each with a short explanation of what its options do.
 
 ## [1.0.16] - 2026-10-27
 

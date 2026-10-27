@@ -9,10 +9,51 @@ use crate::store;
 /// The most downloads the queue runs at the same time.
 pub const MAX_AT_ONCE: usize = 10;
 
+/// The sections of the Settings window.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum SettingsTab {
+    #[default]
+    General,
+    Downloads,
+    Queue,
+    Updates,
+    Help,
+}
+
+impl SettingsTab {
+    pub const ALL: [SettingsTab; 5] = [
+        SettingsTab::General,
+        SettingsTab::Downloads,
+        SettingsTab::Queue,
+        SettingsTab::Updates,
+        SettingsTab::Help,
+    ];
+
+    pub fn label(self) -> &'static str {
+        match self {
+            SettingsTab::General => "General",
+            SettingsTab::Downloads => "Downloads",
+            SettingsTab::Queue => "Queue",
+            SettingsTab::Updates => "Updates",
+            SettingsTab::Help => "Help",
+        }
+    }
+}
+
 impl App {
     pub(super) fn handle_settings(&mut self, message: Message) -> Task<Message> {
         match message {
-            Message::OpenSettings => self.modal = Some(Modal::Settings(self.settings.clone())),
+            Message::OpenSettings => {
+                self.settings_tab = SettingsTab::General;
+                self.modal = Some(Modal::Settings(self.settings.clone()));
+            }
+            Message::SettingsTab(tab) => {
+                // Also opens Settings at that section, as the queue's Schedule button does.
+                if !matches!(self.modal, Some(Modal::Settings(_))) {
+                    self.modal = Some(Modal::Settings(self.settings.clone()));
+                }
+                self.settings_tab = tab;
+            }
             Message::SettingsConnections(n) => {
                 if let Some(Modal::Settings(draft)) = &mut self.modal {
                     draft.connections = n.clamp(1, MAX_CONNECTIONS);
