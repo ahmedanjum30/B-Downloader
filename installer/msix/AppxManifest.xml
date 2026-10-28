@@ -14,10 +14,9 @@
   xmlns:uap="http://schemas.microsoft.com/appx/manifest/uap/windows10"
   xmlns:uap3="http://schemas.microsoft.com/appx/manifest/uap/windows10/3"
   xmlns:desktop="http://schemas.microsoft.com/appx/manifest/desktop/windows10"
-  xmlns:desktop6="http://schemas.microsoft.com/appx/manifest/desktop/windows10/6"
   xmlns:rescap="http://schemas.microsoft.com/appx/manifest/foundation/windows10/restrictedcapabilities"
   xmlns:virtualization="http://schemas.microsoft.com/appx/manifest/virtualization/windows10"
-  IgnorableNamespaces="uap uap3 desktop desktop6 rescap virtualization">
+  IgnorableNamespaces="uap uap3 desktop rescap virtualization">
 
   <Identity Name="{{IDENTITY}}" Publisher="{{PUBLISHER}}" Version="{{VERSION}}" ProcessorArchitecture="x64" />
 
@@ -27,11 +26,10 @@
     <Logo>Assets\StoreLogo.png</Logo>
     <Description>A fast, lightweight download manager with multi-connection downloads, pause and resume, and a browser extension.</Description>
 
-    <!-- Windows 10: no per-location exceptions, so HKCU and AppData writes are real. -->
-    <desktop6:RegistryWriteVirtualization>disabled</desktop6:RegistryWriteVirtualization>
-    <desktop6:FileSystemWriteVirtualization>disabled</desktop6:FileSystemWriteVirtualization>
-
-    <!-- Windows 11: only these locations are real; everything else stays private. -->
+    <!-- Only these locations are written for real; everything else stays
+         private to the package. Windows 10 can only lift virtualization
+         wholesale, which the Store doesn't accept (policy 10.6.3), so this
+         package is for Windows 11; Windows 10 has the website's installer. -->
     <virtualization:FileSystemWriteVirtualization>
       <virtualization:ExcludedDirectories>
         <virtualization:ExcludedDirectory>$(KnownFolder:RoamingAppData)\BDownloader</virtualization:ExcludedDirectory>
@@ -51,7 +49,7 @@
   </Properties>
 
   <Dependencies>
-    <TargetDeviceFamily Name="Windows.Desktop" MinVersion="10.0.18362.0" MaxVersionTested="10.0.26100.0" />
+    <TargetDeviceFamily Name="Windows.Desktop" MinVersion="10.0.22000.0" MaxVersionTested="10.0.26100.0" />
   </Dependencies>
 
   <Resources>
