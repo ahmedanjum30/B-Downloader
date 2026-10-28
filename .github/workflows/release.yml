@@ -28,8 +28,14 @@ jobs:
           shared-key: release
           save-if: false
 
-      - name: Install Inno Setup
-        run: choco install innosetup --no-progress -y
+      # Its prebuilt bi.exe and bi-setup.exe, which have to sit side by side.
+      - name: Install B-Installer
+        shell: pwsh
+        run: |
+          $dir = "$env:RUNNER_TEMP\b-installer"
+          Invoke-WebRequest https://github.com/ahmedanjum30/B-Installer/releases/download/v0.1.0/B-Installer-x64.zip -OutFile "$dir.zip"
+          Expand-Archive "$dir.zip" -DestinationPath $dir
+          $dir | Add-Content $env:GITHUB_PATH
 
       - name: Build the installer
         shell: pwsh

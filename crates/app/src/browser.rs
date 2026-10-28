@@ -96,7 +96,7 @@ impl Browser {
 pub const FIREFOX_STORE_PAGE: &str = "https://addons.mozilla.org/firefox/addon/bdownloader/";
 
 /// The extension's IDs on the Chrome Web Store and Edge Add-ons, assigned on
-/// the first upload; empty until then. Also set in `installer/bdownloader.iss`,
+/// the first upload; empty until then. Also set in `installer/bdownloader.toml`,
 /// which has the browsers offer the extension at their next start.
 pub const CHROME_STORE_ID: &str = "";
 pub const EDGE_STORE_ID: &str = "kfbjnlpmchkeaphhdeidpdpcomoohdfa";

@@ -116,7 +116,7 @@ pub enum Relaunch {
 /// Starts the installer silently. It closes this app if it's still running,
 /// replaces the files and starts the app again as `relaunch` says.
 pub fn install(installer: &Path, relaunch: Relaunch) -> std::io::Result<()> {
-    // Read by the `UpdateMode` check in installer\bdownloader.iss.
+    // Read by the `if_param = "UPDATE=…"` runs in installer\bdownloader.toml.
     let mode = match relaunch {
         Relaunch::No => "/UPDATE=0",
         Relaunch::Window => "/UPDATE=1",

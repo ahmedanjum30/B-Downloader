@@ -83,6 +83,6 @@ All in `store/images/`:
 
 Each store assigns the extension an ID as soon as the package is uploaded (before review). Set them in two places, then release a new app version:
 - `CHROME_STORE_ID` and `EDGE_STORE_ID` in `crates/app/src/browser.rs`: the bridge accepts the store extension, and the Browser extension window gets an "Add to …" button for every browser (Brave, Opera and Vivaldi use the Chrome Web Store).
-- `ChromeStoreId` and `EdgeStoreId` in `installer/bdownloader.iss`: Chrome and Edge offer the extension at their next start.
+- The `Software...xtensions<id>` registry entries in `installer/bdownloader.toml`: Chrome and Edge offer the extension at their next start.
 
 Opera can install from the Chrome Web Store (it offers "Install Chrome Extensions" first), so it needs no listing of its own.

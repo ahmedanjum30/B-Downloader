@@ -5,20 +5,17 @@
 # -Quick builds with the `quick` profile instead: seconds instead of minutes
 # after a change, for installers to test locally. Releases use the default.
 #
-# Needs Inno Setup 6 (winget install JRSoftware.InnoSetup).
+# Needs B-Installer's bi.exe and bi-setup.exe on PATH, side by side: unzip
+# https://github.com/ahmedanjum30/B-Installer/releases/latest/download/B-Installer-x64.zip, or
+#   cargo install --git https://github.com/ahmedanjum30/B-Installer bi setup
 
 param([switch]$Quick)
 
 $ErrorActionPreference = 'Stop'
 $root = Split-Path $PSScriptRoot -Parent
 
-$iscc = @(
-    (Get-Command iscc -ErrorAction SilentlyContinue).Source,
-    "$env:LOCALAPPDATA\Programs\Inno Setup 6\ISCC.exe",
-    "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe",
-    "$env:ProgramFiles\Inno Setup 6\ISCC.exe"
-) | Where-Object { $_ -and (Test-Path $_) } | Select-Object -First 1
-if (-not $iscc) { throw 'Inno Setup 6 not found. Install it with: winget install JRSoftware.InnoSetup' }
+$bi = (Get-Command bi -ErrorAction SilentlyContinue).Source
+if (-not $bi) { throw 'B-Installer not found. Get it from https://github.com/ahmedanjum30/B-Installer/releases, or: cargo install --git https://github.com/ahmedanjum30/B-Installer bi setup' }
 
 $version = (Select-String -Path (Join-Path $root 'Cargo.toml') -Pattern '^version = "(.+)"').Matches[0].Groups[1].Value
 
@@ -27,8 +24,8 @@ try {
     $buildProfile = if ($Quick) { 'quick' } else { 'release' }
     cargo build --profile $buildProfile --workspace
     if ($LASTEXITCODE -ne 0) { throw 'cargo build failed' }
-    & $iscc /Qp "/DAppVersion=$version" "/DBinDir=$root\target\$buildProfile" (Join-Path $root 'installer\bdownloader.iss')
-    if ($LASTEXITCODE -ne 0) { throw 'Inno Setup failed' }
+    & $bi (Join-Path $root 'installer\bdownloader.toml') -D "version=$version" -D "bindir=$root\target\$buildProfile"
+    if ($LASTEXITCODE -ne 0) { throw 'B-Installer failed' }
 } finally {
     Pop-Location
 }
