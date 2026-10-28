@@ -6,6 +6,13 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+## [1.1.2] - 2026-10-29
+
+### Changed
+- The installer is now built with B-Installer instead of Inno Setup: one
+  plain page instead of a wizard. Updates, silent installs and uninstalling
+  work as before, and it updates installs made by earlier versions in place.
+
 ## [1.1.1] - 2026-10-28
 
 ### Changed

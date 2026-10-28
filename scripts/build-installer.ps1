@@ -5,8 +5,8 @@
 # -Quick builds with the `quick` profile instead: seconds instead of minutes
 # after a change, for installers to test locally. Releases use the default.
 #
-# Needs B-Installer's bi.exe and bi-setup.exe on PATH, side by side: unzip
-# https://github.com/ahmedanjum30/B-Installer/releases/latest/download/B-Installer-x64.zip, or
+# Needs B-Installer's bi.exe and bi-setup.exe on PATH, side by side: download both from
+# https://github.com/ahmedanjum30/B-Installer/releases/latest, or
 #   cargo install --git https://github.com/ahmedanjum30/B-Installer bi setup
 
 param([switch]$Quick)
