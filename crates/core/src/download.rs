@@ -18,6 +18,7 @@ use crate::hls;
 use crate::http::{self, ProbeInfo, header_str, parse_content_range};
 use crate::limit::Limiter;
 use crate::sabr::{self, YoutubeSource};
+use crate::scrape::Swarm;
 use crate::segment::Segments;
 use crate::state::ResumeState;
 use crate::torrent::{self, TorrentSource, Torrents};
@@ -283,6 +284,14 @@ pub struct Progress {
     /// A torrent's upload to other peers, including earlier runs ([`TorrentSource::uploaded`]).
     /// For a torrent, `active_connections` are its peers.
     pub uploaded: u64,
+    /// The download speed in bytes per second, when the engine measures it
+    /// itself: a torrent's grows a whole piece at a time, too unevenly to
+    /// time from `downloaded`.
+    pub rate: Option<f64>,
+    /// A torrent's upload speed, in bytes per second.
+    pub upload_rate: f64,
+    /// How many share the torrent, as its trackers count them.
+    pub swarm: Option<Swarm>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

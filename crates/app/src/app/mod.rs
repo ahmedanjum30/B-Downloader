@@ -908,7 +908,7 @@ impl App {
     fn update_tray(&self) {
         let Some(tray) = &self.tray else { return };
         let running: Vec<&Item> = self.items.iter().filter(|i| i.state.is_running()).collect();
-        let speed: f64 = running.iter().map(|i| i.speed.rate()).sum();
+        let speed: f64 = running.iter().map(|i| i.rate()).sum();
         tray.set_tooltip(&match running.len() {
             0 => "BDownloader".to_owned(),
             n => format!("BDownloader\n{n} downloading · {}", format::speed(speed)),

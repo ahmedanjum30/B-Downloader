@@ -125,11 +125,7 @@ fn sidebar(app: &App) -> Element<'_, Message> {
         .into_iter()
         .filter(|&kind| app.filter == kind || app.count(kind) > 0)
         .collect();
-    let mut filters = column![filter_item(Filter::All), filter_item(Filter::Queue)].spacing(2);
-    // Once there's a torrent (or while it's shown).
-    if app.filter == Filter::Torrents || app.count(Filter::Torrents) > 0 {
-        filters = filters.push(filter_item(Filter::Torrents));
-    }
+    let mut filters = column![filter_item(Filter::All), filter_item(Filter::Queue), filter_item(Filter::Torrents)].spacing(2);
     if !kinds.is_empty() {
         filters = filters
             .push(container(muted("Types").size(12)).padding(Padding {
@@ -193,7 +189,7 @@ fn main_panel(app: &App) -> Element<'_, Message> {
             n => format!("{n} downloads"),
         }
     } else {
-        let speed: f64 = running.iter().map(|i| i.speed.rate()).sum();
+        let speed: f64 = running.iter().map(|i| i.rate()).sum();
         format!("{} downloading · {}", running.len(), format::speed(speed))
     };
 
@@ -245,8 +241,10 @@ fn main_panel(app: &App) -> Element<'_, Message> {
     };
 
     let items: Vec<&Item> = app.visible().collect();
-    let list: Element<'_, Message> = if app.items.is_empty() {
+    let list: Element<'_, Message> = if app.items.is_empty() && app.filter != Filter::Torrents {
         empty_state()
+    } else if items.is_empty() && app.filter == Filter::Torrents && app.count(Filter::Torrents) == 0 {
+        torrents_empty_state()
     } else if items.is_empty() {
         center(muted("Nothing here.").size(14)).into()
     } else {
@@ -489,6 +487,25 @@ fn empty_state<'a>() -> Element<'a, Message> {
     .into()
 }
 
+/// The Torrents tab before there are any.
+fn torrents_empty_state<'a>() -> Element<'a, Message> {
+    center(
+        column![
+            container(icon(&icons::TORRENT, 34.0, |c| c.accent))
+                .center(84)
+                .style(style::accent_soft(42.0)),
+            space().height(8),
+            text("No torrents yet").size(20).font(SEMIBOLD),
+            muted("Click a magnet link in your browser, or paste one in Add download. .torrent files work too.").size(14),
+            space().height(8),
+            add_button(true),
+        ]
+        .spacing(8)
+        .align_x(Center),
+    )
+    .into()
+}
+
 /// The file's type, in a quiet square.
 pub fn file_badge<'a>(extension: String) -> Element<'a, Message> {
     badge(extension, false)
@@ -521,7 +538,7 @@ fn status(item: &Item) -> (&'static str, Pick, String, Pick) {
         State::Starting => ("Connecting", |c| c.accent, sizes(), |c| c.muted),
         State::Downloading if item.is_torrent() && item.active_connections == 0 => ("Finding peers", |c| c.accent, sizes(), |c| c.muted),
         // Only once data has stopped, so a brief reconnect while others keep going doesn't flash.
-        State::Downloading if item.problem.is_some() && item.speed.rate() < 1024.0 => (
+        State::Downloading if item.problem.is_some() && item.rate() < 1024.0 => (
             "Reconnecting",
             |c| c.warning,
             capitalize(item.problem.as_deref().unwrap_or_default()),
@@ -613,9 +630,13 @@ fn download_card(item: &Item) -> Element<'_, Message> {
     let remove_tip = if item.state == State::Completed { "Remove" } else { "Cancel and remove" };
     actions = actions.push(action(&icons::TRASH, remove_tip, Message::Remove(id)));
 
-    let top = row![badge(item.extension(), failed), column![name, meta].spacing(5).width(Fill), actions]
-        .spacing(14)
-        .align_y(Center);
+    let top = row![
+        badge(item.extension(), failed),
+        container(column![name, meta].spacing(5)).width(Fill).clip(true),
+        actions
+    ]
+    .spacing(14)
+    .align_y(Center);
 
     let mut body = column![top].spacing(12);
     let never_started = failed && item.downloaded == 0;
@@ -652,9 +673,12 @@ fn downloading_text(item: &Item) -> String {
         Some(size) => format!("{} of {}", format::size(item.downloaded), format::size(size)),
         None => format::size(item.downloaded),
     }];
-    let rate = item.speed.rate();
+    let rate = item.rate();
     if rate > 0.0 {
         parts.push(format::speed(rate));
+    }
+    if item.is_torrent() && item.upload_rate > 0.0 {
+        parts.push(format!("{} up", format::speed(item.upload_rate)));
     }
     if let Some(eta) = item.eta() {
         parts.push(format::eta(eta));
@@ -663,10 +687,7 @@ fn downloading_text(item: &Item) -> String {
         parts.push(format!("limited to {} MB/s", format::number(mb)));
     }
     if item.is_torrent() {
-        parts.push(match item.active_connections {
-            1 => "1 peer".to_owned(),
-            n => format!("{n} peers"),
-        });
+        parts.extend(swarm_parts(item, item.active_connections));
         return parts.join(" · ");
     }
     // Connections that are open but get no data are worth knowing about.
@@ -686,12 +707,25 @@ fn seeding_text(item: &Item) -> String {
         if seeding.upload_rate > 0.0 {
             parts.push(format!("{} up", format::speed(seeding.upload_rate)));
         }
-        parts.push(match seeding.peers {
-            1 => "1 peer".to_owned(),
-            n => format!("{n} peers"),
-        });
+        parts.extend(swarm_parts(item, seeding.peers));
     }
     parts.join(" · ")
+}
+
+/// Seeds and peers in the torrent's swarm (from its trackers), and how many
+/// this PC is connected to; just the connected ones when trackers don't say.
+fn swarm_parts(item: &Item, connected: usize) -> Vec<String> {
+    match item.swarm {
+        Some(swarm) => vec![
+            format!("{} seeds", swarm.seeds),
+            format!("{} peers", swarm.peers),
+            format!("{connected} connected"),
+        ],
+        None => vec![match connected {
+            1 => "1 peer".to_owned(),
+            n => format!("{n} peers"),
+        }],
+    }
 }
 
 fn action<'a>(handle: &icons::Handle, tip: &'a str, message: Message) -> Element<'a, Message> {

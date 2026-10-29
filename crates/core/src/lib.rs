@@ -24,6 +24,7 @@ mod m3u8;
 mod mp4mux;
 mod proto;
 mod sabr;
+mod scrape;
 mod segment;
 mod state;
 mod torrent;
@@ -37,4 +38,5 @@ pub use download::{
 pub use error::{Error, Result};
 pub use http::ProbeInfo;
 pub use sabr::{YoutubeFormat, YoutubeSource};
+pub use scrape::Swarm;
 pub use torrent::{MAX_TORRENT_FILE, SeedStatus, TorrentFile, TorrentInfo, TorrentInput, TorrentSource, is_magnet, parse as parse_torrent};

@@ -4,7 +4,9 @@
 use std::path::PathBuf;
 use std::time::{Duration, Instant};
 
-use bdownloader_core::{DownloadHandle, DownloadOptions, Engine, SeedStatus, SegmentProgress, Status, TorrentSource, YoutubeFormat, YoutubeSource};
+use bdownloader_core::{
+    DownloadHandle, DownloadOptions, Engine, SeedStatus, SegmentProgress, Status, Swarm, TorrentSource, YoutubeFormat, YoutubeSource,
+};
 use bdownloader_ipc::{YoutubeFormatInfo, YoutubeRequest};
 
 use crate::store::{self, HashKind, SavedDownload, SavedState, SavedTorrent};
@@ -69,6 +71,12 @@ pub struct Item {
     pub torrent: Option<SavedTorrent>,
     /// A finished torrent's upload, while it seeds.
     pub seeding: Option<SeedStatus>,
+    /// The engine's own measure of the speed (torrents), steadier than `speed`.
+    pub engine_rate: Option<f64>,
+    /// A torrent's upload speed while it downloads, in bytes per second.
+    pub upload_rate: f64,
+    /// How many share the torrent, as its trackers count them.
+    pub swarm: Option<Swarm>,
 }
 
 impl Item {
@@ -99,6 +107,9 @@ impl Item {
             speed_limit_mb: None,
             torrent: None,
             seeding: None,
+            engine_rate: None,
+            upload_rate: 0.0,
+            swarm: None,
         }
     }
 
@@ -228,6 +239,9 @@ impl Item {
         }
         let status = engine.seed_status(&torrent.info_hash);
         self.seeding = status.filter(|s| !s.done);
+        if let Some(swarm) = status.and_then(|s| s.swarm) {
+            self.swarm = Some(swarm);
+        }
         let Some(status) = status else { return false };
         torrent.uploaded = torrent.uploaded.max(status.uploaded);
         torrent.seeded = status.done;
@@ -297,6 +311,9 @@ impl Item {
         if let Some(torrent) = &mut self.torrent {
             torrent.uploaded = torrent.uploaded.max(progress.uploaded);
         }
+        self.engine_rate = progress.rate;
+        self.upload_rate = progress.upload_rate;
+        self.swarm = progress.swarm.or(self.swarm);
         self.speed.sample(self.downloaded);
     }
 
@@ -349,8 +366,16 @@ impl Item {
         }
     }
 
+    /// Download speed in bytes per second, while it runs.
+    pub fn rate(&self) -> f64 {
+        if self.handle.is_none() {
+            return 0.0;
+        }
+        self.engine_rate.unwrap_or_else(|| self.speed.rate())
+    }
+
     pub fn eta(&self) -> Option<Duration> {
-        let rate = self.speed.rate();
+        let rate = self.rate();
         let remaining = self.size?.saturating_sub(self.downloaded);
         (rate > 1.0).then(|| Duration::from_secs_f64(remaining as f64 / rate))
     }

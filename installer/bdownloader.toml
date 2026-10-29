@@ -30,6 +30,11 @@ delete = ['{app}\bdownloader-firefox.xpi']
 name = "desktopicon"
 label = "Create a desktop shortcut"
 
+# Only takes effect in an install for everyone, which has administrator rights.
+[[task]]
+name = "firewall"
+label = "Allow torrents through Windows Firewall (when installing for everyone)"
+
 [[file]]
 source = '${bindir}\BDownloader.exe'
 dest = '{app}'
@@ -172,6 +177,21 @@ key = 'Software\RegisteredApplications'
 name = "BDownloader"
 value = 'Software\BDownloader\Capabilities'
 
+# The "firewall" checkbox: lets torrent peers connect (seeding needs them to), so Windows
+# Firewall doesn't ask on the first torrent. Needs administrator rights: only an install for
+# everyone gets it; for one user netsh fails quietly and Windows asks as usual. The old rule goes
+# first, so reinstalls don't pile up copies, and unticking the box on an update removes it.
+[[run]]
+file = '{sys}\netsh.exe'
+args = 'advfirewall firewall delete rule name="BDownloader"'
+hidden = true
+
+[[run]]
+file = '{sys}\netsh.exe'
+args = 'advfirewall firewall add rule name="BDownloader" description="Lets torrent peers connect to BDownloader." dir=in action=allow program="{app}\BDownloader.exe" enable=yes profile=any'
+hidden = true
+task = "firewall"
+
 # The app always runs as the user, never as the administrator an install for everyone runs
 # as: the browser can't reach a BDownloader running as administrator, and its settings are the
 # user's. Lets the browser extension reach the app, even before the app is first opened.
@@ -202,4 +222,9 @@ as_user = true
 [[uninstall_run]]
 file = '{app}\BDownloader.exe'
 args = "--unregister"
+hidden = true
+
+[[uninstall_run]]
+file = '{sys}\netsh.exe'
+args = 'advfirewall firewall delete rule name="BDownloader"'
 hidden = true

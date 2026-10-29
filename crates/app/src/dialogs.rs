@@ -48,10 +48,15 @@ fn input<'a>(placeholder: &'a str, value: &'a str) -> text_input::TextInput<'a, 
 
 fn folder_picker<'a>(dir: &Path) -> Element<'a, Message> {
     row![
-        container(text(format::middle_ellipsis(&dir.display().to_string(), 52)).size(14))
-            .padding(12)
-            .width(Fill)
-            .style(style::panel),
+        container(
+            text(format::middle_ellipsis(&dir.display().to_string(), 52))
+                .size(14)
+                .wrapping(text::Wrapping::None)
+        )
+        .padding(12)
+        .width(Fill)
+        .clip(true)
+        .style(style::panel),
         button(text("Browse").size(14))
             .padding([11, 16])
             .style(style::secondary)
@@ -729,14 +734,17 @@ fn copy_field<'a>(value: String, copied: bool) -> Element<'a, Message> {
     };
     // The whole field is the button, so a click anywhere on it copies. Long
     // values (links with tokens) are shortened in the middle to fit on one
-    // line; the copy is whole.
+    // line, and clipped if wide letters still overrun; the copy is whole.
     button(
         row![
-            text(format::middle_ellipsis(&value, 56))
-                .size(14)
-                .font(SEMIBOLD)
-                .wrapping(text::Wrapping::None)
-                .width(Fill),
+            container(
+                text(format::middle_ellipsis(&value, 50))
+                    .size(14)
+                    .font(SEMIBOLD)
+                    .wrapping(text::Wrapping::None)
+            )
+            .width(Fill)
+            .clip(true),
             label
         ]
         .spacing(12)
@@ -1025,12 +1033,18 @@ pub fn details<'a>(item: &'a Item, copied: Option<&str>, limit_text: &'a str, fi
         None => format::size(item.downloaded),
     };
     let (connections_label, connections) = if item.is_torrent() {
-        let peers = match (&item.seeding, item.state.is_running()) {
-            (Some(seeding), _) => plural(seeding.peers, "peer"),
-            (None, true) => plural(item.active_connections, "peer"),
-            (None, false) => "None while stopped".to_owned(),
+        let connected = match (&item.seeding, item.state.is_running()) {
+            (Some(seeding), _) => Some(seeding.peers),
+            (None, true) => Some(item.active_connections),
+            (None, false) => None,
         };
-        ("Peers", peers)
+        let peers = match (item.swarm, connected) {
+            (Some(swarm), Some(n)) => format!("{} seeds · {} peers · connected to {n}", swarm.seeds, swarm.peers),
+            (Some(swarm), None) => format!("{} seeds · {} peers", swarm.seeds, swarm.peers),
+            (None, Some(n)) => format!("Connected to {}", plural(n, "peer")),
+            (None, None) => "None while stopped".to_owned(),
+        };
+        ("Swarm", peers)
     } else if item.state.is_running() && item.active_connections > 0 {
         ("Connections", format!("{} open (up to {})", item.active_connections, item.connections))
     } else {
@@ -1067,6 +1081,9 @@ pub fn details<'a>(item: &'a Item, copied: Option<&str>, limit_text: &'a str, fi
         let shared = format!("{} uploaded · ratio {:.2}", format::size(torrent.uploaded), item.ratio().unwrap_or(0.0));
         let sharing = match (&item.seeding, torrent.seeded) {
             (Some(seeding), _) => format!("{shared} · sharing at {}", format::speed(seeding.upload_rate)),
+            (None, _) if item.state.is_running() && item.upload_rate > 0.0 => {
+                format!("{shared} · sharing at {}", format::speed(item.upload_rate))
+            }
             (None, true) if item.state == State::Completed => format!("{shared} · done sharing"),
             _ => shared,
         };

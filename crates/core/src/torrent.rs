@@ -28,6 +28,7 @@ use tokio_util::sync::CancellationToken;
 use crate::download::{DownloadOptions, Engine, Outcome, Shared, Status, StreamProgress, lock};
 use crate::error::{Error, Result};
 use crate::fsutil::sanitize_file_name;
+use crate::scrape::{self, Swarm};
 
 /// How long a magnet link may take to get its file list from peers.
 const METADATA_TIMEOUT: Duration = Duration::from_secs(120);
@@ -35,6 +36,9 @@ const METADATA_TIMEOUT: Duration = Duration::from_secs(120);
 const POLL: Duration = Duration::from_millis(500);
 /// How often a seeding torrent checks whether it has shared enough.
 const SEED_POLL: Duration = Duration::from_secs(2);
+/// How often the trackers are asked how many share a torrent; sooner after a failure.
+const SCRAPE_EVERY: Duration = Duration::from_secs(300);
+const SCRAPE_RETRY: Duration = Duration::from_secs(60);
 /// The largest .torrent file accepted. Big ones are a few MB.
 pub const MAX_TORRENT_FILE: usize = 16 * 1024 * 1024;
 
@@ -87,6 +91,8 @@ pub struct SeedStatus {
     /// Bytes per second.
     pub upload_rate: f64,
     pub peers: usize,
+    /// How many share the torrent, as its trackers count them.
+    pub swarm: Option<Swarm>,
     /// It has shared enough, or was stopped, and no longer uploads.
     pub done: bool,
 }
@@ -103,6 +109,8 @@ pub(crate) struct Torrents {
     /// The torrents the app knows; others the session remembers are dropped when it starts.
     known: Mutex<Option<HashSet<String>>>,
     seeds: Mutex<HashMap<String, Seed>>,
+    /// For asking trackers how many share a torrent.
+    client: Option<reqwest::Client>,
 }
 
 struct Seed {
@@ -290,7 +298,16 @@ impl Torrents {
             old.stop.cancel();
         }
         let torrents = self.clone();
+        let swarm = self.client.clone().and_then(|client| {
+            let (torrents, info_hash) = (self.clone(), info_hash.clone());
+            watch_swarm(client, &handle, move |swarm| {
+                if let Some(seed) = lock(&torrents.seeds).get_mut(&info_hash) {
+                    seed.status.swarm = Some(swarm);
+                }
+            })
+        });
         tokio::spawn(async move {
+            let _swarm = swarm;
             loop {
                 if release.is_cancelled() {
                     return;
@@ -303,6 +320,7 @@ impl Torrents {
                 let done = enough || failed || stop.is_cancelled();
                 if let Some(seed) = lock(&torrents.seeds).get_mut(&info_hash) {
                     seed.status = SeedStatus {
+                        swarm: seed.status.swarm,
                         uploaded,
                         upload_rate: stats.live.as_ref().map_or(0.0, |l| l.upload_speed.mbps * 1024.0 * 1024.0),
                         peers: stats.live.as_ref().map_or(0, |l| l.snapshot.peer_stats.live as usize),
@@ -337,8 +355,9 @@ impl Torrents {
 impl Engine {
     /// Turns on torrents, keeping their state in `dir`.
     pub fn with_torrents(mut self, dir: impl Into<PathBuf>) -> Self {
-        let torrents = Torrents::new(dir.into());
+        let mut torrents = Torrents::new(dir.into());
         *lock(&torrents.download_limit) = self.speed_limit();
+        torrents.client = Some(self.client.clone());
         self.torrents = Arc::new(torrents);
         self
     }
@@ -421,7 +440,7 @@ pub(crate) async fn download(
     engine: &Engine,
     options: &DownloadOptions,
     source: &TorrentSource,
-    shared: &Shared,
+    shared: &Arc<Shared>,
     pause: &CancellationToken,
 ) -> Result<Outcome> {
     let torrents = &engine.torrents;
@@ -438,6 +457,10 @@ pub(crate) async fn download(
         progress.path = Some(path.clone());
         progress.resumable = true;
     }
+    let _swarm = {
+        let shared = shared.clone();
+        watch_swarm(engine.client.clone(), &handle, move |swarm| lock(&shared.info).swarm = Some(swarm))
+    };
     loop {
         let stats = handle.stats();
         let peers = stats.live.as_ref().map_or(0, |l| l.snapshot.peer_stats.live as usize);
@@ -451,6 +474,9 @@ pub(crate) async fn download(
             };
             progress.active_connections = peers;
             progress.uploaded = source.uploaded + stats.uploaded_bytes;
+            let mib = |mbps: f64| mbps * 1024.0 * 1024.0;
+            progress.rate = Some(stats.live.as_ref().map_or(0.0, |l| mib(l.download_speed.mbps)));
+            progress.upload_rate = stats.live.as_ref().map_or(0.0, |l| mib(l.upload_speed.mbps));
             progress.problem = (matches!(stats.state, TorrentStatsState::Live) && peers == 0).then(|| "Looking for peers".to_owned());
         }
         *lock(&shared.stream) = Some(StreamProgress {
@@ -478,6 +504,38 @@ pub(crate) async fn download(
             () = tokio::time::sleep(POLL) => {}
         }
     }
+}
+
+/// Stops a background task when dropped.
+struct AbortOnDrop(tokio::task::JoinHandle<()>);
+
+impl Drop for AbortOnDrop {
+    fn drop(&mut self) {
+        self.0.abort();
+    }
+}
+
+/// Asks the torrent's trackers how many share it, now and every few
+/// minutes, until the returned guard is dropped. `None` without trackers.
+fn watch_swarm(client: reqwest::Client, handle: &Arc<ManagedTorrent>, store: impl Fn(Swarm) + Send + 'static) -> Option<AbortOnDrop> {
+    let (trackers, info_hash) = handle
+        .with_metadata(|m| (scrape::trackers(&m.torrent_bytes), handle.info_hash().0))
+        .ok()?;
+    if trackers.is_empty() {
+        return None;
+    }
+    Some(AbortOnDrop(tokio::spawn(async move {
+        loop {
+            let wait = match scrape::scrape(&client, &trackers, info_hash).await {
+                Some(swarm) => {
+                    store(swarm);
+                    SCRAPE_EVERY
+                }
+                None => SCRAPE_RETRY,
+            };
+            tokio::time::sleep(wait).await;
+        }
+    })))
 }
 
 /// Reads a .torrent file.

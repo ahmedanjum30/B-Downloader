@@ -6,6 +6,23 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+## [1.2.1] - 2026-10-29
+
+### Added
+- Torrents show their seeds and peers, as their trackers count them, and
+  how many are connected; also their upload speed while they download.
+- The installer can let torrents through Windows Firewall (a checkbox, on
+  by default), so Windows doesn't ask on the first torrent. It needs an
+  install for everyone; uninstalling removes the rule.
+
+### Changed
+- The Torrents tab is always in the sidebar.
+
+### Fixed
+- A torrent's speed no longer disappears for a moment between pieces.
+- Long links and folders no longer run over the Copy and Browse buttons,
+  and long names over a download's buttons.
+
 ## [1.2.0] - 2026-10-29
 
 ### Added
