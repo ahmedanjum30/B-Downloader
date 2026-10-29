@@ -1,4 +1,4 @@
 User-agent: *
 Allow: /
 
-Sitemap: https://ahmedanjum30.github.io/BDownloader/sitemap.xml
+Sitemap: https://ahmedanjum30.github.io/B-Downloader/sitemap.xml
