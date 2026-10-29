@@ -10,24 +10,45 @@ use tokio::net::windows::named_pipe::{NamedPipeServer, ServerOptions};
 
 use crate::app::Message;
 
+/// What the command line asks for: web links, which start right away, and
+/// magnet links and .torrent files (opened from the browser or Explorer),
+/// which ask which files to download first.
+pub fn from_args() -> Vec<Request> {
+    std::env::args().skip(1).filter_map(|arg| request_for(&arg)).collect()
+}
+
+fn request_for(arg: &str) -> Option<Request> {
+    if arg.starts_with("http://") || arg.starts_with("https://") {
+        return Some(Request::Add(AddRequest {
+            start: true,
+            ..AddRequest::new(arg)
+        }));
+    }
+    let magnet = AddRequest::new(arg);
+    if magnet.is_magnet() {
+        return Some(Request::Add(magnet));
+    }
+    let path = std::path::Path::new(arg);
+    let torrent = path.extension().is_some_and(|e| e.eq_ignore_ascii_case("torrent")) && path.is_file();
+    // Absolute, so a running copy started from another folder finds it too.
+    torrent.then(|| Request::OpenTorrentFile {
+        path: std::path::absolute(path)
+            .unwrap_or_else(|_| path.to_owned())
+            .to_string_lossy()
+            .into_owned(),
+    })
+}
+
 /// Hands this launch over to a running copy, if there is one. Returns
 /// whether it did, in which case this copy should exit.
-pub fn hand_over(urls: &[String]) -> bool {
-    if urls.is_empty() {
+pub fn hand_over(requests: &[Request]) -> bool {
+    let Some((first, rest)) = requests.split_first() else {
         return bdownloader_ipc::send(&Request::Show).is_ok();
-    }
-    // Links on the command line start without asking, as they do in a fresh copy.
-    let mut requests = urls.iter().map(|url| {
-        Request::Add(bdownloader_ipc::AddRequest {
-            start: true,
-            ..bdownloader_ipc::AddRequest::new(url.as_str())
-        })
-    });
-    let Some(first) = requests.next() else { return false };
-    if bdownloader_ipc::send(&first).is_err() {
+    };
+    if bdownloader_ipc::send(first).is_err() {
         return false;
     }
-    requests.for_each(|request| drop(bdownloader_ipc::send(&request)));
+    rest.iter().for_each(|request| drop(bdownloader_ipc::send(request)));
     true
 }
 

@@ -24,6 +24,8 @@ pub enum Error {
     Io(#[from] io::Error),
     #[error("checksum mismatch: expected {expected}, got {actual}")]
     ChecksumMismatch { expected: String, actual: String },
+    #[error("torrent: {0}")]
+    Torrent(String),
 }
 
 /// reqwest's own message is often just "error sending request"; the reason

@@ -24,7 +24,7 @@
     <DisplayName>B-Downloader</DisplayName>
     <PublisherDisplayName>Ahmad Anjum</PublisherDisplayName>
     <Logo>Assets\StoreLogo.png</Logo>
-    <Description>A fast, lightweight download manager with multi-connection downloads, pause and resume, and a browser extension.</Description>
+    <Description>A fast, lightweight download manager with multi-connection downloads, torrents, pause and resume, and a browser extension.</Description>
 
     <!-- Only these locations are written for real; everything else stays
          private to the package. Windows 10 can only lift virtualization
@@ -74,6 +74,21 @@
             <desktop:ExecutionAlias Alias="bdl-host.exe" />
           </uap3:AppExecutionAlias>
         </uap3:Extension>
+        <!-- Torrents: .torrent files and magnet links, which arrive on the
+             command line, as they do for the installed app. -->
+        <uap:Extension Category="windows.fileTypeAssociation">
+          <uap:FileTypeAssociation Name="torrent">
+            <uap:DisplayName>Torrent file</uap:DisplayName>
+            <uap:SupportedFileTypes>
+              <uap:FileType>.torrent</uap:FileType>
+            </uap:SupportedFileTypes>
+          </uap:FileTypeAssociation>
+        </uap:Extension>
+        <uap:Extension Category="windows.protocol">
+          <uap:Protocol Name="magnet">
+            <uap:DisplayName>Magnet link</uap:DisplayName>
+          </uap:Protocol>
+        </uap:Extension>
       </Extensions>
     </Application>
   </Applications>

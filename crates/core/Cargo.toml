@@ -22,6 +22,13 @@ percent-encoding = "2"
 sha2 = "0.11"
 md-5 = "0.11"
 aes = "0.9.3"
+# Torrents: magnet links and .torrent files (see torrent.rs). Without its TLS
+# features, which bring reqwest's rustls and a second crypto library: its
+# trackers use the reqwest above, with Windows' own TLS. SHA-1 (for checking
+# pieces) comes from Windows too, through crypto-hash.
+librqbit = { version = "9.0.1", default-features = false }
+librqbit-core = { version = "9.0.1", default-features = false, features = ["sha1-crypto-hash"] }
+librqbit-sha1-wrapper = { version = "9.0.1", default-features = false, features = ["sha1-crypto-hash"] }
 
 [target.'cfg(windows)'.dependencies]
 windows-sys = { version = "0.61", features = ["Win32_Storage_FileSystem", "Win32_System_IO", "Win32_System_Ioctl"] }

@@ -30,12 +30,8 @@ fn main() -> iced::Result {
         Some("--unregister") => return exit_with(browser::unregister()),
         _ => {}
     }
-    let urls: Vec<String> = std::env::args()
-        .skip(1)
-        .filter(|a| a.starts_with("http://") || a.starts_with("https://"))
-        .collect();
-    // Already open: pass the links (or a "show yourself") to that window instead.
-    if instance::hand_over(&urls) {
+    // Already open: pass the links and torrents (or a "show yourself") to that window instead.
+    if instance::hand_over(&instance::from_args()) {
         return Ok(());
     }
     logging::init();

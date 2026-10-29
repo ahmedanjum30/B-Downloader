@@ -8,6 +8,9 @@
 //! its segment, it takes over half of the largest remaining one. Progress is
 //! saved next to the file every few seconds, so a paused or interrupted
 //! download continues where it stopped.
+//!
+//! Torrents (magnet links and .torrent files) download through librqbit
+//! instead, behind the same handle; see the `torrent` module.
 
 mod category;
 mod checksum;
@@ -23,6 +26,7 @@ mod proto;
 mod sabr;
 mod segment;
 mod state;
+mod torrent;
 
 pub use category::{Category, sorted_dir};
 pub use checksum::Checksum;
@@ -33,3 +37,4 @@ pub use download::{
 pub use error::{Error, Result};
 pub use http::ProbeInfo;
 pub use sabr::{YoutubeFormat, YoutubeSource};
+pub use torrent::{MAX_TORRENT_FILE, SeedStatus, TorrentFile, TorrentInfo, TorrentInput, TorrentSource, is_magnet, parse as parse_torrent};

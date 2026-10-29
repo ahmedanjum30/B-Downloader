@@ -2,7 +2,7 @@
 
 use std::path::Path;
 
-use bdownloader_core::MAX_CONNECTIONS;
+use bdownloader_core::{MAX_CONNECTIONS, TorrentInfo};
 use iced::widget::{button, checkbox, column, container, pick_list, row, scrollable, slider, space, text, text_editor, text_input};
 use iced::{Center, Element, Fill, Shrink};
 
@@ -105,12 +105,20 @@ fn cancel<'a>() -> Element<'a, Message> {
 /// `existing`: an unfinished download of the same file (its id and how much
 /// of it is done), which this link can continue instead of starting over.
 pub fn add(dialog: &AddDialog, existing: Option<(u64, u64)>) -> Element<'_, Message> {
-    let url = input("https://example.com/file.zip", &dialog.url)
+    let url = input("https://example.com/file.zip or a magnet link", &dialog.url)
         .on_input(Message::AddUrl)
         .on_paste(Message::AddUrlPasted)
         .on_submit(Message::AddUrlSubmit);
+    let torrent_file = button(
+        row![icon(&icons::FOLDER, 16.0, |c| c.text), text("Torrent file").size(14)]
+            .spacing(8)
+            .align_y(Center),
+    )
+    .padding([10, 14])
+    .style(style::secondary)
+    .on_press(Message::AddTorrentFile);
 
-    let mut body = column![field("Link", url)].spacing(18);
+    let mut body = column![field("Link", row![url, torrent_file].spacing(8).align_y(Center))].spacing(18);
 
     let probe: Option<Element<'_, Message>> = if let Some(source) = &dialog.youtube {
         let total: Option<u64> = source.video.iter().chain(&source.audio).map(|f| f.content_length).sum();
@@ -124,6 +132,12 @@ pub fn add(dialog: &AddDialog, existing: Option<(u64, u64)>) -> Element<'_, Mess
     } else {
         match &dialog.probe {
             Probe::Idle => None,
+            Probe::Checking if dialog.is_torrent() && dialog.url.trim().to_ascii_lowercase().starts_with("magnet:") => Some(
+                muted("Getting the torrent's file list from peers… This can take a minute.")
+                    .size(13)
+                    .into(),
+            ),
+            Probe::Checking if dialog.is_torrent() => Some(muted("Reading the torrent…").size(13).into()),
             Probe::Checking => Some(muted("Checking link…").size(13).into()),
             Probe::Failed(error) => Some(colored(error.as_str(), |c| c.danger).size(13).into()),
             Probe::Ready(info) => {
@@ -154,6 +168,28 @@ pub fn add(dialog: &AddDialog, existing: Option<(u64, u64)>) -> Element<'_, Mess
             }
         }
     };
+    // A torrent: what's in it, to choose from.
+    if let Some(torrent) = &dialog.torrent {
+        let count = dialog.selected.iter().filter(|on| **on).count();
+        let size = if count == torrent.files.len() {
+            format!("{} · {}", format::size(dialog.selected_size()), plural(torrent.files.len(), "file"))
+        } else {
+            format!("{} · {count} of {} files", format::size(dialog.selected_size()), torrent.files.len())
+        };
+        let badge = if torrent.multi_file {
+            "BT".to_owned()
+        } else {
+            extension_of(&torrent.name)
+        };
+        let about = format!("{size} · from other people (peers) · can resume");
+        body = body.push(summary(badge, format::middle_ellipsis(&torrent.name, 56), about, |c| c.success));
+        if torrent.files.len() > 1 {
+            body = body.push(torrent_files(dialog));
+        }
+        body = body.push(field("Save to", folder_picker(&dialog.save_dir())));
+        let footer = add_footer(dialog);
+        return frame("Add torrent", body.into(), footer);
+    }
     if let Some(probe) = probe {
         body = body.push(probe);
     }
@@ -210,7 +246,11 @@ pub fn add(dialog: &AddDialog, existing: Option<(u64, u64)>) -> Element<'_, Mess
     }
     body = body.push(checksum);
 
-    let footer = row![
+    frame("Add download", body.into(), add_footer(dialog))
+}
+
+fn add_footer(dialog: &AddDialog) -> Element<'_, Message> {
+    row![
         space().width(Fill),
         cancel(),
         button(text("Download later").size(14).font(SEMIBOLD))
@@ -222,8 +262,98 @@ pub fn add(dialog: &AddDialog, existing: Option<(u64, u64)>) -> Element<'_, Mess
             .style(style::primary)
             .on_press_maybe(dialog.can_submit().then_some(Message::ConfirmAdd)),
     ]
-    .spacing(10);
-    frame("Add download", body.into(), footer.into())
+    .spacing(10)
+    .into()
+}
+
+/// The torrent's files, each with a checkbox, and one for all of them.
+fn torrent_files(dialog: &AddDialog) -> Element<'_, Message> {
+    let Some(torrent) = &dialog.torrent else { return space().into() };
+    file_list(torrent, dialog.selected.clone(), Message::AddTorrentSelectAll, Message::AddTorrentSelect)
+}
+
+/// Whether one of a torrent download's files is chosen.
+fn torrent_file_chosen(item: &Item, index: usize) -> bool {
+    item.torrent
+        .as_ref()
+        .and_then(|t| t.files.as_ref())
+        .is_none_or(|files| files.contains(&index))
+}
+
+fn torrent_hash(item: &Item) -> &str {
+    item.torrent.as_ref().map_or("", |t| t.info_hash.as_str())
+}
+
+/// A torrent's files with a checkbox each (`selected`, in the same order), and one for all.
+fn file_list<'a>(
+    torrent: &'a TorrentInfo,
+    selected: Vec<bool>,
+    on_all: impl Fn(bool) -> Message + 'a,
+    on_file: impl Fn(usize, bool) -> Message + Clone + 'a,
+) -> Element<'a, Message> {
+    let all = selected.iter().all(|on| *on);
+    let chosen: u64 = torrent.files.iter().zip(&selected).filter(|(_, on)| **on).map(|(f, _)| f.size).sum();
+    let header = row![
+        checkbox(all)
+            .label("All files")
+            .on_toggle(on_all)
+            .size(18)
+            .text_size(14)
+            .spacing(10)
+            .width(Fill),
+        muted(format!(
+            "{} of {}",
+            format::size(chosen),
+            format::size(torrent.files.iter().map(|f| f.size).sum())
+        ))
+        .size(13),
+    ]
+    .align_y(Center);
+    let files = column(torrent.files.iter().zip(selected).enumerate().map(|(i, (file, on))| {
+        let on_file = on_file.clone();
+        row![
+            checkbox(on)
+                .label(format::middle_ellipsis(&file.path, 60))
+                .on_toggle(move |on| on_file(i, on))
+                .size(16)
+                .text_size(13)
+                .spacing(10)
+                .width(Fill),
+            muted(format::size(file.size)).size(12),
+        ]
+        .spacing(12)
+        .align_y(Center)
+        .into()
+    }))
+    .spacing(8)
+    .padding(iced::Padding {
+        right: 12.0,
+        ..iced::Padding::ZERO
+    });
+    container(
+        column![
+            header,
+            container(space()).width(Fill).height(1).style(style::rule),
+            scrollable(files).height(Shrink).style(style::scrollbar),
+        ]
+        .spacing(10),
+    )
+    .padding(12)
+    .width(Fill)
+    .max_height(220)
+    .style(style::panel)
+    .into()
+}
+
+fn plural(n: usize, word: &str) -> String {
+    if n == 1 { format!("1 {word}") } else { format!("{n} {word}s") }
+}
+
+/// The extension a file-type badge shows for a name, such as "ZIP".
+fn extension_of(name: &str) -> String {
+    name.rsplit_once('.')
+        .filter(|(stem, ext)| !stem.is_empty() && (1..=5).contains(&ext.len()))
+        .map_or("FILE".to_owned(), |(_, ext)| ext.to_ascii_uppercase())
 }
 
 /// A line explaining the setting above it.
@@ -419,6 +549,54 @@ fn general(draft: &Settings) -> Element<'_, Message> {
     .into()
 }
 
+fn torrents<'a>(draft: &'a Settings, seed_ratio_text: &'a str) -> Element<'a, Message> {
+    let mut seeding = column![
+        checkbox(draft.seed)
+            .label("Keep sharing finished torrents")
+            .on_toggle(Message::SettingsSeed)
+            .size(18)
+            .text_size(14)
+            .spacing(10),
+    ]
+    .spacing(8);
+    if draft.seed {
+        seeding = seeding.push(
+            row![
+                muted("Until they've uploaded").size(13),
+                text_input("1", seed_ratio_text)
+                    .on_input(Message::SettingsSeedRatio)
+                    .padding([6, 8])
+                    .size(14)
+                    .width(64)
+                    .style(style::input),
+                muted("times their size").size(13),
+            ]
+            .spacing(8)
+            .align_y(Center),
+        );
+    }
+    seeding = seeding.push(hint(
+        "Torrents download from other people, and work because people share back. \
+         Sharing as much as you downloaded (1) is the usual courtesy.",
+    ));
+    column![
+        field("Sharing (seeding)", seeding),
+        field(
+            "Opening torrents",
+            hint(
+                "Magnet links and .torrent files open in BDownloader from the browser extension, the Add download \
+                 dialog, or Windows: choose BDownloader for them in Settings > Apps > Default apps.",
+            ),
+        ),
+        field(
+            "Choosing files",
+            hint("A torrent's details (the i button) list its files. Tick or untick them at any time, also while it downloads."),
+        ),
+    ]
+    .spacing(22)
+    .into()
+}
+
 fn downloads(draft: &Settings) -> Element<'_, Message> {
     column![
         field(
@@ -434,14 +612,17 @@ fn downloads(draft: &Settings) -> Element<'_, Message> {
         ),
         field(
             "Speed limits",
-            hint("For all downloads together: the gauge button in the top bar. For one download: its details (the i button)."),
+            hint(
+                "For all downloads together, torrents too: the gauge button in the top bar. \
+                 For one download: its details (the i button)."
+            ),
         ),
     ]
     .spacing(22)
     .into()
 }
 
-pub fn settings(draft: &Settings, update_status: String, tab: SettingsTab) -> Element<'_, Message> {
+pub fn settings<'a>(draft: &'a Settings, update_status: String, tab: SettingsTab, seed_ratio_text: &'a str) -> Element<'a, Message> {
     let tabs = column(SettingsTab::ALL.map(|t| {
         button(text(t.label()).size(14).font(if t == tab { SEMIBOLD } else { crate::view::FONT }))
             .padding([8, 10])
@@ -455,6 +636,10 @@ pub fn settings(draft: &Settings, update_status: String, tab: SettingsTab) -> El
     let (content, about) = match tab {
         SettingsTab::General => (general(draft), "Where downloads go and how BDownloader looks."),
         SettingsTab::Downloads => (downloads(draft), "How each download uses your connection."),
+        SettingsTab::Torrents => (
+            torrents(draft, seed_ratio_text),
+            "Magnet links and .torrent files, and sharing them back.",
+        ),
         SettingsTab::Queue => (queue_settings(draft), "Downloads saved for later, and when they run."),
         SettingsTab::Updates => (updates(draft, update_status), "How BDownloader stays up to date."),
         SettingsTab::Help => (help(), "Report a problem, or find the log."),
@@ -825,7 +1010,7 @@ pub fn remove(item: &Item, delete_file: bool) -> Element<'_, Message> {
 }
 
 /// A download's details: where it's saved, where it came from, and how it's going.
-pub fn details<'a>(item: &'a Item, copied: Option<&str>, limit_text: &'a str) -> Element<'a, Message> {
+pub fn details<'a>(item: &'a Item, copied: Option<&str>, limit_text: &'a str, files_of: Option<&'a TorrentInfo>) -> Element<'a, Message> {
     let status = match &item.state {
         State::Starting => "Starting".to_owned(),
         State::Downloading => "Downloading".to_owned(),
@@ -839,10 +1024,17 @@ pub fn details<'a>(item: &'a Item, copied: Option<&str>, limit_text: &'a str) ->
         Some(size) => format!("{} of {}", format::size(item.downloaded), format::size(size)),
         None => format::size(item.downloaded),
     };
-    let connections = if item.state.is_running() && item.active_connections > 0 {
-        format!("{} open (up to {})", item.active_connections, item.connections)
+    let (connections_label, connections) = if item.is_torrent() {
+        let peers = match (&item.seeding, item.state.is_running()) {
+            (Some(seeding), _) => plural(seeding.peers, "peer"),
+            (None, true) => plural(item.active_connections, "peer"),
+            (None, false) => "None while stopped".to_owned(),
+        };
+        ("Peers", peers)
+    } else if item.state.is_running() && item.active_connections > 0 {
+        ("Connections", format!("{} open (up to {})", item.active_connections, item.connections))
     } else {
-        format!("Up to {}", item.connections)
+        ("Connections", format!("Up to {}", item.connections))
     };
     let line = |label: &'a str, value: String| {
         row![muted(label).size(13).width(110), text(value).size(14).width(Fill)]
@@ -868,9 +1060,28 @@ pub fn details<'a>(item: &'a Item, copied: Option<&str>, limit_text: &'a str) ->
         .style(style::panel),
         line("Status", status),
         line("Size", progress),
-        line("Connections", connections),
+        line(connections_label, connections),
     ]
     .spacing(12);
+    if let Some(torrent) = &item.torrent {
+        let shared = format!("{} uploaded · ratio {:.2}", format::size(torrent.uploaded), item.ratio().unwrap_or(0.0));
+        let sharing = match (&item.seeding, torrent.seeded) {
+            (Some(seeding), _) => format!("{shared} · sharing at {}", format::speed(seeding.upload_rate)),
+            (None, true) if item.state == State::Completed => format!("{shared} · done sharing"),
+            _ => shared,
+        };
+        body = body.push(line("Shared", sharing));
+        if let Some(info) = files_of.filter(|t| t.info_hash == torrent_hash(item) && t.files.len() > 1) {
+            let chosen = |index: usize| torrent_file_chosen(item, index);
+            body = body.push(muted("Files").size(13).font(SEMIBOLD));
+            body = body.push(file_list(
+                info,
+                info.files.iter().map(|f| chosen(f.index)).collect(),
+                move |on| Message::ItemTorrentAllFiles(item.id, on),
+                move |i, on| Message::ItemTorrentFile(item.id, i, on),
+            ));
+        }
+    }
     if let Some(source) = &item.youtube {
         let what = if source.video.is_some() { "Picture and sound" } else { "Sound only" };
         body = body.push(line("YouTube", what.to_owned()));
@@ -878,7 +1089,8 @@ pub fn details<'a>(item: &'a Item, copied: Option<&str>, limit_text: &'a str) ->
     if let Some((kind, hash)) = &item.checksum {
         body = body.push(line("Checksum", format!("{kind:?} {hash}")));
     }
-    if item.state != State::Completed {
+    // Torrents follow the limit for all downloads only.
+    if item.state != State::Completed && !item.is_torrent() {
         let id = item.id;
         let on = item.speed_limit_mb.is_some();
         let mut limit = row![
@@ -909,7 +1121,7 @@ pub fn details<'a>(item: &'a Item, copied: Option<&str>, limit_text: &'a str) ->
     body = body
         .push(muted("Saved in").size(13).font(SEMIBOLD))
         .push(copyable(item.dir.display().to_string()))
-        .push(muted("Link").size(13).font(SEMIBOLD))
+        .push(muted(if item.is_torrent() { "Torrent" } else { "Link" }).size(13).font(SEMIBOLD))
         .push(copyable(item.url.clone()));
     let page = item.headers.iter().find(|(name, _)| name.eq_ignore_ascii_case("referer"));
     if let Some((_, page)) = page {
@@ -933,7 +1145,7 @@ pub fn details<'a>(item: &'a Item, copied: Option<&str>, limit_text: &'a str) ->
 }
 
 /// What's about to be downloaded: a file-type badge, the size and how it downloads.
-fn summary<'a>(badge: String, size: String, support: &'a str, pick: style::Pick) -> Element<'a, Message> {
+fn summary<'a>(badge: String, size: String, support: impl text::IntoFragment<'a>, pick: style::Pick) -> Element<'a, Message> {
     container(
         row![
             file_badge(badge),

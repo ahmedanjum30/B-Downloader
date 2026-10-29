@@ -24,8 +24,11 @@ pub enum Request {
         #[serde(default)]
         browser: Option<String>,
     },
-    /// Download a file.
+    /// Download a file, or a torrent from its magnet link.
     Add(AddRequest),
+    /// Open a .torrent file on this PC: one opened in Explorer, or given on
+    /// the command line. Never accepted from the browser.
+    OpenTorrentFile { path: String },
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -140,10 +143,16 @@ impl AddRequest {
         if names.is_empty() { "none".to_owned() } else { names.join(", ") }
     }
 
-    /// Only web downloads are accepted; `file:` and other schemes are refused.
+    /// Only web downloads and magnet links are accepted; `file:` and other schemes are refused.
     pub fn is_valid(&self) -> bool {
         let url = self.url.trim();
-        url.len() <= 8192 && (url.starts_with("http://") || url.starts_with("https://"))
+        url.len() <= 8192 && (url.starts_with("http://") || url.starts_with("https://") || self.is_magnet())
+    }
+
+    /// A torrent's magnet link (`magnet:?xt=urn:btih:...`).
+    pub fn is_magnet(&self) -> bool {
+        let url = self.url.trim();
+        url.len() <= 8192 && url.get(..20).is_some_and(|start| start.eq_ignore_ascii_case("magnet:?xt=urn:btih:"))
     }
 
     /// The request headers to send with the download.

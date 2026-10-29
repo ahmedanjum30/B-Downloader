@@ -17,7 +17,7 @@ use std::collections::VecDeque;
 use std::path::PathBuf;
 use std::time::Duration;
 
-use bdownloader_core::{Category, Engine, Outcome, ProbeInfo};
+use bdownloader_core::{Category, Engine, Outcome, ProbeInfo, TorrentInfo};
 use bdownloader_ipc::{AddRequest, Request};
 use iced::keyboard::{self, Key, key::Named};
 use iced::theme::Mode;
@@ -58,6 +58,16 @@ fn focus_window() -> Task<Message> {
 
 /// How often running downloads refresh on screen.
 const REFRESH: Duration = Duration::from_millis(250);
+/// How often seeding torrents refresh on screen.
+const SEED_REFRESH: Duration = Duration::from_secs(2);
+
+/// Something to ask about in the Add dialog, waiting for it to be free.
+enum Pending {
+    /// A download from the browser, or a magnet link.
+    Add(AddRequest),
+    /// A .torrent file opened from Explorer.
+    TorrentFile(PathBuf),
+}
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Filter {
@@ -68,6 +78,8 @@ pub enum Filter {
     Failed,
     /// The download queue: waiting, or running as part of it.
     Queue,
+    /// Torrents: magnet links and .torrent files.
+    Torrents,
     /// Downloads of one kind of file.
     Category(Category),
 }
@@ -84,6 +96,7 @@ impl Filter {
             Filter::Paused => "Paused",
             Filter::Failed => "Failed",
             Filter::Queue => "Queue",
+            Filter::Torrents => "Torrents",
             Filter::Category(category) => category.name(),
         }
     }
@@ -96,6 +109,7 @@ impl Filter {
             // Downloads waiting in the queue are under Queue instead.
             Filter::Paused => item.state == State::Paused && !item.queued,
             Filter::Queue => item.queued,
+            Filter::Torrents => item.is_torrent(),
             Filter::Failed => matches!(item.state, State::Failed(_)),
             Filter::Category(category) => Category::of(&item.display_name()) == Some(category),
         }
@@ -155,6 +169,19 @@ pub enum Message {
     AddUrlPasted(String),
     AddUrlSubmit,
     Probed(u64, Result<ProbeInfo, String>),
+    /// Pick a .torrent file on the PC.
+    AddTorrentFile,
+    TorrentFilePicked(Option<PathBuf>),
+    TorrentProbed(u64, Result<TorrentInfo, String>),
+    /// Download one of the torrent's files, or not.
+    AddTorrentSelect(usize, bool),
+    AddTorrentSelectAll(bool),
+    /// A finished torrent stops uploading.
+    StopSeeding(u64),
+    /// Download one of a torrent's files, or not, from its details.
+    ItemTorrentFile(u64, usize, bool),
+    ItemTorrentAllFiles(u64, bool),
+    SeedTick,
     AddName(String),
     AddConnections(usize),
     AddVerify(bool),
@@ -186,6 +213,9 @@ pub enum Message {
     SettingsCloseToTray(bool),
     SettingsAutoUpdate(bool),
     SettingsSortByType(bool),
+    SettingsSeed(bool),
+    /// The seed ratio as typed.
+    SettingsSeedRatio(String),
     SaveSettings,
 
     /// Show Settings at this section, opening it if needed.
@@ -281,8 +311,8 @@ pub struct App {
     pub update_manual: bool,
     /// Run the downloaded installer when quitting, and how to come back.
     install_on_quit: Option<Relaunch>,
-    /// Downloads from the browser waiting for their confirmation dialog.
-    pending: VecDeque<AddRequest>,
+    /// Downloads from the browser and torrents waiting for their confirmation dialog.
+    pending: VecDeque<Pending>,
     /// Dialogs covered by a newer one, which come back as it closes (last on top).
     covered: Vec<Modal>,
     /// The speed limit field in Settings, as typed.
@@ -300,13 +330,21 @@ pub struct App {
     pub item_limit_text: String,
     /// The section Settings shows.
     pub settings_tab: SettingsTab,
+    /// The seed ratio field in Settings, as typed.
+    pub seed_ratio_text: String,
+    /// The files of the torrent whose details are showing.
+    pub details_torrent: Option<TorrentInfo>,
 }
 
 impl App {
     pub fn new() -> (Self, Task<Message>) {
-        let engine = Engine::new().expect("failed to set up the HTTP client");
+        let engine = Engine::new()
+            .expect("failed to set up the HTTP client")
+            .with_torrents(store::torrents_dir());
         let settings = store::load_settings();
         engine.set_speed_limit(settings.speed_limit());
+        engine.set_seed_ratio(settings.seed_ratio());
+        let seed_ratio_text = format::number(settings.seed_ratio);
         let speed_limit_text = format::number(settings.speed_limit_mb);
         let items: Vec<Item> = store::load_downloads().into_iter().map(Item::from_saved).collect();
         let next_id = items.iter().map(|i| i.id).max().unwrap_or(0) + 1;
@@ -337,24 +375,30 @@ impl App {
             clock_minute: Some(queue::local_minute()),
             item_limit_text: String::new(),
             settings_tab: SettingsTab::General,
+            seed_ratio_text,
+            details_torrent: None,
         };
-        // `BDownloader.exe URL...` starts those downloads right away.
-        for url in std::env::args().skip(1).filter(|a| a.starts_with("http://") || a.starts_with("https://")) {
-            app.add(AddRequest::new(url));
-        }
+        app.engine.set_known_torrents(app.torrent_hashes());
         // Downloads that were running when the app restarted for an update.
         let engine = app.engine.clone();
         for item in app.items.iter_mut().filter(|i| i.resume) {
             item.resume = false;
             item.start(&engine);
         }
+        // Finished torrents that hadn't shared enough yet.
+        for item in &app.items {
+            item.start_seeding(&engine);
+        }
 
-        let mut tasks = vec![
+        // `BDownloader.exe URL...` starts those downloads right away; magnet
+        // links and .torrent files ask which files to download first.
+        let mut tasks: Vec<Task<Message>> = instance::from_args().into_iter().map(|r| Task::done(Message::External(r))).collect();
+        tasks.extend([
             system::theme().map(Message::SystemTheme),
             // Give the app a moment to settle before going online.
             Task::perform(tokio::time::sleep(Duration::from_secs(5)), |_| Message::CheckForUpdates { manual: false }),
             trim_memory_soon(),
-        ];
+        ]);
         // Started in the background (after an update): stay in the tray, unless there is none.
         if std::env::args().any(|a| a == "--background") {
             if app.tray.is_some() {
@@ -417,6 +461,9 @@ impl App {
         if self.items.iter().any(|i| i.handle.is_some()) || matches!(self.update, Update::Downloading { .. }) {
             subscriptions.push(time::every(REFRESH).map(|_| Message::Tick));
         }
+        if self.settings.seed && self.items.iter().any(Item::may_seed) {
+            subscriptions.push(time::every(SEED_REFRESH).map(|_| Message::SeedTick));
+        }
         if self.settings.queue_start_daily || self.settings.queue_stop_daily {
             subscriptions.push(time::every(Duration::from_secs(20)).map(|_| Message::QueueClock));
         }
@@ -453,7 +500,16 @@ impl App {
         self.items.iter_mut().find(|i| i.id == id)
     }
 
+    /// The torrents in the list.
+    fn torrent_hashes(&self) -> Vec<String> {
+        self.items
+            .iter()
+            .filter_map(|i| i.torrent.as_ref().map(|t| t.info_hash.clone()))
+            .collect()
+    }
+
     fn save(&self) {
+        self.engine.set_known_torrents(self.torrent_hashes());
         let saved: Vec<_> = self.items.iter().map(Item::to_saved).collect();
         // Losing the list is annoying but not fatal; the downloads themselves keep their own resume files.
         let _ = store::save_downloads(&saved);
@@ -464,8 +520,15 @@ impl App {
         // Once no dialog is showing, the next download from the browser asks for confirmation.
         if self.modal.is_none()
             && !self.exiting
-            && let Some(request) = self.pending.pop_front()
+            && let Some(pending) = self.pending.pop_front()
         {
+            let request = match pending {
+                Pending::Add(request) => request,
+                Pending::TorrentFile(path) => {
+                    self.modal = Some(Modal::Add(Box::new(AddDialog::from_torrent_file(&self.settings, &path))));
+                    return Task::batch([task, self.probe()]);
+                }
+            };
             // "Open download page" was used for an expired download: this is likely its new link.
             if let Some(id) = self.items.iter().find(|i| i.awaiting_link).map(|i| i.id) {
                 if let Some(item) = self.item(id) {
@@ -511,6 +574,8 @@ impl App {
             | Message::OpenFile(_)
             | Message::ShowInFolder(_)
             | Message::ShowDetails(_)
+            | Message::ItemTorrentFile(..)
+            | Message::ItemTorrentAllFiles(..)
             | Message::OpenDownloadFolder(_)) => return self.handle_downloads(m),
             m @ (Message::OpenAdd
             | Message::Clipboard(_)
@@ -518,6 +583,11 @@ impl App {
             | Message::AddUrlPasted(_)
             | Message::AddUrlSubmit
             | Message::Probed(..)
+            | Message::AddTorrentFile
+            | Message::TorrentFilePicked(_)
+            | Message::TorrentProbed(..)
+            | Message::AddTorrentSelect(..)
+            | Message::AddTorrentSelectAll(_)
             | Message::AddName(_)
             | Message::AddConnections(_)
             | Message::AddVerify(_)
@@ -544,6 +614,8 @@ impl App {
             | Message::SettingsCloseToTray(_)
             | Message::SettingsAutoUpdate(_)
             | Message::SettingsSortByType(_)
+            | Message::SettingsSeed(_)
+            | Message::SettingsSeedRatio(_)
             | Message::SettingsQueueAtOnce(_)
             | Message::SettingsQueueStartDaily(_)
             | Message::SettingsQueueStart(_)
@@ -565,8 +637,30 @@ impl App {
             | Message::ConfirmRefresh) => return self.handle_refresh(m),
 
             Message::Tick => return self.tick(),
+            Message::SeedTick => {
+                let engine = self.engine.clone();
+                let mut stopped = false;
+                for item in &mut self.items {
+                    stopped |= item.refresh_seeding(&engine);
+                }
+                if stopped {
+                    self.save();
+                }
+            }
+            Message::StopSeeding(id) => {
+                let engine = self.engine.clone();
+                if let Some(item) = self.item(id)
+                    && let Some(torrent) = &mut item.torrent
+                {
+                    engine.stop_seeding(&torrent.info_hash);
+                    torrent.seeded = true;
+                    item.seeding = None;
+                }
+                self.save();
+            }
             Message::Finished(id, result) => {
                 let engine = self.engine.clone();
+                let seed = self.settings.seed_ratio().is_some();
                 let paused = matches!(result, Ok(Outcome::Paused));
                 if let Some(item) = self.item(id) {
                     item.segments.clear();
@@ -578,6 +672,10 @@ impl App {
                             item.size = Some(item.size.unwrap_or(item.downloaded));
                             item.downloaded = item.size.unwrap_or(item.downloaded);
                             item.state = State::Completed;
+                            // With seeding off, a torrent is done once downloaded.
+                            if !seed && let Some(torrent) = &mut item.torrent {
+                                torrent.seeded = true;
+                            }
                         }
                         Ok(Outcome::Paused) => item.state = State::Paused,
                         Err(e) => item.state = State::Failed(e),
@@ -643,7 +741,17 @@ impl App {
             Message::External(request) => match request {
                 Request::Show => return self.show_window(),
                 Request::Hello { .. } => self.extension_connected(),
-                Request::Add(add) if add.start => {
+                Request::OpenTorrentFile { path } => {
+                    if let Some(open) = self.modal.take()
+                        && !matches!(open, Modal::PowerCountdown { .. })
+                    {
+                        self.covered.push(open);
+                    }
+                    self.pending.push_back(Pending::TorrentFile(PathBuf::from(path)));
+                    return self.show_window();
+                }
+                // A magnet link asks which files to download first.
+                Request::Add(add) if add.start && !add.is_magnet() => {
                     self.add(add);
                     self.show(Filter::All);
                     return self.show_window();
@@ -673,7 +781,7 @@ impl App {
                         {
                             self.covered.push(open);
                         }
-                        self.pending.push_back(add);
+                        self.pending.push_back(Pending::Add(add));
                     }
                     return self.show_window();
                 }

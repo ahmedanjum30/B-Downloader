@@ -34,7 +34,9 @@ fn handle(input: &mut impl Read) -> io::Result<Reply> {
     let request: Request = serde_json::from_slice(&message).map_err(io::Error::other)?;
     let taken = Reply { ok: true, error: None };
     match &request {
-        Request::Add(add) if !add.is_valid() => return Err(io::Error::other("only http and https links can be downloaded")),
+        Request::Add(add) if !add.is_valid() => return Err(io::Error::other("only http and https links and magnet links can be downloaded")),
+        // Files on the PC are opened from Explorer, never by a web page.
+        Request::OpenTorrentFile { .. } => return Err(io::Error::other("the browser can't open files on the PC")),
         // Don't start the app just because the browser started.
         Request::Hello { .. } | Request::Show => return bdownloader_ipc::send(&request).map(|()| taken.clone()).or(Ok(taken)),
         Request::Add(_) => {}

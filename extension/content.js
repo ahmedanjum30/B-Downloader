@@ -27,6 +27,28 @@
     }
   }
 
+  // Magnet links open in BDownloader instead of the browser's "Open this
+  // app?" prompt. If BDownloader can't be reached, the browser has the link as usual.
+  document.addEventListener(
+    "click",
+    (event) => {
+      if (event.defaultPrevented || event.button !== 0 || event.ctrlKey || event.metaKey || event.shiftKey || event.altKey) return;
+      const link = event.target instanceof Element ? event.target.closest("a[href]") : null;
+      if (!link || !/^magnet:\?xt=urn:btih:/i.test(link.href) || !connected()) return;
+      event.preventDefault();
+      const href = link.href;
+      ask({ type: "magnet", url: href }).then(
+        (taken) => {
+          if (!taken) location.href = href;
+        },
+        () => {
+          location.href = href;
+        },
+      );
+    },
+    true,
+  );
+
   // Playlists found by hook.js, which can't talk to the extension itself.
   window.addEventListener("message", (event) => {
     if (event.source !== window || !event.data) return;

@@ -4,10 +4,10 @@
 use std::path::PathBuf;
 use std::time::{Duration, Instant};
 
-use bdownloader_core::{DownloadHandle, DownloadOptions, Engine, SegmentProgress, Status, YoutubeFormat, YoutubeSource};
+use bdownloader_core::{DownloadHandle, DownloadOptions, Engine, SeedStatus, SegmentProgress, Status, TorrentSource, YoutubeFormat, YoutubeSource};
 use bdownloader_ipc::{YoutubeFormatInfo, YoutubeRequest};
 
-use crate::store::{HashKind, SavedDownload, SavedState};
+use crate::store::{self, HashKind, SavedDownload, SavedState, SavedTorrent};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum State {
@@ -64,6 +64,11 @@ pub struct Item {
     pub queued: bool,
     /// This download's own speed limit, in MB/s.
     pub speed_limit_mb: Option<f64>,
+    /// A torrent, downloaded from peers. `url` is its magnet link or where
+    /// its .torrent file came from.
+    pub torrent: Option<SavedTorrent>,
+    /// A finished torrent's upload, while it seeds.
+    pub seeding: Option<SeedStatus>,
 }
 
 impl Item {
@@ -92,6 +97,8 @@ impl Item {
             sort_by_type: false,
             queued: false,
             speed_limit_mb: None,
+            torrent: None,
+            seeding: None,
         }
     }
 
@@ -111,6 +118,7 @@ impl Item {
             sort_by_type: saved.sort_by_type,
             queued: saved.queued,
             speed_limit_mb: saved.speed_limit_mb,
+            torrent: saved.torrent,
             ..Self::new(saved.id, saved.url, saved.dir, saved.file_name, saved.connections, saved.checksum)
         }
     }
@@ -145,6 +153,7 @@ impl Item {
             sort_by_type: self.sort_by_type,
             queued: self.queued,
             speed_limit_mb: self.speed_limit_mb,
+            torrent: self.torrent.clone(),
         }
     }
 
@@ -152,6 +161,14 @@ impl Item {
         if self.handle.is_some() {
             return;
         }
+        let torrent = match self.torrent_source() {
+            Some(Ok(source)) => Some(source),
+            Some(Err(e)) => {
+                self.state = State::Failed(e);
+                return;
+            }
+            None => None,
+        };
         let options = DownloadOptions {
             url: self.url.clone(),
             dir: self.dir.clone(),
@@ -164,11 +181,69 @@ impl Item {
             state_dir: Some(crate::store::resume_dir()),
             sort_by_type: self.sort_by_type,
             speed_limit: self.speed_limit_mb.map(mb_per_second),
+            torrent,
         };
         self.awaiting_link = false;
         self.handle = Some(engine.start(options));
         self.state = State::Starting;
         self.speed = Speed::default();
+    }
+
+    /// What the engine needs to download or seed this torrent, if it is one.
+    fn torrent_source(&self) -> Option<Result<TorrentSource, String>> {
+        let torrent = self.torrent.as_ref()?;
+        Some(
+            std::fs::read(store::torrent_file(&torrent.info_hash))
+                .map(|bytes| TorrentSource {
+                    bytes,
+                    files: torrent.files.clone(),
+                    uploaded: torrent.uploaded,
+                })
+                .map_err(|e| format!("The torrent's file is missing: {e}")),
+        )
+    }
+
+    pub fn is_torrent(&self) -> bool {
+        self.torrent.is_some()
+    }
+
+    /// Seeds a torrent that finished before the app last closed, until it
+    /// has shared enough.
+    pub fn start_seeding(&self, engine: &Engine) {
+        if self.state != State::Completed || self.torrent.as_ref().is_none_or(|t| t.seeded) {
+            return;
+        }
+        if let Some(Ok(source)) = self.torrent_source() {
+            engine.seed(source, self.dir.clone());
+        }
+    }
+
+    /// Copies a finished torrent's seeding into the item. Returns whether
+    /// it just stopped (so the list should be saved).
+    pub fn refresh_seeding(&mut self, engine: &Engine) -> bool {
+        let Some(torrent) = &mut self.torrent else { return false };
+        if torrent.seeded {
+            self.seeding = None;
+            return false;
+        }
+        let status = engine.seed_status(&torrent.info_hash);
+        self.seeding = status.filter(|s| !s.done);
+        let Some(status) = status else { return false };
+        torrent.uploaded = torrent.uploaded.max(status.uploaded);
+        torrent.seeded = status.done;
+        status.done
+    }
+
+    /// A finished torrent that may still be seeding.
+    pub fn may_seed(&self) -> bool {
+        self.state == State::Completed && self.torrent.as_ref().is_some_and(|t| !t.seeded)
+    }
+
+    /// Uploaded so far divided by the size: how much of its share it's given back.
+    pub fn ratio(&self) -> Option<f64> {
+        let torrent = self.torrent.as_ref()?;
+        let size = self.size.filter(|s| *s > 0)?;
+        Some(torrent.uploaded as f64 / size as f64)
     }
 
     pub fn pause(&self) {
@@ -219,6 +294,9 @@ impl Item {
         self.active_connections = progress.active_connections;
         self.problem = progress.problem;
         self.receiving = progress.receiving;
+        if let Some(torrent) = &mut self.torrent {
+            torrent.uploaded = torrent.uploaded.max(progress.uploaded);
+        }
         self.speed.sample(self.downloaded);
     }
 
@@ -233,6 +311,9 @@ impl Item {
     /// The error usually means the link's token or session has run out.
     pub fn link_may_have_expired(&self) -> bool {
         let State::Failed(error) = &self.state else { return false };
+        if self.is_torrent() {
+            return false;
+        }
         ["HTTP 401", "HTTP 403", "HTTP 404", "HTTP 410", "changed on the server"]
             .iter()
             .any(|sign| error.contains(sign))
@@ -250,6 +331,10 @@ impl Item {
 
     pub fn extension(&self) -> String {
         let name = self.display_name();
+        // A torrent of several files is a folder.
+        if self.torrent.as_ref().is_some_and(|t| t.folder) {
+            return "BT".into();
+        }
         match name.rsplit_once('.') {
             Some((stem, ext)) if !stem.is_empty() && (1..=5).contains(&ext.len()) => ext.to_ascii_uppercase(),
             _ => "FILE".into(),
@@ -271,6 +356,9 @@ impl Item {
     }
 
     pub fn host(&self) -> String {
+        if self.is_torrent() {
+            return "Torrent".to_owned();
+        }
         self.url
             .split("://")
             .nth(1)

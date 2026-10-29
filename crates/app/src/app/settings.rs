@@ -16,15 +16,17 @@ pub enum SettingsTab {
     General,
     Downloads,
     Queue,
+    Torrents,
     Updates,
     Help,
 }
 
 impl SettingsTab {
-    pub const ALL: [SettingsTab; 5] = [
+    pub const ALL: [SettingsTab; 6] = [
         SettingsTab::General,
         SettingsTab::Downloads,
         SettingsTab::Queue,
+        SettingsTab::Torrents,
         SettingsTab::Updates,
         SettingsTab::Help,
     ];
@@ -34,6 +36,7 @@ impl SettingsTab {
             SettingsTab::General => "General",
             SettingsTab::Downloads => "Downloads",
             SettingsTab::Queue => "Queue",
+            SettingsTab::Torrents => "Torrents",
             SettingsTab::Updates => "Updates",
             SettingsTab::Help => "Help",
         }
@@ -45,12 +48,14 @@ impl App {
         match message {
             Message::OpenSettings => {
                 self.settings_tab = SettingsTab::General;
+                self.seed_ratio_text = crate::format::number(self.settings.seed_ratio);
                 self.modal = Some(Modal::Settings(self.settings.clone()));
             }
             Message::SettingsTab(tab) => {
                 // Also opens Settings at that section, as the queue's Schedule button does.
                 if !matches!(self.modal, Some(Modal::Settings(_))) {
                     self.modal = Some(Modal::Settings(self.settings.clone()));
+                    self.seed_ratio_text = crate::format::number(self.settings.seed_ratio);
                 }
                 self.settings_tab = tab;
             }
@@ -94,6 +99,22 @@ impl App {
                     draft.sort_by_type = sort_by_type;
                 }
             }
+            Message::SettingsSeed(seed) => {
+                if let Some(Modal::Settings(draft)) = &mut self.modal {
+                    draft.seed = seed;
+                }
+            }
+            Message::SettingsSeedRatio(typed) => {
+                // Half-typed values ("", "1.") keep the last valid one.
+                if let Some(Modal::Settings(draft)) = &mut self.modal
+                    && let Ok(ratio) = typed.trim().parse::<f64>()
+                    && ratio.is_finite()
+                    && ratio > 0.0
+                {
+                    draft.seed_ratio = ratio.min(100.0);
+                }
+                self.seed_ratio_text = typed;
+            }
             Message::SettingsQueueAtOnce(n) => {
                 if let Some(Modal::Settings(draft)) = &mut self.modal {
                     draft.queue_at_once = n.clamp(1, MAX_AT_ONCE);
@@ -123,6 +144,7 @@ impl App {
                 if let Some(Modal::Settings(draft)) = self.modal.take() {
                     self.settings = draft;
                     self.engine.set_speed_limit(self.settings.speed_limit());
+                    self.engine.set_seed_ratio(self.settings.seed_ratio());
                     let _ = store::save_settings(&self.settings);
                     // More downloads at once may start more of the queue now.
                     self.run_queue();

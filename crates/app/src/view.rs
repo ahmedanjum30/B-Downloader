@@ -37,7 +37,10 @@ pub fn view(app: &App) -> Element<'_, Message> {
     match &app.modal {
         None => base.into(),
         Some(Modal::Add(dialog)) => modal(base, dialogs::add(dialog, app.existing_partial(dialog))),
-        Some(Modal::Settings(draft)) => modal(base, dialogs::settings(draft, app.update.status(), app.settings_tab)),
+        Some(Modal::Settings(draft)) => modal(
+            base,
+            dialogs::settings(draft, app.update.status(), app.settings_tab, &app.seed_ratio_text),
+        ),
         Some(Modal::Report(dialog)) => modal(base, dialogs::report(dialog)),
         Some(Modal::Refresh(dialog)) => modal(base, dialogs::refresh(dialog)),
         Some(Modal::Remove { id, delete_file }) => match app.items.iter().find(|i| i.id == *id) {
@@ -45,7 +48,10 @@ pub fn view(app: &App) -> Element<'_, Message> {
             None => base.into(),
         },
         Some(Modal::Details(id)) => match app.items.iter().find(|i| i.id == *id) {
-            Some(item) => modal(base, dialogs::details(item, app.copied.as_deref(), &app.item_limit_text)),
+            Some(item) => modal(
+                base,
+                dialogs::details(item, app.copied.as_deref(), &app.item_limit_text, app.details_torrent.as_ref()),
+            ),
             None => base.into(),
         },
         Some(Modal::Extension(browser)) => modal(
@@ -98,6 +104,7 @@ fn sidebar(app: &App) -> Element<'_, Message> {
             Filter::Paused => &icons::PAUSED,
             Filter::Failed => &icons::FAILED,
             Filter::Queue => &icons::CLOCK,
+            Filter::Torrents => &icons::TORRENT,
             Filter::Category(Category::Compressed) => &icons::COMPRESSED,
             Filter::Category(Category::Documents) => &icons::DOCUMENT,
             Filter::Category(Category::Music) => &icons::MUSIC,
@@ -119,6 +126,10 @@ fn sidebar(app: &App) -> Element<'_, Message> {
         .filter(|&kind| app.filter == kind || app.count(kind) > 0)
         .collect();
     let mut filters = column![filter_item(Filter::All), filter_item(Filter::Queue)].spacing(2);
+    // Once there's a torrent (or while it's shown).
+    if app.filter == Filter::Torrents || app.count(Filter::Torrents) > 0 {
+        filters = filters.push(filter_item(Filter::Torrents));
+    }
     if !kinds.is_empty() {
         filters = filters
             .push(container(muted("Types").size(12)).padding(Padding {
@@ -506,7 +517,9 @@ fn status(item: &Item) -> (&'static str, Pick, String, Pick) {
             "Click the download again in your browser".into(),
             |c| c.muted,
         ),
+        State::Starting if item.is_torrent() => ("Finding peers", |c| c.accent, sizes(), |c| c.muted),
         State::Starting => ("Connecting", |c| c.accent, sizes(), |c| c.muted),
+        State::Downloading if item.is_torrent() && item.active_connections == 0 => ("Finding peers", |c| c.accent, sizes(), |c| c.muted),
         // Only once data has stopped, so a brief reconnect while others keep going doesn't flash.
         State::Downloading if item.problem.is_some() && item.speed.rate() < 1024.0 => (
             "Reconnecting",
@@ -515,9 +528,11 @@ fn status(item: &Item) -> (&'static str, Pick, String, Pick) {
             |c| c.muted,
         ),
         State::Downloading => ("Downloading", |c| c.accent, downloading_text(item), |c| c.muted),
+        State::Verifying if item.is_torrent() => ("Checking", |c| c.accent, "Checking the files already there".into(), |c| c.muted),
         State::Verifying => ("Verifying", |c| c.accent, "Checking the checksum".into(), |c| c.muted),
         State::Paused if item.queued => ("Queued", |c| c.muted, sizes(), |c| c.muted),
         State::Paused => ("Paused", |c| c.warning, sizes(), |c| c.muted),
+        State::Completed if item.seeding.is_some() => ("Seeding", |c| c.accent, seeding_text(item), |c| c.muted),
         State::Completed => (
             "Completed",
             |c| c.success,
@@ -564,7 +579,7 @@ fn download_card(item: &Item) -> Element<'_, Message> {
         actions = actions.push(action(&icons::PAUSE, "Pause", Message::Pause(id)));
     }
     // A fresh link only helps a download that already has part of a known-size file.
-    let refreshable = item.size.is_some() && item.downloaded > 0 && item.file_name.is_some();
+    let refreshable = item.size.is_some() && item.downloaded > 0 && item.file_name.is_some() && !item.is_torrent();
     match &item.state {
         State::Paused if item.queued => {
             actions = actions.push(text_action(None, "Start now", Message::Resume(id)));
@@ -586,6 +601,9 @@ fn download_card(item: &Item) -> Element<'_, Message> {
             actions = actions.push(action(&icons::CLOCK, "Try again later (add to queue)", Message::Enqueue(id)));
         }
         State::Completed => {
+            if item.seeding.is_some() {
+                actions = actions.push(text_action(None, "Stop seeding", Message::StopSeeding(id)));
+            }
             actions = actions.push(action(&icons::OPEN, "Open", Message::OpenFile(id)));
             actions = actions.push(action(&icons::FOLDER, "Show in folder", Message::ShowInFolder(id)));
         }
@@ -644,12 +662,34 @@ fn downloading_text(item: &Item) -> String {
     if let Some(mb) = item.speed_limit_mb {
         parts.push(format!("limited to {} MB/s", format::number(mb)));
     }
+    if item.is_torrent() {
+        parts.push(match item.active_connections {
+            1 => "1 peer".to_owned(),
+            n => format!("{n} peers"),
+        });
+        return parts.join(" · ");
+    }
     // Connections that are open but get no data are worth knowing about.
     match (item.active_connections, item.receiving) {
         (0, _) => {}
         (1, _) => parts.push("1 connection".to_owned()),
         (open, receiving) if receiving < open => parts.push(format!("{open} connections · {receiving} receiving")),
         (open, _) => parts.push(format!("{open} connections")),
+    }
+    parts.join(" · ")
+}
+
+/// A finished torrent sharing with others: how much it has given back.
+fn seeding_text(item: &Item) -> String {
+    let mut parts = vec![format!("Ratio {:.2}", item.ratio().unwrap_or(0.0))];
+    if let Some(seeding) = &item.seeding {
+        if seeding.upload_rate > 0.0 {
+            parts.push(format!("{} up", format::speed(seeding.upload_rate)));
+        }
+        parts.push(match seeding.peers {
+            1 => "1 peer".to_owned(),
+            n => format!("{n} peers"),
+        });
     }
     parts.join(" · ")
 }

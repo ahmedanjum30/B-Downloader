@@ -16,6 +16,11 @@ function isWebUrl(url) {
   return /^https?:\/\//i.test(url || "");
 }
 
+// A torrent's magnet link.
+function isMagnet(url) {
+  return /^magnet:\?xt=urn:btih:/i.test(url || "");
+}
+
 // Text and data files are small and often just opened; the browser keeps those.
 const BROWSER_TYPES = new Set([
   "txt", "json", "xml", "csv", "tsv", "html", "htm", "js", "css", "md", "log",
@@ -170,7 +175,7 @@ chrome.contextMenus.onClicked.addListener(async (info, tab) => {
   if (info.menuItemId !== MENU_ID) return;
   const url = info.linkUrl || info.srcUrl;
   const page = info.pageUrl || (tab && tab.url);
-  if (isWebUrl(url)) {
+  if (isWebUrl(url) || isMagnet(url)) {
     handOver(url, page, null, null, null, null, tab && { tabId: tab.id, cookieStoreId: tab.cookieStoreId });
     return;
   }
@@ -197,6 +202,11 @@ chrome.runtime.onMessage.addListener((message, sender, reply) => {
   }
   // From content.js, on the page.
   const tabId = sender.tab && sender.tab.id;
+  // A magnet link clicked on the page: BDownloader asks which files to get.
+  if (message.type === "magnet" && isMagnet(message.url)) {
+    handOver(message.url, sender.tab && sender.tab.url, null, null, null, null, null).then(reply, () => reply(false));
+    return true;
+  }
   if (message.type === "playlist" && tabId !== undefined) {
     addPlaylist(tabId, message.url, { referer: message.referer, origin: message.origin }).catch(() => {});
     return false;

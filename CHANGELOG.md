@@ -6,6 +6,21 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+## [1.2.0] - 2026-10-29
+
+### Added
+- Torrents: magnet links and .torrent files. Paste a magnet link or pick a
+  .torrent file in Add download, click one in the browser (with the
+  extension), or open one from Windows (choose BDownloader for them in
+  Default apps). The torrent's files are listed to choose from, and can be
+  ticked or unticked later in its details, also while it downloads.
+- Files of a torrent already on disk are checked against it and kept, so
+  only what's missing or damaged downloads.
+- Finished torrents keep sharing until they've uploaded as much as they
+  downloaded; Settings > Torrents changes how much, or turns it off.
+- A Torrents tab in the sidebar.
+- Extension 1.0.8: magnet links clicked on a page open in BDownloader.
+
 ## [1.1.2] - 2026-10-29
 
 ### Changed

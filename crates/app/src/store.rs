@@ -43,6 +43,10 @@ pub struct Settings {
     /// Stop the queue every day at `queue_stop` ("HH:MM").
     pub queue_stop_daily: bool,
     pub queue_stop: String,
+    /// Keep uploading finished torrents until they've shared `seed_ratio`
+    /// times their size, as torrent sites expect.
+    pub seed: bool,
+    pub seed_ratio: f64,
 }
 
 impl Default for Settings {
@@ -62,6 +66,8 @@ impl Default for Settings {
             queue_start: "01:00".to_owned(),
             queue_stop_daily: false,
             queue_stop: "07:00".to_owned(),
+            seed: true,
+            seed_ratio: 1.0,
         }
     }
 }
@@ -77,6 +83,11 @@ impl Settings {
     /// The limit for the engine, in bytes per second.
     pub fn speed_limit(&self) -> Option<u64> {
         (self.limit_speed && self.speed_limit_mb > 0.0).then_some((self.speed_limit_mb * 1024.0 * 1024.0) as u64)
+    }
+
+    /// The seed ratio for the engine; `None` doesn't seed.
+    pub fn seed_ratio(&self) -> Option<f64> {
+        (self.seed && self.seed_ratio.is_finite() && self.seed_ratio > 0.0).then_some(self.seed_ratio)
     }
 }
 
@@ -151,6 +162,28 @@ pub struct SavedDownload {
     /// This download's own speed limit, in MB/s.
     #[serde(default)]
     pub speed_limit_mb: Option<f64>,
+    /// A torrent: `url` is its magnet link or where its .torrent came from.
+    #[serde(default)]
+    pub torrent: Option<SavedTorrent>,
+}
+
+/// What a torrent download needs besides the common fields. Its .torrent
+/// file is kept in [`torrent_file`].
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct SavedTorrent {
+    pub info_hash: String,
+    /// The files chosen, by their index in the torrent; `None` for all.
+    #[serde(default)]
+    pub files: Option<Vec<usize>>,
+    /// Uploaded to other peers so far, towards the seed ratio.
+    #[serde(default)]
+    pub uploaded: u64,
+    /// Done seeding: it shared enough or the user stopped it.
+    #[serde(default)]
+    pub seeded: bool,
+    /// Several files, saved in a folder named after the torrent.
+    #[serde(default)]
+    pub folder: bool,
 }
 
 /// `BDOWNLOADER_DATA` overrides the folder, so development builds can use a
@@ -169,6 +202,18 @@ pub fn data_dir() -> PathBuf {
 /// download folder shows just the file being downloaded.
 pub fn resume_dir() -> PathBuf {
     data_dir().join("resume")
+}
+
+/// Where the torrent session keeps its state, and the .torrent files of downloads.
+pub fn torrents_dir() -> PathBuf {
+    data_dir().join("torrents")
+}
+
+/// The kept .torrent file of a torrent download.
+pub fn torrent_file(info_hash: &str) -> PathBuf {
+    // Only hex, so the name can't point anywhere else.
+    let name: String = info_hash.chars().filter(char::is_ascii_hexdigit).collect();
+    torrents_dir().join(format!("{name}.torrent"))
 }
 
 fn load<T: DeserializeOwned + Default>(name: &str) -> T {

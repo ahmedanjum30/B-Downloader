@@ -70,6 +70,108 @@ name = "update_url"
 value = "https://edge.microsoft.com/extensionwebstorebase/v1/crx"
 uninstall = "key"
 
+# Torrents: .torrent files and magnet links can open in BDownloader. Listed in Default apps and
+# "Open with", so a torrent app the user picked as the default keeps them. HKA: the user's, or
+# everyone's for an install for everyone.
+[[registry]]
+root = "HKA"
+key = 'Software\Classes\BDownloader.torrent'
+value = "Torrent file"
+uninstall = "key"
+
+[[registry]]
+root = "HKA"
+key = 'Software\Classes\BDownloader.torrent\DefaultIcon'
+value = '{app}\BDownloader.exe,0'
+
+[[registry]]
+root = "HKA"
+key = 'Software\Classes\BDownloader.torrent\shell\open\command'
+value = '"{app}\BDownloader.exe" "%1"'
+
+[[registry]]
+root = "HKA"
+key = 'Software\Classes\BDownloader.magnet'
+value = "Magnet link"
+uninstall = "key"
+
+[[registry]]
+root = "HKA"
+key = 'Software\Classes\BDownloader.magnet'
+name = "URL Protocol"
+value = ""
+
+[[registry]]
+root = "HKA"
+key = 'Software\Classes\BDownloader.magnet\DefaultIcon'
+value = '{app}\BDownloader.exe,0'
+
+[[registry]]
+root = "HKA"
+key = 'Software\Classes\BDownloader.magnet\shell\open\command'
+value = '"{app}\BDownloader.exe" "%1"'
+
+# The magnet: protocol itself. Without it Windows doesn't know magnet links at all, and browsers
+# do nothing when one is clicked. A default the user picked (Default apps) still comes first.
+[[registry]]
+root = "HKA"
+key = 'Software\Classes\magnet'
+value = "URL:Magnet link"
+uninstall = "key"
+
+[[registry]]
+root = "HKA"
+key = 'Software\Classes\magnet'
+name = "URL Protocol"
+value = ""
+
+[[registry]]
+root = "HKA"
+key = 'Software\Classes\magnet\DefaultIcon'
+value = '{app}\BDownloader.exe,0'
+
+[[registry]]
+root = "HKA"
+key = 'Software\Classes\magnet\shell\open\command'
+value = '"{app}\BDownloader.exe" "%1"'
+
+[[registry]]
+root = "HKA"
+key = 'Software\Classes\.torrent\OpenWithProgids'
+name = "BDownloader.torrent"
+value = ""
+
+[[registry]]
+root = "HKA"
+key = 'Software\BDownloader\Capabilities'
+name = "ApplicationName"
+value = "BDownloader"
+uninstall = "key"
+
+[[registry]]
+root = "HKA"
+key = 'Software\BDownloader\Capabilities'
+name = "ApplicationDescription"
+value = "A fast download manager, for files and torrents."
+
+[[registry]]
+root = "HKA"
+key = 'Software\BDownloader\Capabilities\FileAssociations'
+name = ".torrent"
+value = "BDownloader.torrent"
+
+[[registry]]
+root = "HKA"
+key = 'Software\BDownloader\Capabilities\URLAssociations'
+name = "magnet"
+value = "BDownloader.magnet"
+
+[[registry]]
+root = "HKA"
+key = 'Software\RegisteredApplications'
+name = "BDownloader"
+value = 'Software\BDownloader\Capabilities'
+
 # The app always runs as the user, never as the administrator an install for everyone runs
 # as: the browser can't reach a BDownloader running as administrator, and its settings are the
 # user's. Lets the browser extension reach the app, even before the app is first opened.

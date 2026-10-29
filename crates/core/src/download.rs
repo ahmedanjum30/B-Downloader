@@ -20,6 +20,7 @@ use crate::limit::Limiter;
 use crate::sabr::{self, YoutubeSource};
 use crate::segment::Segments;
 use crate::state::ResumeState;
+use crate::torrent::{self, TorrentSource, Torrents};
 
 pub const DEFAULT_CONNECTIONS: usize = 8;
 pub const MAX_CONNECTIONS: usize = 64;
@@ -46,6 +47,8 @@ pub struct Engine {
     pub(crate) client: Client,
     stall_timeout: Duration,
     pub(crate) limiter: Arc<Limiter>,
+    /// Off until [`Engine::with_torrents`].
+    pub(crate) torrents: Arc<Torrents>,
 }
 
 /// A connection that sends nothing for this long is dropped and reopened.
@@ -72,6 +75,7 @@ impl Engine {
             client,
             stall_timeout,
             limiter: Arc::default(),
+            torrents: Arc::default(),
         })
     }
 
@@ -79,6 +83,7 @@ impl Engine {
     /// `None` removes the limit. Applies to running downloads right away.
     pub fn set_speed_limit(&self, bytes_per_second: Option<u64>) {
         self.limiter.set(bytes_per_second);
+        self.torrents.set_download_limit(bytes_per_second);
     }
 
     pub fn speed_limit(&self) -> Option<u64> {
@@ -116,6 +121,24 @@ impl Engine {
             body.extend_from_slice(&chunk);
         }
         String::from_utf8(body).map_err(|e| io::Error::other(e).into())
+    }
+
+    /// Fetches a small file, such as a .torrent, refusing anything larger
+    /// than `max_bytes`. `headers` are sent along, as in [`DownloadOptions::headers`].
+    pub async fn get_bytes(&self, url: &str, headers: &[(String, String)], max_bytes: usize) -> Result<Vec<u8>> {
+        let request = self.client.get(parse_url(url)?).headers(http::header_map(headers));
+        let mut response = self.stalled(request.send()).await?;
+        if !response.status().is_success() {
+            return Err(Error::Status(response.status().as_u16()));
+        }
+        let mut body = Vec::new();
+        while let Some(chunk) = self.stalled(response.chunk()).await? {
+            if body.len() + chunk.len() > max_bytes {
+                return Err(io::Error::other("file too large").into());
+            }
+            body.extend_from_slice(&chunk);
+        }
+        Ok(body)
     }
 
     /// Follows redirects from `url` and returns where they end, without
@@ -170,8 +193,11 @@ pub struct DownloadOptions {
     /// …), picked from its final name. See [`crate::Category`].
     pub sort_by_type: bool,
     /// Caps this download's speed, in bytes per second, on top of the limit
-    /// for all downloads. See [`DownloadHandle::set_speed_limit`].
+    /// for all downloads. See [`DownloadHandle::set_speed_limit`]. Not for torrents.
     pub speed_limit: Option<u64>,
+    /// A torrent, downloaded from peers instead of from `url` (its magnet
+    /// link or where its .torrent came from). Saved into `dir`.
+    pub torrent: Option<TorrentSource>,
 }
 
 impl DownloadOptions {
@@ -188,6 +214,7 @@ impl DownloadOptions {
             state_dir: None,
             sort_by_type: false,
             speed_limit: None,
+            torrent: None,
         }
     }
 
@@ -253,6 +280,9 @@ pub struct Progress {
     pub receiving: usize,
     /// Parts not finished yet. Everything outside these ranges is downloaded.
     pub segments: Vec<SegmentProgress>,
+    /// A torrent's upload to other peers, including earlier runs ([`TorrentSource::uploaded`]).
+    /// For a torrent, `active_connections` are its peers.
+    pub uploaded: u64,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -427,6 +457,9 @@ async fn run(engine: Engine, options: DownloadOptions, shared: Arc<Shared>, paus
 }
 
 async fn download(engine: &Engine, options: &DownloadOptions, shared: &Arc<Shared>, pause: &CancellationToken) -> Result<Outcome> {
+    if let Some(source) = &options.torrent {
+        return torrent::download(engine, options, source, shared, pause).await;
+    }
     if let Some(source) = &options.youtube {
         return sabr::download(engine, options, shared, pause, source).await;
     }
