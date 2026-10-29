@@ -124,7 +124,7 @@ jobs:
           EDGE_PRODUCT_ID: ${{ secrets.EDGE_PRODUCT_ID }}
 
   # The installer, also at a fixed link without redirects, on GitHub Pages:
-  # https://ahmedanjum30.github.io/BDownloader/download/<version>/. The
+  # https://ahmedanjum30.github.io/B-Downloader/download/<version>/. The
   # Microsoft Store installs from such a link (GitHub's release links redirect).
   pages:
     needs: publish

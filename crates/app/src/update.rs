@@ -5,7 +5,7 @@ use std::path::{Path, PathBuf};
 
 use bdownloader_core::Engine;
 
-const REPO: &str = "https://github.com/ahmedanjum30/BDownloader";
+const REPO: &str = "https://github.com/ahmedanjum30/B-Downloader";
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Release {

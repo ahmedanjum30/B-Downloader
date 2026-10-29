@@ -10,9 +10,9 @@ Text and answers to paste into the Chrome Web Store and Edge Add-ons dashboards.
 | Summary (max 132 characters) | Sends your downloads and the videos you watch to BDownloader, a fast multi-connection download manager. |
 | Category | Chrome: Productivity → Tools · Edge: Productivity |
 | Language | English |
-| Homepage | https://github.com/ahmedanjum30/BDownloader |
-| Support | https://github.com/ahmedanjum30/BDownloader/issues |
-| Privacy policy | https://github.com/ahmedanjum30/BDownloader/blob/main/PRIVACY.md |
+| Homepage | https://github.com/ahmedanjum30/B-Downloader |
+| Support | https://github.com/ahmedanjum30/B-Downloader/issues |
+| Privacy policy | https://github.com/ahmedanjum30/B-Downloader/blob/main/PRIVACY.md |
 
 ## Description
 
@@ -26,7 +26,7 @@ What the extension does:
 • Downloads that need you to be signed in still work: the extension passes along the browser's cookies for that link.
 • If BDownloader isn't installed or can't be reached, the browser simply downloads the file itself.
 
-Requires the free BDownloader app for Windows: https://github.com/ahmedanjum30/BDownloader
+Requires the free BDownloader app for Windows: https://github.com/ahmedanjum30/B-Downloader
 
 Privacy: the extension sends download details only to the BDownloader app on your own computer. Nothing goes to any server, and there is no tracking or analytics.
 ```

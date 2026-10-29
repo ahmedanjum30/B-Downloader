@@ -14,7 +14,7 @@ $ErrorActionPreference = 'Stop'
 $productId = 'XP89FXJJF4J45W'
 $root = Split-Path $PSScriptRoot -Parent
 $version = (Select-String -Path (Join-Path $root 'Cargo.toml') -Pattern '^version = "(.+)"').Matches[0].Groups[1].Value
-$installer = "https://ahmedanjum30.github.io/BDownloader/download/$version/BDownloader-Setup-$version.exe"
+$installer = "https://ahmedanjum30.github.io/B-Downloader/download/$version/BDownloader-Setup-$version.exe"
 
 $tenant = $env:MSSTORE_TENANT_ID
 $clientId = $env:MSSTORE_CLIENT_ID

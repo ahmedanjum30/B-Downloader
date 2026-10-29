@@ -34,6 +34,6 @@ BDownloader doesn't share data with anyone. There are no accounts, ads or analyt
 
 ## Contact
 
-Questions about this policy: open an issue at https://github.com/ahmedanjum30/BDownloader/issues.
+Questions about this policy: open an issue at https://github.com/ahmedanjum30/B-Downloader/issues.
 
 _Last updated: October 15, 2026_

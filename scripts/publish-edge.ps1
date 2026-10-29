@@ -60,12 +60,12 @@ $notes = @'
 No accounts or credentials are needed. The extension depends on one other product: BDownloader, a free open-source download manager for Windows. Without the app installed, downloads simply stay in the browser.
 
 To test:
-1. Install the app: https://github.com/ahmedanjum30/BDownloader/releases/latest (BDownloader-Setup-*.exe; installs for the current user, no admin rights needed). Windows SmartScreen may warn because the installer isn't code-signed yet: click More info, then Run anyway.
+1. Install the app: https://github.com/ahmedanjum30/B-Downloader/releases/latest (BDownloader-Setup-*.exe; installs for the current user, no admin rights needed). Windows SmartScreen may warn because the installer isn't code-signed yet: click More info, then Run anyway.
 2. Start a download in Edge, for example https://proof.ovh.net/files/100Mb.dat. BDownloader opens and takes the download over.
 3. Right-click any link and choose "Download with BDownloader".
 4. Open a page with a video (for example a YouTube video, and let it play for a few seconds) and hover over the video: a "Download this video" bar appears with the qualities available.
 
-The extension talks only to the BDownloader app on the same computer, through the native messaging host com.bdownloader.host. No data is sent to any server. Source code: https://github.com/ahmedanjum30/BDownloader
+The extension talks only to the BDownloader app on the same computer, through the native messaging host com.bdownloader.host. No data is sent to any server. Source code: https://github.com/ahmedanjum30/B-Downloader
 '@
 "Submitting extension $version for review"
 $body = @{ notes = $notes } | ConvertTo-Json

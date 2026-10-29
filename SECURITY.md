@@ -6,7 +6,7 @@ Security fixes are made for the latest release only.
 
 ## Reporting a vulnerability
 
-Please **don't** open a public issue for security problems. Report them privately through GitHub's [private vulnerability reporting](https://github.com/ahmedanjum30/BDownloader/security/advisories/new) instead.
+Please **don't** open a public issue for security problems. Report them privately through GitHub's [private vulnerability reporting](https://github.com/ahmedanjum30/B-Downloader/security/advisories/new) instead.
 
 Include a description of the issue, steps to reproduce, and the impact you expect. You should get a reply within a week.
 

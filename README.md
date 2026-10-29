@@ -4,12 +4,12 @@
 
 **A fast, lightweight download manager for Windows.** BDownloader splits each file into several parts and downloads them in parallel over multiple connections, so downloads finish faster and can be paused and resumed at any time.
 
-[![CI](https://github.com/ahmedanjum30/BDownloader/actions/workflows/ci.yml/badge.svg)](https://github.com/ahmedanjum30/BDownloader/actions/workflows/ci.yml)
+[![CI](https://github.com/ahmedanjum30/B-Downloader/actions/workflows/ci.yml/badge.svg)](https://github.com/ahmedanjum30/B-Downloader/actions/workflows/ci.yml)
 [![License: PolyForm Noncommercial](https://img.shields.io/badge/license-PolyForm%20Noncommercial-blue.svg)](LICENSE)
 
 Free for personal and other non-commercial use. See [License](#license).
 
-**[Download the latest version](https://github.com/ahmedanjum30/BDownloader/releases/latest)** for Windows 10 and 11, or get it from the [Microsoft Store](https://apps.microsoft.com/detail/xp89fxjjf4j45w).
+**[Download the latest version](https://github.com/ahmedanjum30/B-Downloader/releases/latest)** for Windows 10 and 11, or get it from the [Microsoft Store](https://apps.microsoft.com/detail/xp89fxjjf4j45w).
 
 ## Features
 
@@ -30,7 +30,7 @@ Free for personal and other non-commercial use. See [License](#license).
 
 ## Installing
 
-Download `BDownloader-Setup-<version>.exe` from [Releases](https://github.com/ahmedanjum30/BDownloader/releases) and run it. By default it installs for your user only, into `%LOCALAPPDATA%\Programs\BDownloader`, so it doesn't need admin rights; it can also install for everyone on the PC, into Program Files. After that, BDownloader keeps itself up to date (from version 0.1.1 on). For a silent install, run the installer with `/VERYSILENT`.
+Download `BDownloader-Setup-<version>.exe` from [Releases](https://github.com/ahmedanjum30/B-Downloader/releases) and run it. By default it installs for your user only, into `%LOCALAPPDATA%\Programs\BDownloader`, so it doesn't need admin rights; it can also install for everyone on the PC, into Program Files. After that, BDownloader keeps itself up to date (from version 0.1.1 on). For a silent install, run the installer with `/VERYSILENT`.
 
 The [Microsoft Store version](https://apps.microsoft.com/detail/xp89fxjjf4j45w) installs without the "Windows protected your PC" warning and is updated through the Store.
 
@@ -45,7 +45,7 @@ The installer on the Releases page is built by this repository's [release workfl
 
 To add the browser extension, open **Browser extension** in BDownloader and follow the steps.
 
-Questions or ideas? Ask in [Discussions](https://github.com/ahmedanjum30/BDownloader/discussions). Found a bug? Open an [issue](https://github.com/ahmedanjum30/BDownloader/issues).
+Questions or ideas? Ask in [Discussions](https://github.com/ahmedanjum30/B-Downloader/discussions). Found a bug? Open an [issue](https://github.com/ahmedanjum30/B-Downloader/issues).
 
 ## Building from source
 

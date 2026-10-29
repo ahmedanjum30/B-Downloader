@@ -8,7 +8,7 @@ use iced::widget::text_editor;
 use super::{App, Message, Modal};
 use crate::store;
 
-const NEW_ISSUE: &str = "https://github.com/ahmedanjum30/BDownloader/issues/new";
+const NEW_ISSUE: &str = "https://github.com/ahmedanjum30/B-Downloader/issues/new";
 /// GitHub refuses longer links to a new issue, so the log is shortened to fit.
 const MAX_URL: usize = 7_500;
 /// The most of the log that goes in, before shortening to fit.

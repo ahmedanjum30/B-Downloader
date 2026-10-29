@@ -41,7 +41,7 @@ Runs in the tray all day; the window is opened to check progress, add a link, or
 
 ## Evidence on Hand
 
-- Store images and screenshots in `store/images/`; website at https://ahmedanjum30.github.io/BDownloader/.
+- Store images and screenshots in `store/images/`; website at https://ahmedanjum30.github.io/B-Downloader/.
 - Live on the Microsoft Store, Edge Add-ons and Firefox Add-ons. No user counts, reviews or benchmarks exist; none may be invented.
 
 ## Product Principles

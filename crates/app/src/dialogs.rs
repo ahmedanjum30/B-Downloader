@@ -445,7 +445,7 @@ fn help<'a>() -> Element<'a, Message> {
         ),
         field(
             "Questions and ideas",
-            hint("Ask in Discussions on GitHub: github.com/ahmedanjum30/BDownloader/discussions"),
+            hint("Ask in Discussions on GitHub: github.com/ahmedanjum30/B-Downloader/discussions"),
         ),
     ]
     .spacing(22)
