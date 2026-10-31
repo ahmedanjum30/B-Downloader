@@ -21,10 +21,12 @@ function isMagnet(url) {
   return /^magnet:\?xt=urn:btih:/i.test(url || "");
 }
 
-// Text and data files are small and often just opened; the browser keeps those.
+// Text, data and document files are small and often just opened; the browser
+// keeps those. (Right-click "Download with BDownloader" still sends them.)
 const BROWSER_TYPES = new Set([
   "txt", "json", "xml", "csv", "tsv", "html", "htm", "js", "css", "md", "log",
   "ini", "cfg", "conf", "yaml", "yml", "ics", "vcf", "srt", "vtt", "svg", "rss",
+  "pdf", "doc", "docx", "xls", "xlsx", "ppt", "pptx", "odt", "ods", "odp", "rtf", "epub",
 ]);
 
 function keepInBrowser(item, url) {
@@ -39,7 +41,11 @@ function keepInBrowser(item, url) {
   if (ext) return BROWSER_TYPES.has(ext);
   // No extension: go by the type the server gave.
   const mime = (item.mime || "").toLowerCase();
-  return /^text\//.test(mime) || /^application\/(json|xml|[\w.+-]*\+(json|xml))\b/.test(mime);
+  return (
+    /^text\//.test(mime) ||
+    /^application\/(json|xml|[\w.+-]*\+(json|xml))\b/.test(mime) ||
+    /^application\/(pdf|msword|rtf|epub\+zip|vnd\.ms-(excel|powerpoint)|vnd\.openxmlformats-officedocument\.|vnd\.oasis\.opendocument\.)/.test(mime)
+  );
 }
 
 // Resolves to true if the app accepted the message.

@@ -40,6 +40,8 @@ struct Server {
     /// Answer range requests with 429 until then, like a server that is
     /// busy for a moment.
     busy_until: Option<std::time::Instant>,
+    /// Answer this many requests with 429 first, whatever they ask for.
+    refuse_first: AtomicUsize,
     streaming: AtomicUsize,
     open: AtomicUsize,
 }
@@ -68,6 +70,7 @@ impl Server {
             stream_limit: None,
             refuse_ranges: None,
             busy_until: None,
+            refuse_first: AtomicUsize::new(0),
             streaming: AtomicUsize::new(0),
             open: AtomicUsize::new(0),
         }
@@ -97,6 +100,17 @@ impl Server {
         }
         let open = self.open.fetch_add(1, Ordering::SeqCst) + 1;
         let _guard = OpenGuard(&self.open);
+        // Like Google's export links: "too many requests" to the first few, whatever they ask.
+        let refused = self
+            .refuse_first
+            .try_update(Ordering::SeqCst, Ordering::SeqCst, |n| n.checked_sub(1))
+            .is_ok();
+        if refused {
+            let _ = socket
+                .write_all(b"HTTP/1.1 429 Too Many Requests\r\nContent-Length: 0\r\nConnection: close\r\n\r\n")
+                .await;
+            return;
+        }
         if self.max_connections.is_some_and(|max| open > max) {
             let status = self.limit_status;
             let _ = socket
@@ -253,6 +267,31 @@ async fn connections_refused_with_429_hand_over_their_part() {
     let Outcome::Completed(path) = outcome else { panic!("not completed") };
     assert!(std::fs::read(path).unwrap() == data);
     assert_no_leftovers(dir.path());
+}
+
+/// A server that's busy for the first requests (Google's export links answer
+/// 429 to a link just checked): the download waits and asks again instead of
+/// failing before it begins.
+#[tokio::test(flavor = "multi_thread")]
+async fn a_busy_server_at_the_start_is_asked_again() {
+    let data = test_data(MB);
+    let addr = Server {
+        refuse_first: AtomicUsize::new(2),
+        ..Server::new(data.clone())
+    }
+    .start()
+    .await;
+    let dir = tempfile::tempdir().unwrap();
+
+    let outcome = Engine::new()
+        .unwrap()
+        .start(DownloadOptions::new(format!("http://{addr}/busy.bin"), dir.path()))
+        .wait()
+        .await
+        .unwrap();
+
+    let Outcome::Completed(path) = outcome else { panic!("not completed") };
+    assert!(std::fs::read(path).unwrap() == data);
 }
 
 /// Like pixeldrain: connections over the limit get 403, as an expired link

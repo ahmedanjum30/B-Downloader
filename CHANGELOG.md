@@ -6,6 +6,18 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+## [1.2.2] - 2026-11-01
+
+### Changed
+- Extension 1.0.9: documents (PDF, Word, Excel, PowerPoint, OpenDocument,
+  RTF, EPUB) stay in the browser, like text files already did. Right-click
+  "Download with BDownloader" still sends them.
+
+### Fixed
+- A server that's busy when a download starts (Google Drive answers "too
+  many requests" to a link it has just served) no longer fails the
+  download: it waits a moment and asks again, up to four times.
+
 ## [1.2.1] - 2026-10-29
 
 ### Added

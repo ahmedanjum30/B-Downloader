@@ -31,6 +31,9 @@ pub const MAX_CONNECTIONS: usize = 64;
 const WRITE_BUFFER: usize = 1024 * 1024;
 /// Attempts per segment in a row without progress before the download fails.
 pub(crate) const MAX_RETRIES: u32 = 5;
+/// Times the first request is tried again when the server is busy (waiting
+/// 2, 4, 8 and 16 seconds), before the download fails.
+const START_RETRIES: u32 = 4;
 /// Retries of a connection the server turned away as one too many (429 or
 /// 503) before it gives up and leaves its part to the others.
 const OVERLOAD_RETRIES: u32 = 3;
@@ -474,7 +477,27 @@ async fn download(engine: &Engine, options: &DownloadOptions, shared: &Arc<Share
     }
     let url = parse_url(&options.url)?;
     let headers = http::header_map(&options.headers);
-    let info = engine.stalled(http::probe(&engine.client, &url, &headers)).await?;
+    let mut attempt = 0;
+    let info = loop {
+        match engine.stalled(http::probe(&engine.client, &url, &headers)).await {
+            Ok(info) => break info,
+            // A busy server (Google answers 429 to a link it just served): wait
+            // and ask again instead of failing before the download has begun.
+            // One that doesn't answer at all still fails at once.
+            Err(e) if e.is_overloaded() && attempt < START_RETRIES => {
+                attempt += 1;
+                let wait = Duration::from_secs(1 << attempt);
+                log::info!("{}: {e}; asking again in {}s", redact(&url), wait.as_secs());
+                shared.report_problem(format!("{e}; trying again"));
+                tokio::select! {
+                    () = pause.cancelled() => return Ok(Outcome::Paused),
+                    () = tokio::time::sleep(wait) => {}
+                }
+            }
+            Err(e) => return Err(e),
+        }
+    };
+    shared.clear_problem();
     if info.is_stream() {
         return hls::download(engine, options, shared, pause, &info, &headers).await;
     }
