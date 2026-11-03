@@ -49,6 +49,9 @@ const RECEIVING_WINDOW: Duration = Duration::from_secs(3);
 #[derive(Debug, Clone)]
 pub struct Engine {
     pub(crate) client: Client,
+    /// The same as `client` but without certificate checks, made the first
+    /// time a download asks for it ([`DownloadOptions::skip_certificate_check`]).
+    unchecked: Arc<std::sync::OnceLock<Client>>,
     stall_timeout: Duration,
     pub(crate) limiter: Arc<Limiter>,
     /// Off until [`Engine::with_torrents`].
@@ -68,19 +71,31 @@ impl Engine {
         // No `read_timeout` here: its clock keeps running while we aren't
         // reading (waiting for the speed limit or a slow disk), so it would
         // drop healthy connections. `stalled` times only the waits on the server.
-        let client = Client::builder()
-            .user_agent(concat!("BDownloader/", env!("CARGO_PKG_VERSION")))
-            // With HTTP/2 all range requests would share a single TCP
-            // connection, which defeats downloading over several connections.
-            .http1_only()
-            .connect_timeout(Duration::from_secs(15))
-            .build()?;
         Ok(Self {
-            client,
+            client: client_builder().build()?,
+            unchecked: Arc::default(),
             stall_timeout,
             limiter: Arc::default(),
             torrents: Arc::default(),
         })
+    }
+
+    /// This engine with certificate checks off, for the downloads the user
+    /// chose to get anyway after a certificate error: it accepts any
+    /// certificate, so whoever is between here and the server could change
+    /// the file. Shares the speed limit with this one.
+    pub fn without_certificate_check(&self) -> Self {
+        let client = self.unchecked.get_or_init(|| {
+            client_builder()
+                .danger_accept_invalid_certs(true)
+                .build()
+                // The same settings as the checked client, which already built.
+                .unwrap_or_else(|_| self.client.clone())
+        });
+        Self {
+            client: client.clone(),
+            ..self.clone()
+        }
     }
 
     /// Caps the combined speed of all downloads, in bytes per second.
@@ -163,7 +178,16 @@ impl Engine {
         let shared = Arc::new(Shared::default());
         shared.limiter.set(options.speed_limit);
         let pause = CancellationToken::new();
-        let task = tokio::spawn(run(self.clone(), options, shared.clone(), pause.clone()));
+        let engine = if options.skip_certificate_check {
+            log::warn!(
+                "{}: downloading without checking the site's certificate, as asked",
+                redact_str(&options.url)
+            );
+            self.without_certificate_check()
+        } else {
+            self.clone()
+        };
+        let task = tokio::spawn(run(engine, options, shared.clone(), pause.clone()));
         DownloadHandle { shared, pause, task }
     }
 }
@@ -202,6 +226,23 @@ pub struct DownloadOptions {
     /// A torrent, downloaded from peers instead of from `url` (its magnet
     /// link or where its .torrent came from). Saved into `dir`.
     pub torrent: Option<TorrentSource>,
+    /// Accept the site's certificate even though the system doesn't trust
+    /// it: only when the user chose to, for this download.
+    pub skip_certificate_check: bool,
+}
+
+fn client_builder() -> reqwest::ClientBuilder {
+    Client::builder()
+        .user_agent(concat!("BDownloader/", env!("CARGO_PKG_VERSION")))
+        // With HTTP/2 all range requests would share a single TCP
+        // connection, which defeats downloading over several connections.
+        .http1_only()
+        .connect_timeout(Duration::from_secs(15))
+}
+
+/// [`redact`] for a URL still in text form.
+fn redact_str(url: &str) -> String {
+    Url::parse(url).map_or_else(|_| "invalid URL".to_owned(), |u| redact(&u))
 }
 
 impl DownloadOptions {
@@ -219,6 +260,7 @@ impl DownloadOptions {
             sort_by_type: false,
             speed_limit: None,
             torrent: None,
+            skip_certificate_check: false,
         }
     }
 

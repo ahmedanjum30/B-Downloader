@@ -556,6 +556,12 @@ fn status(item: &Item) -> (&'static str, Pick, String, Pick) {
             format!("{} · {}", item.size.map(format::size).unwrap_or_default(), item.host()),
             |c| c.muted,
         ),
+        State::Failed(_) if item.certificate_failed() => (
+            "Failed",
+            |c| c.danger,
+            "The site's security certificate isn't trusted by Windows".into(),
+            |c| c.danger,
+        ),
         State::Failed(error) if item.link_may_have_expired() => (
             "Failed",
             |c| c.danger,
@@ -607,6 +613,10 @@ fn download_card(item: &Item) -> Element<'_, Message> {
             if refreshable {
                 actions = actions.push(action(&icons::LINK, "Refresh link", Message::OpenRefresh(id)));
             }
+        }
+        State::Failed(_) if item.certificate_failed() => {
+            actions = actions.push(text_action(None, "Download anyway", Message::DownloadAnyway(id)));
+            actions = actions.push(action(&icons::RETRY, "Try again", Message::Resume(id)));
         }
         State::Failed(_) if refreshable => {
             actions = actions.push(text_action(Some(&icons::LINK), "Refresh link", Message::OpenRefresh(id)));

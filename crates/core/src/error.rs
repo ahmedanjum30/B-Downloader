@@ -7,7 +7,7 @@ pub enum Error {
     #[error("invalid URL: {0}")]
     InvalidUrl(String),
     #[error("network error: {}", with_causes(.0))]
-    Http(#[from] reqwest::Error),
+    Http(reqwest::Error),
     #[error("the server returned HTTP {0}")]
     Status(u16),
     #[error("the server sent a different part of the file than requested")]
@@ -43,7 +43,20 @@ fn with_causes(error: &dyn std::error::Error) -> String {
     message
 }
 
+/// Without the address: it's often a long signed link that buries the reason,
+/// and logs name the download at the start of every line anyway.
+impl From<reqwest::Error> for Error {
+    fn from(e: reqwest::Error) -> Self {
+        Error::Http(e.without_url())
+    }
+}
+
 impl Error {
+    /// The site's certificate isn't one the system trusts.
+    pub fn is_certificate(&self) -> bool {
+        is_certificate_message(&self.to_string())
+    }
+
     /// Whether trying the same request again might succeed.
     pub(crate) fn is_retryable(&self) -> bool {
         match self {
@@ -63,4 +76,11 @@ impl Error {
     pub(crate) fn is_forbidden(&self) -> bool {
         matches!(self, Error::Status(403))
     }
+}
+
+/// Whether an error message is about the site's certificate, for errors only
+/// kept as text (a failed download saved in the list).
+pub fn is_certificate_message(message: &str) -> bool {
+    let message = message.to_ascii_lowercase();
+    message.contains("certificate") || message.contains("sec_e_untrusted_root") || message.contains("-2146762487")
 }

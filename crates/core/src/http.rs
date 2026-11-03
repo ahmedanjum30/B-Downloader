@@ -1,8 +1,17 @@
+use std::time::Duration;
+
 use percent_encoding::percent_decode_str;
 use reqwest::header::{self, HeaderMap, HeaderName};
 use reqwest::{Client, StatusCode, Url};
 
 use crate::error::{Error, Result};
+
+/// Waits before connecting again when a connection failed outright. Some hosts
+/// run several servers under one name and only some of them fail (one sending
+/// a certificate chain Windows can't finish), and Windows may fetch a missing
+/// certificate in the meantime: a second try usually reaches a working one.
+/// Once only: Windows takes about two seconds to report each refused connection.
+const CONNECT_RETRIES: [Duration; 1] = [Duration::from_secs(1)];
 
 /// What the server told us about a file before downloading it.
 #[derive(Debug, Clone)]
@@ -41,12 +50,26 @@ impl ProbeInfo {
 /// ranges work. A `HEAD` request would be cheaper, but many servers answer it
 /// differently from `GET`.
 pub(crate) async fn probe(client: &Client, url: &Url, extra: &HeaderMap) -> Result<ProbeInfo> {
-    let mut resp = client
-        .get(url.clone())
-        .headers(extra.clone())
-        .header(header::RANGE, "bytes=0-0")
-        .send()
-        .await?;
+    let mut waits = CONNECT_RETRIES.iter();
+    let mut resp = loop {
+        let sent = client
+            .get(url.clone())
+            .headers(extra.clone())
+            .header(header::RANGE, "bytes=0-0")
+            .send()
+            .await;
+        match sent {
+            Ok(resp) => break resp,
+            Err(e)
+                if e.is_connect()
+                    && let Some(wait) = waits.next() =>
+            {
+                log::info!("{}: {}; connecting again", crate::download::redact(url), Error::from(e));
+                tokio::time::sleep(*wait).await;
+            }
+            Err(e) => return Err(e.into()),
+        }
+    };
     // Some servers refuse range requests outright (often with 403 or 404)
     // although a plain request works; such a file downloads over one connection.
     if resp.status().is_client_error() && resp.status() != StatusCode::RANGE_NOT_SATISFIABLE {

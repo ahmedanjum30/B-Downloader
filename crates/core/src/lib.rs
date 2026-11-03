@@ -35,7 +35,7 @@ pub use download::{
     DEFAULT_CONNECTIONS, DownloadHandle, DownloadOptions, Engine, MAX_CONNECTIONS, Outcome, Progress, STALL_TIMEOUT, SegmentProgress, Status,
     state_path,
 };
-pub use error::{Error, Result};
+pub use error::{Error, Result, is_certificate_message};
 pub use http::ProbeInfo;
 pub use sabr::{YoutubeFormat, YoutubeSource};
 pub use scrape::Swarm;

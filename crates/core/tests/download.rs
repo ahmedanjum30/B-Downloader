@@ -269,6 +269,47 @@ async fn connections_refused_with_429_hand_over_their_part() {
     assert_no_leftovers(dir.path());
 }
 
+/// Over the internet: a site whose certificate the system doesn't trust is
+/// refused, the error says it's the certificate, and only a download the user
+/// chose to get anyway goes past it.
+#[tokio::test(flavor = "multi_thread")]
+#[ignore = "uses the internet"]
+async fn an_untrusted_certificate_is_refused_unless_skipped() {
+    let url = "https://self-signed.badssl.com/";
+    let engine = Engine::new().unwrap();
+    let refused = engine.probe(url, &[]).await.unwrap_err();
+    assert!(refused.is_certificate(), "{refused}");
+    let info = engine.without_certificate_check().probe(url, &[]).await.unwrap();
+    assert!(info.is_web_page());
+    // The engine it came from still checks.
+    assert!(engine.probe(url, &[]).await.is_err());
+}
+
+/// A first connection that fails outright (like one of a host's servers
+/// sending a certificate chain Windows can't finish) is tried again: the
+/// link check, and with it the browser's hand-over, still succeeds.
+#[tokio::test(flavor = "multi_thread")]
+async fn a_failed_first_connection_is_tried_again() {
+    // A free port, with nothing listening on it for the first moment.
+    let addr = TcpListener::bind("127.0.0.1:0").await.unwrap().local_addr().unwrap();
+    let data = test_data(64 * 1024);
+    tokio::spawn({
+        let data = data.clone();
+        async move {
+            tokio::time::sleep(Duration::from_millis(200)).await;
+            let listener = TcpListener::bind(addr).await.unwrap();
+            let server = Arc::new(Server::new(data));
+            loop {
+                let (socket, _) = listener.accept().await.unwrap();
+                tokio::spawn(server.clone().handle(socket));
+            }
+        }
+    });
+
+    let info = Engine::new().unwrap().probe(&format!("http://{addr}/late.bin"), &[]).await.unwrap();
+    assert_eq!(info.size, Some(data.len() as u64));
+}
+
 /// A server that's busy for the first requests (Google's export links answer
 /// 429 to a link just checked): the download waits and asks again instead of
 /// failing before it begins.

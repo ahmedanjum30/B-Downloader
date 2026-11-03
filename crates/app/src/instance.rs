@@ -1,7 +1,9 @@
 //! Keeps BDownloader to one window: later copies of the app, and the browser
 //! bridge, send their requests to the running one over a named pipe.
 
-use bdownloader_core::Engine;
+use std::sync::atomic::{AtomicU64, Ordering};
+
+use bdownloader_core::{Engine, ProbeInfo};
 use bdownloader_ipc::{AddRequest, Expected, MAX_MESSAGE, Reply, Request, pipe_name};
 use iced::futures::channel::mpsc::Sender;
 use iced::futures::{SinkExt, Stream};
@@ -9,6 +11,9 @@ use tokio::io::{AsyncBufReadExt, AsyncReadExt, AsyncWriteExt, BufReader};
 use tokio::net::windows::named_pipe::{NamedPipeServer, ServerOptions};
 
 use crate::app::Message;
+
+/// Numbers the downloads the browser offers, so a check's answer finds its dialog.
+static OFFERS: AtomicU64 = AtomicU64::new(1);
 
 /// What the command line asks for: web links, which start right away, and
 /// magnet links and .torrent files (opened from the browser or Explorer),
@@ -98,19 +103,22 @@ async fn read_requests(client: NamedPipeServer, mut output: Sender<Message>) {
         if let Request::Add(add) = &request
             && let Some(expected) = &add.expect
         {
-            let reply = match check(add, expected).await {
-                Ok(()) => Reply { ok: true, error: None },
+            // The dialog opens at once, checking; the check fills it in, so
+            // nothing seems stuck while it runs.
+            let id = OFFERS.fetch_add(1, Ordering::Relaxed);
+            let _ = output.send(Message::BrowserOffer(id, add.clone())).await;
+            let checked = check(add, expected).await;
+            let reply = match &checked {
+                Ok(_) => Reply { ok: true, error: None },
                 Err(reason) => {
                     log::info!("left to the browser: {reason} (cookies: {})", add.cookie_names());
                     Reply {
                         ok: false,
-                        error: Some(reason),
+                        error: Some(reason.clone()),
                     }
                 }
             };
-            if reply.ok {
-                let _ = output.send(Message::External(request)).await;
-            }
+            let _ = output.send(Message::BrowserChecked(id, checked)).await;
             let mut answer = serde_json::to_vec(&reply).unwrap_or_default();
             answer.push(b'\n');
             let _ = write.write_all(&answer).await;
@@ -123,7 +131,8 @@ async fn read_requests(client: NamedPipeServer, mut output: Sender<Message>) {
 /// Whether the app gets the file the browser is getting from this link.
 /// Some sites unlock a download once, for the browser: asked again, they send
 /// a web page (a login or "are you a human?" check) or nothing at all.
-async fn check(add: &AddRequest, expected: &Expected) -> Result<(), String> {
+/// The link, checked, for the dialog to show without asking the server again.
+async fn check(add: &AddRequest, expected: &Expected) -> Result<ProbeInfo, String> {
     let engine = Engine::new().map_err(|e| e.to_string())?;
     let info = engine.probe(add.url.trim(), &add.headers()).await.map_err(|e| e.to_string())?;
     let browser_page = expected.mime.as_deref().is_some_and(|m| m.to_ascii_lowercase().starts_with("text/html"));
@@ -135,7 +144,7 @@ async fn check(add: &AddRequest, expected: &Expected) -> Result<(), String> {
     {
         return Err(format!("the site sends a different file ({ours} bytes instead of {browser})"));
     }
-    Ok(())
+    Ok(info)
 }
 
 #[cfg(test)]
@@ -183,7 +192,7 @@ mod tests {
     async fn takes_a_link_only_when_it_gets_the_browsers_file() {
         let base = server().await;
         let file = AddRequest::new(format!("{base}/file"));
-        assert_eq!(check(&file, &zip(1000)).await, Ok(()));
+        assert!(check(&file, &zip(1000)).await.is_ok());
         // Same link, but not the file the browser is getting.
         assert!(check(&file, &zip(5000)).await.unwrap_err().contains("different file"));
         // A web page where the browser got a zip.
@@ -194,6 +203,6 @@ mod tests {
             mime: Some("text/html".into()),
             size: None,
         };
-        assert_eq!(check(&page, &html).await, Ok(()));
+        assert!(check(&page, &html).await.is_ok());
     }
 }

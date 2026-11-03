@@ -165,6 +165,10 @@ pub struct SavedDownload {
     /// A torrent: `url` is its magnet link or where its .torrent came from.
     #[serde(default)]
     pub torrent: Option<SavedTorrent>,
+    /// The user chose to download it although the site's certificate failed
+    /// the check ("Download anyway").
+    #[serde(default)]
+    pub skip_certificate_check: bool,
 }
 
 /// What a torrent download needs besides the common fields. Its .torrent

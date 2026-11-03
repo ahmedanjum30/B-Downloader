@@ -21,6 +21,16 @@ impl App {
                 }
                 self.save();
             }
+            Message::DownloadAnyway(id) => {
+                let engine = self.engine.clone();
+                if let Some(item) = self.item(id) {
+                    log::warn!("download {id}: the user chose to download it without checking the site's certificate");
+                    item.skip_certificate_check = true;
+                    item.queued = false;
+                    item.start(&engine);
+                }
+                self.save();
+            }
             Message::Resume(id) => {
                 let engine = self.engine.clone();
                 if let Some(item) = self.item(id) {

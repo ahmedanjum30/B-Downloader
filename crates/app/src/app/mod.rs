@@ -65,6 +65,9 @@ const SEED_REFRESH: Duration = Duration::from_secs(2);
 enum Pending {
     /// A download from the browser, or a magnet link.
     Add(AddRequest),
+    /// A download the browser is holding while its link is checked
+    /// ([`Message::BrowserOffer`]); the check fills the dialog in.
+    Offer(u64, AddRequest),
     /// A .torrent file opened from Explorer.
     TorrentFile(PathBuf),
 }
@@ -178,6 +181,16 @@ pub enum Message {
     AddTorrentSelectAll(bool),
     /// A finished torrent stops uploading.
     StopSeeding(u64),
+    /// Download it without checking the site's certificate, which failed.
+    DownloadAnyway(u64),
+    /// The Add dialog's link: check it again without checking its certificate.
+    AddSkipCertificateCheck,
+    /// The browser hands over a download and holds it while its link is
+    /// checked: its dialog opens at once.
+    BrowserOffer(u64, AddRequest),
+    /// The check of a [`Message::BrowserOffer`]: the link's details, or why
+    /// the browser keeps the download.
+    BrowserChecked(u64, Result<ProbeInfo, String>),
     /// Download one of a torrent's files, or not, from its details.
     ItemTorrentFile(u64, usize, bool),
     ItemTorrentAllFiles(u64, bool),
@@ -334,6 +347,11 @@ pub struct App {
     pub seed_ratio_text: String,
     /// The files of the torrent whose details are showing.
     pub details_torrent: Option<TorrentInfo>,
+    /// Checks of downloads from the browser whose dialog isn't showing yet.
+    checked: std::collections::HashMap<u64, Result<ProbeInfo, String>>,
+    /// Downloads from the browser held back for the Refresh link dialog or an
+    /// expired download, until their check says the app gets the file.
+    held_offers: std::collections::HashMap<u64, AddRequest>,
 }
 
 impl App {
@@ -377,6 +395,8 @@ impl App {
             settings_tab: SettingsTab::General,
             seed_ratio_text,
             details_torrent: None,
+            checked: std::collections::HashMap::new(),
+            held_offers: std::collections::HashMap::new(),
         };
         app.engine.set_known_torrents(app.torrent_hashes());
         // Downloads that were running when the app restarted for an update.
@@ -524,6 +544,13 @@ impl App {
         {
             let request = match pending {
                 Pending::Add(request) => request,
+                Pending::Offer(id, request) => {
+                    let mut dialog = AddDialog::from_request(&self.settings, request);
+                    dialog.offer = Some(id);
+                    dialog.probe = Probe::Checking;
+                    self.modal = Some(Modal::Add(Box::new(dialog)));
+                    return Task::batch([task, self.apply_check(id)]);
+                }
                 Pending::TorrentFile(path) => {
                     self.modal = Some(Modal::Add(Box::new(AddDialog::from_torrent_file(&self.settings, &path))));
                     return Task::batch([task, self.probe()]);
@@ -545,6 +572,13 @@ impl App {
             && !self.exiting
             && let Some(covered) = self.covered.pop()
         {
+            // A browser download's dialog takes its check's answer, which may have come meanwhile.
+            if let Modal::Add(dialog) = &covered
+                && let Some(id) = dialog.offer.filter(|_| matches!(dialog.probe, Probe::Checking))
+            {
+                self.modal = Some(covered);
+                return Task::batch([task, self.apply_check(id)]);
+            }
             let recheck = match &covered {
                 Modal::Add(dialog) => matches!(dialog.probe, Probe::Checking).then_some(false),
                 Modal::Refresh(dialog) => matches!(dialog.probe, Probe::Checking).then_some(true),
@@ -575,6 +609,7 @@ impl App {
             | Message::ShowInFolder(_)
             | Message::ShowDetails(_)
             | Message::ItemTorrentFile(..)
+            | Message::DownloadAnyway(_)
             | Message::ItemTorrentAllFiles(..)
             | Message::OpenDownloadFolder(_)) => return self.handle_downloads(m),
             m @ (Message::OpenAdd
@@ -584,6 +619,7 @@ impl App {
             | Message::AddUrlSubmit
             | Message::Probed(..)
             | Message::AddTorrentFile
+            | Message::AddSkipCertificateCheck
             | Message::TorrentFilePicked(_)
             | Message::TorrentProbed(..)
             | Message::AddTorrentSelect(..)
@@ -637,6 +673,45 @@ impl App {
             | Message::ConfirmRefresh) => return self.handle_refresh(m),
 
             Message::Tick => return self.tick(),
+            Message::BrowserOffer(id, add) => {
+                if !add.is_valid() {
+                    return Task::none();
+                }
+                // The Refresh link dialog, or an expired download whose page was
+                // opened, is waiting for a link: it takes this one once checked.
+                let refresh_waiting = matches!(&self.modal, Some(Modal::Refresh(dialog)) if !matches!(dialog.probe, Probe::Ready(_)));
+                if refresh_waiting || self.items.iter().any(|i| i.awaiting_link) {
+                    self.held_offers.insert(id, add);
+                    return Task::none();
+                }
+                log::info!(
+                    "download from the browser, checking it (browser's folder: {:?}, cookies: {})",
+                    add.dir,
+                    add.cookie_names()
+                );
+                // The newest download's dialog goes on top of what's open.
+                // A new download means the PC stays on: the countdown goes.
+                if let Some(open) = self.modal.take()
+                    && !matches!(open, Modal::PowerCountdown { .. })
+                {
+                    self.covered.push(open);
+                }
+                self.pending.push_back(Pending::Offer(id, add));
+                return self.show_window();
+            }
+            Message::BrowserChecked(id, result) => {
+                if let Some(add) = self.held_offers.remove(&id) {
+                    // Only a link the app gets is a new link for that download.
+                    return match result {
+                        Ok(_) => self.handle(Message::External(Request::Add(add))),
+                        Err(_) => Task::none(),
+                    };
+                }
+                self.checked.insert(id, result);
+                if matches!(&self.modal, Some(Modal::Add(dialog)) if dialog.offer == Some(id)) {
+                    return self.apply_check(id);
+                }
+            }
             Message::SeedTick => {
                 let engine = self.engine.clone();
                 let mut stopped = false;

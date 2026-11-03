@@ -6,6 +6,26 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+## [1.2.3] - 2026-11-04
+
+### Added
+- "Download anyway" for a download whose site certificate Windows doesn't
+  trust (often a work or school network inspecting HTTPS): on its card
+  and in the Add dialog, with a warning. It applies to that download only,
+  its details say so, and the log notes it.
+
+### Changed
+- A download from the browser opens its dialog at once, while its link
+  is checked, instead of after the check. The check fills it in, so the
+  link isn't asked for twice; if the app can't get the file, the dialog
+  says the browser is downloading it.
+- Errors no longer include the whole link, which buried the reason.
+
+### Fixed
+- A connection that fails outright at the start (such as one of a
+  host's servers that Windows can't verify) is tried once more before the
+  download fails or is left to the browser.
+
 ## [1.2.2] - 2026-11-01
 
 ### Changed

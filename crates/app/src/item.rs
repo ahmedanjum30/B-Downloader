@@ -77,6 +77,9 @@ pub struct Item {
     pub upload_rate: f64,
     /// How many share the torrent, as its trackers count them.
     pub swarm: Option<Swarm>,
+    /// Downloaded without checking the site's certificate, as the user chose
+    /// after it failed ("Download anyway").
+    pub skip_certificate_check: bool,
 }
 
 impl Item {
@@ -110,6 +113,7 @@ impl Item {
             engine_rate: None,
             upload_rate: 0.0,
             swarm: None,
+            skip_certificate_check: false,
         }
     }
 
@@ -130,6 +134,7 @@ impl Item {
             queued: saved.queued,
             speed_limit_mb: saved.speed_limit_mb,
             torrent: saved.torrent,
+            skip_certificate_check: saved.skip_certificate_check,
             ..Self::new(saved.id, saved.url, saved.dir, saved.file_name, saved.connections, saved.checksum)
         }
     }
@@ -165,6 +170,7 @@ impl Item {
             queued: self.queued,
             speed_limit_mb: self.speed_limit_mb,
             torrent: self.torrent.clone(),
+            skip_certificate_check: self.skip_certificate_check,
         }
     }
 
@@ -193,6 +199,7 @@ impl Item {
             sort_by_type: self.sort_by_type,
             speed_limit: self.speed_limit_mb.map(mb_per_second),
             torrent,
+            skip_certificate_check: self.skip_certificate_check,
         };
         self.awaiting_link = false;
         self.handle = Some(engine.start(options));
@@ -323,6 +330,13 @@ impl Item {
             .iter()
             .find(|(name, _)| name.eq_ignore_ascii_case("referer"))
             .map(|(_, v)| v.as_str())
+    }
+
+    /// It failed because Windows doesn't trust the site's certificate (often a
+    /// network that inspects HTTPS), and can be downloaded anyway.
+    pub fn certificate_failed(&self) -> bool {
+        let State::Failed(error) = &self.state else { return false };
+        !self.is_torrent() && !self.skip_certificate_check && bdownloader_core::is_certificate_message(error)
     }
 
     /// The error usually means the link's token or session has run out.

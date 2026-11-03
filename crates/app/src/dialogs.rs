@@ -144,6 +144,7 @@ pub fn add(dialog: &AddDialog, existing: Option<(u64, u64)>) -> Element<'_, Mess
             ),
             Probe::Checking if dialog.is_torrent() => Some(muted("Reading the torrent…").size(13).into()),
             Probe::Checking => Some(muted("Checking link…").size(13).into()),
+            Probe::Failed(_) if dialog.certificate_failed() => Some(certificate_warning()),
             Probe::Failed(error) => Some(colored(error.as_str(), |c| c.danger).size(13).into()),
             Probe::Ready(info) => {
                 let name = if dialog.file_name.is_empty() {
@@ -359,6 +360,26 @@ fn extension_of(name: &str) -> String {
     name.rsplit_once('.')
         .filter(|(stem, ext)| !stem.is_empty() && (1..=5).contains(&ext.len()))
         .map_or("FILE".to_owned(), |(_, ext)| ext.to_ascii_uppercase())
+}
+
+/// The link's certificate failed: why, and the way past it for a network the user trusts.
+fn certificate_warning<'a>() -> Element<'a, Message> {
+    column![
+        colored("The site's security certificate isn't trusted by Windows.", |c| c.danger)
+            .size(13)
+            .font(SEMIBOLD),
+        muted(
+            "Often a work or school network inspecting HTTPS. It can also be someone changing the file on the way: \
+             only download anyway on a network you trust."
+        )
+        .size(13),
+        button(text("Download anyway (skip certificate check)").size(13).font(SEMIBOLD))
+            .padding([7, 12])
+            .style(style::secondary)
+            .on_press(Message::AddSkipCertificateCheck),
+    ]
+    .spacing(6)
+    .into()
 }
 
 /// A line explaining the setting above it.
@@ -1105,6 +1126,9 @@ pub fn details<'a>(item: &'a Item, copied: Option<&str>, limit_text: &'a str, fi
     }
     if let Some((kind, hash)) = &item.checksum {
         body = body.push(line("Checksum", format!("{kind:?} {hash}")));
+    }
+    if item.skip_certificate_check {
+        body = body.push(line("Security", "Certificate check off for this download, as you chose".to_owned()));
     }
     // Torrents follow the limit for all downloads only.
     if item.state != State::Completed && !item.is_torrent() {

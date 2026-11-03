@@ -48,6 +48,13 @@ pub struct AddDialog {
     pub torrent: Option<TorrentInfo>,
     /// Which of `torrent`'s files to download, in the same order.
     pub selected: Vec<bool>,
+    /// A download the browser handed over, numbered: its link check is
+    /// running, and its answer fills the dialog in.
+    pub offer: Option<u64>,
+    /// The check found the app doesn't get the file, so the browser kept it.
+    pub left_to_browser: bool,
+    /// The user chose to download it although its certificate failed.
+    pub skip_certificate_check: bool,
 }
 
 impl AddDialog {
@@ -69,6 +76,9 @@ impl AddDialog {
             torrent_file: None,
             torrent: None,
             selected: Vec::new(),
+            offer: None,
+            left_to_browser: false,
+            skip_certificate_check: false,
         }
     }
 
@@ -157,7 +167,17 @@ impl AddDialog {
         ((url.starts_with("http://") || url.starts_with("https://")) && url.len() > "https://x".len()) || self.is_torrent()
     }
 
+    /// The check failed on the site's certificate, so "Download anyway" can be offered.
+    pub fn certificate_failed(&self) -> bool {
+        !self.left_to_browser
+            && !self.skip_certificate_check
+            && matches!(&self.probe, Probe::Failed(e) if bdownloader_core::is_certificate_message(e))
+    }
+
     pub fn can_submit(&self) -> bool {
+        if self.left_to_browser {
+            return false;
+        }
         if self.is_torrent() {
             // Its files have to be known to choose from them.
             return self.selected.iter().any(|on| *on);
@@ -187,6 +207,9 @@ impl App {
                 if let Some(Modal::Add(dialog)) = &mut self.modal {
                     dialog.url = url;
                     dialog.probe = Probe::Idle;
+                    dialog.offer = None;
+                    dialog.left_to_browser = false;
+                    dialog.skip_certificate_check = false;
                     // A different link is no longer the captured YouTube video, or the torrent.
                     dialog.youtube = None;
                     dialog.torrent_file = None;
@@ -201,6 +224,14 @@ impl App {
                     dialog.torrent_file = None;
                     dialog.torrent = None;
                     dialog.selected.clear();
+                    dialog.offer = None;
+                    dialog.left_to_browser = false;
+                    return self.probe();
+                }
+            }
+            Message::AddSkipCertificateCheck => {
+                if let Some(Modal::Add(dialog)) = &mut self.modal {
+                    dialog.skip_certificate_check = true;
                     return self.probe();
                 }
             }
@@ -347,6 +378,7 @@ impl App {
                             item.youtube = dialog.youtube;
                             item.sort_by_type = dialog.sort_by_type;
                             item.queued = later;
+                            item.skip_certificate_check = dialog.skip_certificate_check;
                         },
                     );
                     if let Probe::Ready(info) = &dialog.probe {
@@ -474,6 +506,31 @@ impl App {
         self.items.last_mut().expect("just pushed")
     }
 
+    /// Fills the dialog of a browser download in with its link check, once
+    /// both are there: the link's name and size, or that the browser kept it.
+    pub(super) fn apply_check(&mut self, offer: u64) -> Task<Message> {
+        let Some(Modal::Add(dialog)) = &mut self.modal else {
+            return Task::none();
+        };
+        if dialog.offer != Some(offer) {
+            return Task::none();
+        }
+        let Some(result) = self.checked.remove(&offer) else {
+            return Task::none();
+        };
+        match result {
+            Ok(info) => {
+                let probe_id = dialog.probe_id;
+                self.handle_add(Message::Probed(probe_id, Ok(info)))
+            }
+            Err(reason) => {
+                dialog.probe = Probe::Failed(format!("Your browser is downloading this one: {reason}"));
+                dialog.left_to_browser = true;
+                Task::none()
+            }
+        }
+    }
+
     pub(super) fn probe(&mut self) -> Task<Message> {
         let Some(Modal::Add(dialog)) = &mut self.modal else {
             return Task::none();
@@ -500,7 +557,12 @@ impl App {
                 move |result| Message::TorrentProbed(probe_id, result),
             );
         }
-        let (engine, url, probe_id, headers) = (self.engine.clone(), dialog.url.trim().to_owned(), dialog.probe_id, dialog.headers.clone());
+        let engine = if dialog.skip_certificate_check {
+            self.engine.without_certificate_check()
+        } else {
+            self.engine.clone()
+        };
+        let (url, probe_id, headers) = (dialog.url.trim().to_owned(), dialog.probe_id, dialog.headers.clone());
         Task::perform(
             async move { engine.probe(&url, &headers).await.map_err(|e| e.to_string()) },
             move |result| Message::Probed(probe_id, result),
