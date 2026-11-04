@@ -46,6 +46,10 @@ pub struct Item {
 
     pub handle: Option<DownloadHandle>,
     pub speed: Speed,
+    /// The speed over the last half minute or so, for the time left.
+    steady: SteadyRate,
+    /// The time left, worked out once a second rather than on every refresh.
+    shown_eta: Option<(Instant, Option<Duration>)>,
     pub segments: Vec<SegmentProgress>,
     pub active_connections: usize,
     /// Why the download is reconnecting, while it is.
@@ -98,6 +102,8 @@ impl Item {
             resume: false,
             handle: None,
             speed: Speed::default(),
+            steady: SteadyRate::default(),
+            shown_eta: None,
             segments: Vec::new(),
             active_connections: 0,
             problem: None,
@@ -205,6 +211,8 @@ impl Item {
         self.handle = Some(engine.start(options));
         self.state = State::Starting;
         self.speed = Speed::default();
+        self.steady = SteadyRate::default();
+        self.shown_eta = None;
     }
 
     /// What the engine needs to download or seed this torrent, if it is one.
@@ -322,6 +330,14 @@ impl Item {
         self.upload_rate = progress.upload_rate;
         self.swarm = progress.swarm.or(self.swarm);
         self.speed.sample(self.downloaded);
+        let now = Instant::now();
+        // Once data flows: the wait before the first byte isn't the speed.
+        if self.downloaded > 0 {
+            self.steady.update(now, self.rate());
+        }
+        if self.shown_eta.is_none_or(|(at, _)| now.duration_since(at) >= ETA_EVERY) {
+            self.shown_eta = Some((now, self.compute_eta()));
+        }
     }
 
     /// The page the download came from, to get a fresh link from.
@@ -388,8 +404,14 @@ impl Item {
         self.engine_rate.unwrap_or_else(|| self.speed.rate())
     }
 
+    /// The time left, as last worked out (once a second, from the steady speed).
     pub fn eta(&self) -> Option<Duration> {
-        let rate = self.rate();
+        self.handle.as_ref()?;
+        self.shown_eta.and_then(|(_, eta)| eta)
+    }
+
+    fn compute_eta(&self) -> Option<Duration> {
+        let rate = self.steady.rate()?;
         let remaining = self.size?.saturating_sub(self.downloaded);
         (rate > 1.0).then(|| Duration::from_secs_f64(remaining as f64 / rate))
     }
@@ -409,6 +431,41 @@ impl Item {
 
 fn mb_per_second(mb: f64) -> u64 {
     (mb * 1024.0 * 1024.0) as u64
+}
+
+/// How often the time left is worked out again.
+const ETA_EVERY: Duration = Duration::from_secs(1);
+
+/// The speed averaged over roughly the last 3 seconds, recent ones counting
+/// most, for the time left. While a download is younger than that, it's the
+/// average since data started, so the slow first moments (while connections
+/// are added) don't linger.
+#[derive(Debug, Default)]
+pub struct SteadyRate {
+    rate: Option<f64>,
+    started: Option<Instant>,
+    last: Option<Instant>,
+}
+
+impl SteadyRate {
+    /// Seconds over which older speed fades.
+    const SPAN: f64 = 3.0;
+
+    pub fn update(&mut self, now: Instant, rate: f64) {
+        let started = *self.started.get_or_insert(now);
+        let Some(last) = self.last.replace(now) else { return };
+        let step = now.duration_since(last).as_secs_f64();
+        if step <= 0.0 {
+            return;
+        }
+        let span = now.duration_since(started).as_secs_f64().clamp(step, Self::SPAN);
+        let weight = 1.0 - (-step / span).exp();
+        self.rate = Some(self.rate.map_or(rate, |old| old + weight * (rate - old)));
+    }
+
+    pub fn rate(&self) -> Option<f64> {
+        self.rate
+    }
 }
 
 /// Download speed averaged over the last few seconds.
@@ -451,5 +508,42 @@ pub fn youtube_source(request: YoutubeRequest) -> YoutubeSource {
         video: request.video.map(format),
         audio: request.audio.map(format),
         duration_ms: request.duration_ms,
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// A speed that swings between 2 and 8 MB/s every second, sampled four
+    /// times a second like the window refresh: the steady speed stays near the
+    /// 5 MB/s average, where a 3-second window would follow the swings.
+    #[test]
+    fn the_steady_speed_ignores_swings() {
+        let mut steady = SteadyRate::default();
+        let start = Instant::now();
+        let mb = 1024.0 * 1024.0;
+        for tick in 0..240u64 {
+            let rate = if (tick / 4) % 2 == 0 { 2.0 * mb } else { 8.0 * mb };
+            steady.update(start + Duration::from_millis(tick * 250), rate);
+        }
+        let rate = steady.rate().unwrap() / mb;
+        assert!((4.4..5.6).contains(&rate), "{rate} MB/s");
+    }
+
+    /// Early on it's the average since the start, so a slow first second (while
+    /// connections are added) doesn't hold the time left high for long.
+    #[test]
+    fn the_steady_speed_catches_up_after_a_slow_start() {
+        let mut steady = SteadyRate::default();
+        let start = Instant::now();
+        let mb = 1024.0 * 1024.0;
+        for tick in 0..40u64 {
+            let rate = if tick < 4 { 0.5 * mb } else { 10.0 * mb };
+            steady.update(start + Duration::from_millis(tick * 250), rate);
+        }
+        // Ten seconds in, mostly at 10 MB/s.
+        let rate = steady.rate().unwrap() / mb;
+        assert!(rate > 8.5, "{rate} MB/s");
     }
 }

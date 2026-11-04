@@ -25,7 +25,7 @@ Free for personal and other non-commercial use. See [License](#license).
 - **Sleep or shut down when done**, with a 60-second countdown you can cancel.
 - **Optional integrity check.** Verify a finished file's MD5 or SHA-256 checksum.
 - **Stays out of the way.** Runs in the tray, uses little memory while idle, and updates itself.
-- **Native and lightweight.** Written in Rust with the [iced](https://iced.rs) GUI toolkit; the installer is about 5 MB. No bundled browser engine.
+- **Native and lightweight.** Written in Rust with the [iced](https://iced.rs) GUI toolkit; the installer is about 6 MB. No bundled browser engine.
 - **Modern interface** with dark and light themes, live speed and time left, and a progress bar that shows what each connection is downloading.
 
 ## Installing

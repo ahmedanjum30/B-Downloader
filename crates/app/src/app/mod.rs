@@ -427,6 +427,12 @@ impl App {
                 tasks.push(focus_window());
             }
         }
+        // Development builds only: save a picture of the window, as drawn, a few
+        // seconds after start (BDOWNLOADER_SHOT=<file.bmp>[,<seconds>]).
+        #[cfg(debug_assertions)]
+        if let Ok(shot) = std::env::var("BDOWNLOADER_SHOT") {
+            tasks.push(debug_shot(shot));
+        }
         // Development builds only: open a dialog at start, for screenshots.
         #[cfg(debug_assertions)]
         match std::env::var("BDOWNLOADER_OPEN").as_deref() {
@@ -989,4 +995,41 @@ impl App {
             n => format!("BDownloader\n{n} downloading · {}", format::speed(speed)),
         });
     }
+}
+
+/// Saves the window as the renderer drew it, `seconds` after start, as a BMP:
+/// for checking the look of a development build, GPU or not.
+#[cfg(debug_assertions)]
+fn debug_shot(spec: String) -> Task<Message> {
+    let (path, seconds) = match spec.rsplit_once(',') {
+        Some((path, s)) => (path.to_owned(), s.parse().unwrap_or(8)),
+        None => (spec, 8),
+    };
+    Task::perform(tokio::time::sleep(Duration::from_secs(seconds)), |_| ())
+        .then(|()| window::latest())
+        .and_then(window::screenshot)
+        .then(move |shot| {
+            let (width, height) = (shot.size.width, shot.size.height);
+            let mut bmp = Vec::with_capacity(54 + shot.rgba.len());
+            let file_size = 54 + shot.rgba.len() as u32;
+            bmp.extend_from_slice(b"BM");
+            bmp.extend_from_slice(&file_size.to_le_bytes());
+            bmp.extend_from_slice(&[0; 4]);
+            bmp.extend_from_slice(&54u32.to_le_bytes());
+            bmp.extend_from_slice(&40u32.to_le_bytes());
+            bmp.extend_from_slice(&(width as i32).to_le_bytes());
+            // Negative: rows from the top down, as the screenshot has them.
+            bmp.extend_from_slice(&(-(height as i32)).to_le_bytes());
+            bmp.extend_from_slice(&1u16.to_le_bytes());
+            bmp.extend_from_slice(&32u16.to_le_bytes());
+            bmp.extend_from_slice(&[0; 24]);
+            for px in shot.rgba.as_chunks::<4>().0 {
+                bmp.extend_from_slice(&[px[2], px[1], px[0], px[3]]);
+            }
+            match std::fs::write(&path, bmp) {
+                Ok(()) => log::info!("saved a picture of the window to {path}"),
+                Err(e) => log::warn!("couldn't save a picture of the window: {e}"),
+            }
+            Task::none()
+        })
 }

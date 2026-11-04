@@ -6,6 +6,17 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+## [1.2.4] - 2026-11-04
+
+### Changed
+- The window is drawn on the GPU (DirectX 12) instead of the CPU, so it
+  stays smooth with many downloads running: scrolling the list with 20
+  downloads used to lag by almost half a second. Laptops with two GPUs
+  use the power-saving one. Without DirectX 12 it's drawn on the CPU as
+  before. The installer is about 1 MB bigger.
+- The time left follows a slightly steadier speed (the last 3 seconds),
+  worked out once a second, so it jumps around less.
+
 ## [1.2.3] - 2026-11-04
 
 ### Added
