@@ -13,7 +13,7 @@
 <meta property="og:url" content="https://ahmedanjum30.github.io/B-Downloader/">
 <meta property="og:image" content="https://ahmedanjum30.github.io/B-Downloader/images/social.png">
 <meta name="twitter:card" content="summary_large_image">
-<meta name="theme-color" content="#14171d">
+<meta name="theme-color" content="#1c1c21">
 <script type="application/ld+json">
 {
   "@context": "https://schema.org",
@@ -32,29 +32,32 @@
 }
 </script>
 <style>
-  /* The app's palette: shadcn/ui's slate scale with one blue. */
+  /* The app's palette: charcoal greys and one blue-to-violet gradient. */
   :root {
-    --bg: #ffffff; --bg-soft: #f8fafc; --card: #ffffff; --line: #e2e8f0;
-    --fg: #0f172a; --muted: #64748b; --accent: #2563eb; --accent-fg: #ffffff;
-    --hero: linear-gradient(160deg, #eff6ff 0%, #ffffff 60%);
+    --bg: #ffffff; --bg-soft: #f4f4f6; --card: #ffffff; --line: #dcdce2;
+    --fg: #1c1c21; --muted: #66666f; --accent: #2f6fdc; --accent-fg: #ffffff;
+    --grad: linear-gradient(90deg, #2f6fdc, #8340e0);
+    --hero: linear-gradient(160deg, #f1eefe 0%, #ffffff 60%);
   }
   @media (prefers-color-scheme: dark) {
     :root:not([data-theme="light"]) {
-      --bg: #020617; --bg-soft: #0b1222; --card: #0f172a; --line: #1e293b;
-      --fg: #f8fafc; --muted: #94a3b8; --accent: #3b82f6; --accent-fg: #ffffff;
-      --hero: linear-gradient(160deg, #0f1d3d 0%, #020617 60%);
+      --bg: #1c1c21; --bg-soft: #202026; --card: #24242b; --line: #34343d;
+      --fg: #e6e6ea; --muted: #8d8d98; --accent: #4a8df6; --accent-fg: #ffffff;
+      --grad: linear-gradient(90deg, #4a8df6, #a35bf7);
+      --hero: linear-gradient(160deg, #23213a 0%, #1c1c21 60%);
     }
   }
   :root[data-theme="dark"] {
-    --bg: #020617; --bg-soft: #0b1222; --card: #0f172a; --line: #1e293b;
-    --fg: #f8fafc; --muted: #94a3b8; --accent: #3b82f6; --accent-fg: #ffffff;
-    --hero: linear-gradient(160deg, #0f1d3d 0%, #020617 60%);
+    --bg: #1c1c21; --bg-soft: #202026; --card: #24242b; --line: #34343d;
+    --fg: #e6e6ea; --muted: #8d8d98; --accent: #4a8df6; --accent-fg: #ffffff;
+    --grad: linear-gradient(90deg, #4a8df6, #a35bf7);
+    --hero: linear-gradient(160deg, #23213a 0%, #1c1c21 60%);
   }
   * { box-sizing: border-box; }
   html { scroll-behavior: smooth; }
   body { margin: 0; background: var(--bg); color: var(--fg); font: 17px/1.6 "Segoe UI Variable Text", "Segoe UI", system-ui, -apple-system, sans-serif; }
   a { color: var(--accent); }
-  img { max-width: 100%; display: block; }
+  img { max-width: 100%; height: auto; display: block; }
   .wrap { max-width: 1120px; margin: 0 auto; padding: 0 16px; }
   header.bar { position: sticky; top: 0; z-index: 10; background: color-mix(in srgb, var(--bg) 85%, transparent); backdrop-filter: blur(10px); border-bottom: 1px solid var(--line); }
   header.bar .wrap { display: flex; align-items: center; gap: 16px; height: 60px; }
@@ -69,7 +72,7 @@
   .hero p.lead { font-size: clamp(17px, 2.2vw, 20px); color: var(--muted); max-width: 680px; margin: 0 auto 28px; }
   .cta { display: flex; flex-wrap: wrap; gap: 12px; justify-content: center; align-items: center; }
   .button { display: inline-flex; align-items: center; gap: 10px; padding: 13px 22px; border-radius: 10px; font-weight: 600; text-decoration: none; font-size: 16px; }
-  .button.primary { background: var(--accent); color: var(--accent-fg); box-shadow: 0 6px 24px color-mix(in srgb, var(--accent) 35%, transparent); }
+  .button.primary { background: var(--grad); color: var(--accent-fg); box-shadow: 0 6px 24px color-mix(in srgb, var(--accent) 35%, transparent); }
   .button.primary:hover { filter: brightness(1.08); }
   .button.secondary { color: var(--fg); border: 1px solid var(--line); background: var(--card); }
   .store img { height: 48px; width: auto; }
@@ -133,7 +136,7 @@
         <a class="button secondary" href="https://github.com/ahmedanjum30/B-Downloader">View on GitHub</a>
       </div>
       <p class="meta">Windows 10 and 11 · About 5 MB · No admin rights needed · Free for personal use</p>
-      <div class="shot"><img src="images/app.png" width="1418" height="947" alt="BDownloader downloading a file over 8 connections, with a queued download, a failed one offering Refresh link, and finished downloads below"></div>
+      <div class="shot"><img src="images/app.png" width="1400" height="900" alt="BDownloader with two files downloading over 8 connections each, then the downloads that need you (one paused, two failed, one offering Refresh link), a queued download and finished ones"></div>
     </div>
   </div>
 
@@ -202,7 +205,7 @@
           <li><b>Chrome, Brave, Opera, Vivaldi</b>a few guided steps inside BDownloader</li>
         </ul>
       </div>
-      <img class="rounded" src="images/extension.png" width="676" height="742" alt="BDownloader's browser extension window, showing it connected, with tabs for Chrome, Edge, Brave, Opera, Vivaldi and Firefox and an Add to Firefox button">
+      <img class="rounded" src="images/extension.png" width="676" height="742" alt="BDownloader's browser extension window, with tabs for Chrome, Edge, Brave, Opera, Vivaldi and Firefox and an Add to Firefox button">
     </div>
   </section>
 
