@@ -1,15 +1,17 @@
 //! Colors and widget styles. Everything visual lives here, so the look can be
 //! changed in one place.
 //!
-//! The look follows shadcn/ui on its slate scale with one blue: flat
-//! surfaces, 1px borders, small radii, and colour only where it means
-//! something (the primary action, progress, a download's state).
+//! The look follows AB Download Manager: charcoal panels with 1px borders and
+//! generous rounding, and one blue-to-violet gradient where something moves
+//! or is the main action (progress, Add URL, the primary button). Other
+//! colour only where it means something: a download's state.
 
 use std::sync::LazyLock;
 
+use iced::gradient::Linear;
 use iced::theme::Palette;
 use iced::widget::{button, container, pick_list, progress_bar, scrollable, text_input};
-use iced::{Background, Border, Color, Shadow, Theme};
+use iced::{Background, Border, Color, Degrees, Gradient, Shadow, Theme};
 
 pub struct Colors {
     pub background: Color,
@@ -20,7 +22,10 @@ pub struct Colors {
     pub border: Color,
     pub text: Color,
     pub muted: Color,
+    /// Where the gradient starts; also the accent on its own (focus, links).
     pub accent: Color,
+    /// Where the gradient ends.
+    pub accent_end: Color,
     pub on_accent: Color,
     pub success: Color,
     pub warning: Color,
@@ -42,36 +47,43 @@ pub const fn alpha(color: Color, a: f32) -> Color {
 }
 
 pub const DARK: Colors = Colors {
-    background: rgb(0x020617),
-    sidebar: rgb(0x020617),
-    surface: rgb(0x0f172a),
-    surface_hover: rgb(0x1e293b),
-    border: rgb(0x1e293b),
-    text: rgb(0xf8fafc),
-    muted: rgb(0x94a3b8),
-    accent: rgb(0x3b82f6),
+    background: rgb(0x1c1c21),
+    sidebar: rgb(0x1c1c21),
+    surface: rgb(0x24242b),
+    surface_hover: rgb(0x2c2c34),
+    border: rgb(0x34343d),
+    text: rgb(0xe6e6ea),
+    muted: rgb(0x8d8d98),
+    accent: rgb(0x4a8df6),
+    accent_end: rgb(0xa35bf7),
     on_accent: rgb(0xffffff),
-    success: rgb(0x22c55e),
-    warning: rgb(0xf59e0b),
-    danger: rgb(0xef4444),
-    track: rgb(0x1e293b),
+    success: rgb(0x3fb950),
+    warning: rgb(0xe3a008),
+    danger: rgb(0xf85149),
+    track: rgb(0x2c2c34),
 };
 
 pub const LIGHT: Colors = Colors {
-    background: rgb(0xffffff),
-    sidebar: rgb(0xf8fafc),
+    background: rgb(0xf4f4f6),
+    sidebar: rgb(0xf4f4f6),
     surface: rgb(0xffffff),
-    surface_hover: rgb(0xf1f5f9),
-    border: rgb(0xe2e8f0),
-    text: rgb(0x0f172a),
-    muted: rgb(0x64748b),
-    accent: rgb(0x2563eb),
+    surface_hover: rgb(0xebebef),
+    border: rgb(0xdcdce2),
+    text: rgb(0x1c1c21),
+    muted: rgb(0x66666f),
+    accent: rgb(0x3b7ce8),
+    accent_end: rgb(0x9147ee),
     on_accent: rgb(0xffffff),
-    success: rgb(0x16a34a),
-    warning: rgb(0xd97706),
-    danger: rgb(0xdc2626),
-    track: rgb(0xf1f5f9),
+    success: rgb(0x1f9d3a),
+    warning: rgb(0xb87500),
+    danger: rgb(0xd93a33),
+    track: rgb(0xebebef),
 };
+
+/// The blue-to-violet gradient, left to right.
+pub fn gradient(c: &Colors) -> Background {
+    Gradient::Linear(Linear::new(Degrees(90.0)).add_stop(0.0, c.accent).add_stop(1.0, c.accent_end)).into()
+}
 
 fn theme_from(name: &'static str, c: &Colors) -> Theme {
     Theme::custom(
@@ -95,9 +107,9 @@ pub fn colors(theme: &Theme) -> &'static Colors {
 }
 
 /// Controls: buttons, inputs, tabs.
-pub const RADIUS: f32 = 6.0;
-/// Cards and dialogs.
-const CARD_RADIUS: f32 = 10.0;
+pub const RADIUS: f32 = 8.0;
+/// Cards, panels and dialogs.
+const CARD_RADIUS: f32 = 12.0;
 
 fn border(color: Color, width: f32, radius: f32) -> Border {
     Border {
@@ -119,10 +131,8 @@ pub fn app_background(theme: &Theme) -> container::Style {
 }
 
 pub fn sidebar(theme: &Theme) -> container::Style {
-    let c = colors(theme);
     container::Style {
-        background: Some(c.sidebar.into()),
-        border: border(c.border, 1.0, 0.0),
+        background: Some(colors(theme).sidebar.into()),
         ..container::Style::default()
     }
 }
@@ -245,13 +255,20 @@ pub fn dot(pick: Pick) -> impl Fn(&Theme) -> container::Style {
     }
 }
 
+/// The gradient tile: the logo and the Add URL button's icon.
 pub fn logo(theme: &Theme) -> container::Style {
     let c = colors(theme);
     container::Style {
-        background: Some(c.accent.into()),
-        border: border(Color::TRANSPARENT, 0.0, 7.0),
+        background: Some(gradient(c)),
+        border: border(Color::TRANSPARENT, 0.0, 8.0),
+        text_color: Some(c.on_accent),
         ..container::Style::default()
     }
+}
+
+/// A group of compact rows (Needs you, Queued, Finished): one bordered panel.
+pub fn group(theme: &Theme) -> container::Style {
+    card(theme)
 }
 
 /// A soft circle or box in the theme's accent color.
@@ -271,15 +288,21 @@ pub fn tooltip(theme: &Theme) -> container::Style {
 
 // Buttons
 
+/// The main action, filled with the gradient.
 pub fn primary(theme: &Theme, status: button::Status) -> button::Style {
     let c = colors(theme);
     let background = match status {
-        button::Status::Hovered | button::Status::Pressed => alpha(c.accent, 0.9),
-        button::Status::Disabled => alpha(c.accent, 0.5),
-        button::Status::Active => c.accent,
+        button::Status::Disabled => alpha(c.accent, 0.45).into(),
+        button::Status::Hovered | button::Status::Pressed => Gradient::Linear(
+            Linear::new(Degrees(90.0))
+                .add_stop(0.0, alpha(c.accent, 0.88))
+                .add_stop(1.0, alpha(c.accent_end, 0.88)),
+        )
+        .into(),
+        button::Status::Active => gradient(c),
     };
     button::Style {
-        background: Some(background.into()),
+        background: Some(background),
         text_color: if status == button::Status::Disabled {
             alpha(c.on_accent, 0.7)
         } else {
@@ -307,12 +330,12 @@ pub fn danger(theme: &Theme, status: button::Status) -> button::Style {
     }
 }
 
-/// An outline button, as shadcn/ui's "outline" variant.
+/// A raised button on a panel: Add URL, Browse, row actions with words.
 pub fn secondary(theme: &Theme, status: button::Status) -> button::Style {
     let c = colors(theme);
     let background = match status {
         button::Status::Hovered | button::Status::Pressed => c.surface_hover,
-        _ => c.background,
+        _ => c.surface,
     };
     button::Style {
         background: Some(background.into()),
@@ -323,7 +346,7 @@ pub fn secondary(theme: &Theme, status: button::Status) -> button::Style {
     }
 }
 
-/// A borderless button, as shadcn/ui's "ghost" variant: Cancel and the like.
+/// A borderless button: Cancel, toolbar buttons and the like.
 pub fn ghost(theme: &Theme, status: button::Status) -> button::Style {
     let c = colors(theme);
     let hovered = matches!(status, button::Status::Hovered | button::Status::Pressed);
@@ -371,8 +394,7 @@ pub fn nav(selected: bool) -> impl Fn(&Theme, button::Status) -> button::Style {
 }
 
 /// One option of a segmented control on a [`panel`] track: the chosen one
-/// sits on the page's own ground, as shadcn/ui's tabs (outlined rather than
-/// shadowed, for the same reason as [`dialog`]).
+/// sits on the page's own ground, outlined.
 pub fn tab(selected: bool) -> impl Fn(&Theme, button::Status) -> button::Style {
     move |theme, status| {
         let c = colors(theme);
@@ -419,7 +441,7 @@ pub fn bare_pick_list(theme: &Theme, status: pick_list::Status) -> pick_list::St
     }
 }
 
-/// A thin slate thumb with no track, darker while it's used.
+/// A thin thumb with no track, brighter while it's used.
 pub fn scrollbar(theme: &Theme, status: scrollable::Status) -> scrollable::Style {
     let c = colors(theme);
     let busy = !matches!(status, scrollable::Status::Active { .. });
@@ -447,5 +469,15 @@ pub fn progress(pick: Pick) -> impl Fn(&Theme) -> progress_bar::Style {
             bar: pick(c).into(),
             border: border(Color::TRANSPARENT, 0.0, 3.0),
         }
+    }
+}
+
+/// A running download's bar, in the gradient.
+pub fn progress_gradient(theme: &Theme) -> progress_bar::Style {
+    let c = colors(theme);
+    progress_bar::Style {
+        background: c.track.into(),
+        bar: gradient(c),
+        border: border(Color::TRANSPARENT, 0.0, 3.0),
     }
 }

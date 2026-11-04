@@ -11,9 +11,9 @@ The main window and its dialogs (crates/app/src/view.rs, dialogs.rs, style.rs). 
 
 ## Direction contract
 
-THESIS: A shadcn/ui-style working screen (user-pinned): flat zinc-slate surfaces, 1px borders and quiet hierarchy, refusing the category's glowing gradient dashboard and the busy IDM grid.
-OWN-WORLD: Slate greys with one blue. Dark: #020617 ground, #0F172A cards, #1E293B borders, #F8FAFC text, #94A3B8 muted, primary #3B82F6. Light: #FFFFFF ground and cards, #E2E8F0 borders, #0F172A text, #64748B muted, primary #2563EB. Radius 6px controls, 10px cards and dialogs. Outline and ghost buttons; segmented tabs on a muted track; status as small dot badges.
-STORY: The visitor sees what's running and how fast, what's waiting, and what needs them, then acts with one obvious button.
-FIRST VIEWPORT: Left sidebar (All downloads, Queue, Types) on the ground colour with a 1px divider; header with title and speed subtitle, then the speed limit, when-done, search and the blue Add download; status tabs; bordered download rows with the per-connection progress bar.
-FORM: shadcn/ui component language over slate + blue; user-pinned, overriding the roll. seed:5b6ff9e9fc9df6e8
+THESIS: A working download manager in AB Download Manager's world (user-pinned): charcoal panels and one blue-to-violet gradient, with the list grouped by what needs the user instead of one flat list or a busy IDM grid.
+OWN-WORLD: Charcoal greys and one gradient. Dark: #1c1c21 ground, #24242b panels, #2c2c34 raised, #34343d borders, #e6e6ea text, #8d8d98 muted; gradient #4a8df6 to #a35bf7 on progress, the Add URL tile and the primary button's fill (translated from the mock's gradient outline: iced draws no gradient borders, so the fill carries it); green #3fb950 done parts, amber #e3a008 paused, red #f85149 failed. Light keeps the structure on #ffffff / #f4f4f6 with the same gradient. Radius 8px controls, 12px panels. Icon-over-label toolbar buttons; a rounded category card; compact table groups (name, state, size, actions).
+STORY: The visitor sees what's downloading and how fast, what needs them, and what waits, then acts on the row in front of them.
+FIRST VIEWPORT: Category card left (All with its types, then Queue and Torrents); toolbar on top with the Add URL pill and icon-over-label Resume all, Pause all, Start queue, Settings, plus search; "Downloading now" tall rows with gradient bar and per-connection strip, then "Needs you", "Queued" and "Finished" as compact table groups; status bar at the bottom: speed limit and When done on the left, counts and total speed on the right.
+FORM: AB Download Manager style (user-pinned), the grouped layout, candidate 6 of 7 dealt as the lead. seed:73174734da3eecf5
 FINISH: unreviewed and undocumented is unfinished; this build ends with the finish review, the verdict, DESIGN.md, and every shipping raster carrying its provenance

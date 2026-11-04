@@ -6,6 +6,25 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+## [1.3.0] - 2026-11-04
+
+### Changed
+- A new look: charcoal panels with one blue-to-violet accent, used on
+  running downloads, Add URL and the main button of each dialog.
+- The list is grouped by what each download needs instead of split into
+  tabs. "Downloading now" comes first, with a large progress bar for each
+  download and a thin strip under it showing every connection's part,
+  finished parts in green. Then come "Needs you" (paused and failed),
+  "Queued" and "Finished", as compact rows with the name, state, size and
+  actions side by side.
+- The sidebar groups the file types under All downloads, with Queue and
+  Torrents in their own panel.
+- The toolbar has Resume all and Pause all next to Add URL, the queue and
+  Settings.
+- A status bar along the bottom shows the speed limit, When done, how many
+  downloads are running or queued, and the total speed.
+- The installer is about 0.4 MB smaller.
+
 ## [1.2.4] - 2026-11-04
 
 ### Changed

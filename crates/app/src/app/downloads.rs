@@ -14,6 +14,23 @@ impl App {
         match message {
             // Pausing or starting a download by hand takes it out of the
             // queue, so the queue doesn't start or stop it again.
+            // Like pressing Pause or Resume on each: out of the queue, so it
+            // doesn't start or stop them again.
+            Message::PauseAll => {
+                for item in self.items.iter_mut().filter(|i| i.handle.is_some()) {
+                    item.queued = false;
+                    item.pause();
+                }
+                self.save();
+            }
+            Message::ResumeAll => {
+                let engine = self.engine.clone();
+                let stopped = |i: &crate::item::Item| i.handle.is_none() && matches!(i.state, State::Paused | State::Failed(_)) && !i.queued;
+                for item in self.items.iter_mut().filter(|i| stopped(i)) {
+                    item.start(&engine);
+                }
+                self.save();
+            }
             Message::Pause(id) => {
                 if let Some(item) = self.item(id) {
                     item.queued = false;

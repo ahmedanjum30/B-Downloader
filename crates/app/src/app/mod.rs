@@ -75,10 +75,6 @@ enum Pending {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Filter {
     All,
-    Active,
-    Completed,
-    Paused,
-    Failed,
     /// The download queue: waiting, or running as part of it.
     Queue,
     /// Torrents: magnet links and .torrent files.
@@ -88,16 +84,9 @@ pub enum Filter {
 }
 
 impl Filter {
-    /// The tabs above the list, which narrow down what the sidebar shows.
-    pub const STATUSES: [Filter; 5] = [Filter::All, Filter::Active, Filter::Completed, Filter::Paused, Filter::Failed];
-
     pub fn label(self) -> &'static str {
         match self {
             Filter::All => "All downloads",
-            Filter::Active => "Downloading",
-            Filter::Completed => "Completed",
-            Filter::Paused => "Paused",
-            Filter::Failed => "Failed",
             Filter::Queue => "Queue",
             Filter::Torrents => "Torrents",
             Filter::Category(category) => category.name(),
@@ -107,13 +96,8 @@ impl Filter {
     pub fn matches(self, item: &Item) -> bool {
         match self {
             Filter::All => true,
-            Filter::Active => item.state.is_running(),
-            Filter::Completed => item.state == State::Completed,
-            // Downloads waiting in the queue are under Queue instead.
-            Filter::Paused => item.state == State::Paused && !item.queued,
             Filter::Queue => item.queued,
             Filter::Torrents => item.is_torrent(),
-            Filter::Failed => matches!(item.state, State::Failed(_)),
             Filter::Category(category) => Category::of(&item.display_name()) == Some(category),
         }
     }
@@ -151,10 +135,12 @@ pub enum Message {
 
     /// What the sidebar shows: all downloads, the queue or one type.
     Filter(Filter),
-    /// The status tab above the list.
-    Status(Filter),
     Search(String),
     Pause(u64),
+    /// Pause every running download, from the toolbar.
+    PauseAll,
+    /// Continue every paused or failed download, from the toolbar.
+    ResumeAll,
     Resume(u64),
     /// Asks before removing a download.
     Remove(u64),
@@ -304,8 +290,6 @@ pub struct App {
     pub items: Vec<Item>,
     /// What the sidebar shows.
     pub filter: Filter,
-    /// The status tab, within what the sidebar shows.
-    pub status: Filter,
     pub search: String,
     pub modal: Option<Modal>,
     system_dark: bool,
@@ -371,7 +355,6 @@ impl App {
             settings,
             items,
             filter: Filter::All,
-            status: Filter::All,
             search: String::new(),
             modal: None,
             system_dark: true,
@@ -503,23 +486,18 @@ impl App {
         self.items.iter().filter(|i| filter.matches(i)).count()
     }
 
-    /// Downloads in a status tab, within what the sidebar shows.
-    pub fn count_status(&self, status: Filter) -> usize {
-        self.items.iter().filter(|i| self.filter.matches(i) && status.matches(i)).count()
-    }
-
-    /// Shows these downloads (from the sidebar), in every state.
+    /// Shows these downloads (from the sidebar).
     fn show(&mut self, filter: Filter) {
         self.filter = filter;
-        self.status = Filter::All;
     }
 
     /// Items shown for the current filter and search, newest first.
     pub fn visible(&self) -> impl Iterator<Item = &Item> {
         let search = self.search.trim().to_lowercase();
-        self.items.iter().rev().filter(move |i| {
-            self.filter.matches(i) && self.status.matches(i) && (search.is_empty() || i.display_name().to_lowercase().contains(&search))
-        })
+        self.items
+            .iter()
+            .rev()
+            .filter(move |i| self.filter.matches(i) && (search.is_empty() || i.display_name().to_lowercase().contains(&search)))
     }
 
     fn item(&mut self, id: u64) -> Option<&mut Item> {
@@ -614,6 +592,8 @@ impl App {
             | Message::OpenFile(_)
             | Message::ShowInFolder(_)
             | Message::ShowDetails(_)
+            | Message::PauseAll
+            | Message::ResumeAll
             | Message::ItemTorrentFile(..)
             | Message::DownloadAnyway(_)
             | Message::ItemTorrentAllFiles(..)
@@ -791,7 +771,6 @@ impl App {
             Message::Removed => {}
 
             Message::Filter(filter) => self.show(filter),
-            Message::Status(status) => self.status = status,
             Message::Search(search) => self.search = search,
             Message::OpenExtension => self.modal = Some(Modal::Extension(browser::Browser::Chrome)),
             Message::OpenSupport => store::open_file(std::path::Path::new(SUPPORT_URL)),
