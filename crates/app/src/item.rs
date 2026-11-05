@@ -458,6 +458,12 @@ impl SteadyRate {
         if step <= 0.0 {
             return;
         }
+        // After a gap longer than the span (the PC slept, or no data came for
+        // a while), the old speed says nothing: start again from this one.
+        if step >= Self::SPAN {
+            self.rate = Some(rate);
+            return;
+        }
         let span = now.duration_since(started).as_secs_f64().clamp(step, Self::SPAN);
         let weight = 1.0 - (-step / span).exp();
         self.rate = Some(self.rate.map_or(rate, |old| old + weight * (rate - old)));
@@ -545,5 +551,19 @@ mod tests {
         // Ten seconds in, mostly at 10 MB/s.
         let rate = steady.rate().unwrap() / mb;
         assert!(rate > 8.5, "{rate} MB/s");
+    }
+
+    /// A long gap between updates (a torrent that got no data for a while, or
+    /// a PC waking from sleep) used to crash the app; the speed starts afresh.
+    #[test]
+    fn a_long_gap_starts_the_speed_afresh() {
+        let mut steady = SteadyRate::default();
+        let start = Instant::now();
+        let mb = 1024.0 * 1024.0;
+        for tick in 0..8u64 {
+            steady.update(start + Duration::from_millis(tick * 250), 5.0 * mb);
+        }
+        steady.update(start + Duration::from_secs(100), 1.0 * mb);
+        assert_eq!(steady.rate(), Some(1.0 * mb));
     }
 }

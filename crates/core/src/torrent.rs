@@ -20,8 +20,8 @@ use std::time::Duration;
 use librqbit::dht::DhtPersistenceConfig;
 use librqbit::limits::LimitsConfig;
 use librqbit::{
-    AddTorrent, AddTorrentOptions, AddTorrentResponse, DhtSessionConfig, ListOnlyResponse, ListenerOptions, ManagedTorrent, Session, SessionOptions,
-    SessionPersistenceConfig, TorrentStatsState,
+    AddTorrent, AddTorrentOptions, AddTorrentResponse, DhtSessionConfig, ListOnlyResponse, ListenerMode, ListenerOptions, ManagedTorrent, Session,
+    SessionOptions, SessionPersistenceConfig, TorrentStatsState,
 };
 use tokio_util::sync::CancellationToken;
 
@@ -163,8 +163,12 @@ impl Torrents {
                     // Remembers which pieces each torrent has, so it doesn't
                     // read all its files again after a restart.
                     fastresume: true,
-                    // Lets other peers connect, which seeding depends on.
+                    // Lets other peers connect, which seeding depends on. Over
+                    // uTP too (librqbit's default is TCP only): many peers
+                    // are reachable only over uTP, and without its socket
+                    // the app can't connect to them either.
                     listen: Some(ListenerOptions {
+                        mode: ListenerMode::TcpAndUtp,
                         enable_upnp_port_forwarding: true,
                         ..Default::default()
                     }),

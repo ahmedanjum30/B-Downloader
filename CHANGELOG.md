@@ -6,6 +6,22 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+## [1.3.1] - 2026-11-05
+
+### Changed
+- Torrents connect to peers over uTP as well as TCP, like other torrent
+  apps. Before, only TCP was used, which left out the many peers that
+  are reachable only over uTP, so torrents downloaded much slower than
+  they could.
+- The log stays under about 4 MB: it starts over past 2 MB (keeping the
+  previous one) while the app runs too, not only when it starts, and very
+  long lines are cut.
+
+### Fixed
+- The app crashed when a running download got no new data for a while
+  (a torrent waiting for peers, or the PC waking from sleep) and then
+  continued. Introduced in 1.2.4.
+
 ## [1.3.0] - 2026-11-04
 
 ### Changed
@@ -23,7 +39,6 @@ All notable changes to this project are documented here. The format follows
   Settings.
 - A status bar along the bottom shows the speed limit, When done, how many
   downloads are running or queued, and the total speed.
-- The installer is about 0.4 MB smaller.
 
 ## [1.2.4] - 2026-11-04
 
