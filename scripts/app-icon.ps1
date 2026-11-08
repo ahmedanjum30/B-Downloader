@@ -1,6 +1,7 @@
 # Draws the app icon into crates\app\assets:
 #   bdownloader.ico  - for the exe, shortcuts and the installer (16 to 256 px)
 #   icon-64.rgba     - raw 64x64 RGBA pixels for the window's title bar and taskbar
+# and the browser extension's icons, extension\icons\16, 32, 48 and 128.png.
 #
 #   powershell -ExecutionPolicy Bypass -File scripts\app-icon.ps1
 
@@ -63,6 +64,14 @@ for ($i = 0; $i -lt $sizes.Count; $i++) {
 foreach ($png in $pngs) { $bw.Write([byte[]]$png) }
 $bw.Flush()
 [IO.File]::WriteAllBytes((Join-Path $out 'bdownloader.ico'), $ico.ToArray())
+
+# The browser extension's icons, the same drawing.
+$extIcons = Join-Path (Split-Path $PSScriptRoot -Parent) 'extension\icons'
+foreach ($size in 16, 32, 48, 128) {
+    $bmp = Draw-Icon $size
+    $bmp.Save((Join-Path $extIcons "$size.png"), [Drawing.Imaging.ImageFormat]::Png)
+    $bmp.Dispose()
+}
 
 # Raw RGBA (GDI+ stores BGRA, so swap red and blue).
 $bmp = Draw-Icon 64

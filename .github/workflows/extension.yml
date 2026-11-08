@@ -1,0 +1,44 @@
+# Publishes the browser extension on its own, without an app release: run it
+# from the Actions tab (or the API) after raising the extension's version.
+# The same steps as the release's firefox and edge jobs: each submits only
+# when the version differs from the last release's, and skips without its
+# secrets.
+name: Extension
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  firefox:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          # The tags, to compare with the last release's extension.
+          fetch-depth: 0
+      - name: Submit to Firefox Add-ons
+        shell: pwsh
+        run: ./scripts/publish-firefox.ps1
+        env:
+          AMO_JWT_ISSUER: ${{ secrets.AMO_JWT_ISSUER }}
+          AMO_JWT_SECRET: ${{ secrets.AMO_JWT_SECRET }}
+
+  edge:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+      - name: Package the extension
+        shell: pwsh
+        run: ./scripts/package-extension.ps1
+      - name: Submit to Edge Add-ons
+        shell: pwsh
+        run: ./scripts/publish-edge.ps1
+        env:
+          EDGE_CLIENT_ID: ${{ secrets.EDGE_CLIENT_ID }}
+          EDGE_API_KEY: ${{ secrets.EDGE_API_KEY }}
+          EDGE_PRODUCT_ID: ${{ secrets.EDGE_PRODUCT_ID }}

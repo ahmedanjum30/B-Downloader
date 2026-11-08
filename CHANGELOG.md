@@ -6,6 +6,10 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+### Changed
+- Browser extension 1.1.1: its icon is the new blue-to-violet tile, like
+  the app's. Published to Firefox and Edge on its own (2026-11-09).
+
 ## [1.3.2] - 2026-11-08
 
 ### Changed
