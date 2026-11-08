@@ -67,7 +67,7 @@ function Draw-Promo([int]$w, [int]$h, [string]$file) {
     $tx = $x + $icon + $k * 0.1
     $title = New-Object Drawing.Font 'Segoe UI', ([float]($k * 0.15)), ([Drawing.FontStyle]::Bold), ([Drawing.GraphicsUnit]::Pixel)
     $sub = New-Object Drawing.Font 'Segoe UI', ([float]($k * 0.068)), ([Drawing.FontStyle]::Regular), ([Drawing.GraphicsUnit]::Pixel)
-    $g.DrawString('BDownloader', $title, [Drawing.Brushes]::White, [float]$tx, [float]($h / 2 - $k * 0.2))
+    $g.DrawString('B-Downloader', $title, [Drawing.Brushes]::White, [float]$tx, [float]($h / 2 - $k * 0.2))
     $muted = New-Object Drawing.SolidBrush ([Drawing.Color]::FromArgb(255, 0x94, 0xa3, 0xb8))
     $g.DrawString("Faster downloads over many connections.`nPause and resume any time.", $sub, $muted, [float]($tx + $k * 0.01), [float]($h / 2 + $k * 0.02))
     $bmp.Save((Join-Path $out $file), [Drawing.Imaging.ImageFormat]::Png)

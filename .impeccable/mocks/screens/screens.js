@@ -30,6 +30,8 @@ setTheme(new URLSearchParams(location.search).get("theme") || storedTheme() || "
 
 document.addEventListener("DOMContentLoaded", async () => {
   const here = location.pathname.split("/").pop() || "main.html";
+  // ?bare: the screen alone, for screenshots.
+  if (new URLSearchParams(location.search).has("bare")) document.documentElement.classList.add("bare");
   const nav = document.createElement("nav");
   nav.className = "switcher";
   nav.innerHTML = SCREENS.map(([href, name]) =>

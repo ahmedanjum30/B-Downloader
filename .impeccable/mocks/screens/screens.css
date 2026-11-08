@@ -73,6 +73,8 @@ svg.i.lg { width: 20px; height: 20px; }
   backdrop-filter: blur(8px); border-bottom: 1px solid var(--border);
   font-size: 12.5px;
 }
+.bare .switcher { display: none; }
+.bare body { padding: 0; }
 .switcher a { color: var(--muted); text-decoration: none; padding: 4px 9px; border-radius: 6px; }
 .switcher a:hover { color: var(--text); background: var(--surface); }
 .switcher a[aria-current="page"] { color: var(--text); background: var(--surface-hover); }
