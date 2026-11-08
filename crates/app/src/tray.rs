@@ -55,7 +55,7 @@ impl Tray {
     }
 
     fn create() -> Result<Self, Box<dyn std::error::Error>> {
-        let open = MenuItem::new("Open BDownloader", true, None);
+        let open = MenuItem::new("Open B-Downloader", true, None);
         let exit = MenuItem::new("Exit", true, None);
         let menu = Menu::new();
         menu.append_items(&[&open, &PredefinedMenuItem::separator(), &exit])?;
@@ -63,7 +63,7 @@ impl Tray {
         let icon = tray_icon::Icon::from_rgba(include_bytes!("../assets/icon-64.rgba").to_vec(), 64, 64)?;
         let tray = TrayIconBuilder::new()
             .with_icon(icon)
-            .with_tooltip("BDownloader")
+            .with_tooltip("B-Downloader")
             .with_menu(Box::new(menu))
             // Left click opens the window; the menu is on right click.
             .with_menu_on_left_click(false)

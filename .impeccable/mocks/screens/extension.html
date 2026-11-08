@@ -1,0 +1,34 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Browser extension</title>
+<link rel="stylesheet" href="screens.css">
+<script src="screens.js"></script>
+</head>
+<body>
+<div class="window" data-backdrop>
+  <div class="scrim">
+    <section class="dialog" role="dialog" aria-label="Browser extension">
+      <header class="dlg-head"><h1>Browser extension</h1><a class="icon-btn" href="main.html" aria-label="Close"><svg class="i lg"><use href="icons.svg#close"/></svg></a></header>
+      <div class="file-card"><span class="badge" style="color:var(--accent)"><svg class="i lg"><use href="icons.svg#globe"/></svg></span><div><div class="name">Not connected</div><div class="meta">Add the extension to your browser.</div></div></div>
+      <div class="field"><span class="label">What it does</span>
+        <ul class="bullets">
+          <li>Downloads you start in the browser go to BDownloader.</li>
+          <li>Right-click a link and choose Download with BDownloader.</li>
+          <li>Videos, YouTube too, get a Download this video bar.</li>
+        </ul>
+      </div>
+      <div class="field"><span class="label">How to add it</span>
+        <div class="seg"><button aria-pressed="false">Chrome</button><button aria-pressed="false">Edge</button><button aria-pressed="false">Brave</button><button aria-pressed="false">Opera</button><button aria-pressed="false">Vivaldi</button><button aria-pressed="true">Firefox</button></div>
+      </div>
+      <div style="display:flex;align-items:center;gap:14px"><button class="btn primary">Add to Firefox</button><span>Firefox opens the add-on's page: click Add to Firefox.</span></div>
+      <div class="field"><span class="hint">Firefox didn't open? Open this page in Firefox:</span><div class="copy-field"><span>https://addons.mozilla.org/firefox/addon/bdownloader/</span><button class="btn sm ghost"><svg class="i"><use href="icons.svg#copy"/></svg>Copy</button></div></div>
+      <span class="hint">It shows as connected here once the browser has talked to BDownloader.</span>
+      <footer class="dlg-foot"><a class="btn" href="main.html">Close</a></footer>
+    </section>
+  </div>
+</div>
+</body>
+</html>

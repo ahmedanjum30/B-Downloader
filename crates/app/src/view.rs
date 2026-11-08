@@ -3,9 +3,10 @@
 use bdownloader_core::Category;
 use iced::font::Weight;
 use iced::widget::{
-    Space, button, center, column, container, mouse_area, opaque, pick_list, progress_bar, row, scrollable, space, stack, text, text_input, tooltip,
+    Space, button, center, column, container, mouse_area, opaque, pick_list, progress_bar, row, scrollable, space, stack, text, text_input, themer,
+    tooltip,
 };
-use iced::{Center, Element, Fill, FillPortion, Font, Padding};
+use iced::{Center, Element, Fill, FillPortion, Font, Padding, Theme};
 
 use crate::app::{App, Filter, Message, Modal, SettingsTab, Update, WhenDone};
 use crate::icons::{self, icon};
@@ -33,44 +34,83 @@ pub fn view(app: &App) -> Element<'_, Message> {
         .width(Fill)
         .height(Fill)
         .style(style::app_background);
-    match &app.modal {
-        None => base.into(),
-        Some(Modal::Add(dialog)) => modal(base, dialogs::add(dialog, app.existing_partial(dialog))),
-        Some(Modal::Settings(draft)) => modal(
-            base,
-            dialogs::settings(draft, app.update.status(), app.settings_tab, &app.seed_ratio_text),
-        ),
-        Some(Modal::Report(dialog)) => modal(base, dialogs::report(dialog)),
-        Some(Modal::Refresh(dialog)) => modal(base, dialogs::refresh(dialog)),
-        Some(Modal::Remove { id, delete_file }) => match app.items.iter().find(|i| i.id == *id) {
-            Some(item) => modal(base, dialogs::remove(item, *delete_file)),
+    let now = std::time::Instant::now();
+    let theme = app.theme();
+    if let Some(open) = &app.modal {
+        let shown = app.motion.dialog(now);
+        return match dialog(app, open, now) {
+            Some(content) => modal(base, faded(&theme, shown, content), shown, true),
             None => base.into(),
-        },
-        Some(Modal::Details(id)) => match app.items.iter().find(|i| i.id == *id) {
-            Some(item) => modal(
-                base,
-                dialogs::details(item, app.copied.as_deref(), &app.item_limit_text, app.details_torrent.as_ref()),
-            ),
-            None => base.into(),
-        },
-        Some(Modal::Extension(browser)) => modal(
-            base,
-            dialogs::extension(*browser, app.settings.extension_connected, app.copied.as_deref()),
-        ),
-        Some(Modal::PowerCountdown { action, deadline }) => {
-            let left = deadline.saturating_duration_since(std::time::Instant::now());
-            modal(base, dialogs::power_countdown(*action, left.as_secs_f64().ceil() as u64))
-        }
+        };
     }
+    // The dialog that just closed, fading out. It no longer takes input.
+    if let Some(closing) = &app.motion.closing {
+        let shown = app.motion.dialog(now);
+        let content = closing
+            .as_ref()
+            .and_then(|closed| dialog(app, closed, now))
+            .map_or_else(|| space().into(), |content| faded(&theme, shown, content));
+        return modal(base, content, shown, false);
+    }
+    base.into()
 }
 
-/// Shows `content` centered over a dimmed `base`. Clicking outside closes it.
-fn modal<'a>(base: impl Into<Element<'a, Message>>, content: Element<'a, Message>) -> Element<'a, Message> {
-    stack![
-        base.into(),
-        opaque(mouse_area(center(opaque(content)).style(style::backdrop)).on_press(Message::CloseModal))
-    ]
-    .into()
+/// A dialog's contents, or none when what it shows is gone.
+fn dialog<'a>(app: &'a App, modal: &'a Modal, now: std::time::Instant) -> Option<Element<'a, Message>> {
+    Some(match modal {
+        Modal::Add(dialog) => dialogs::add(dialog, app.existing_partial(dialog)),
+        Modal::Settings(draft) => dialogs::settings(
+            draft,
+            app.update.status(),
+            app.settings_tab,
+            &app.seed_ratio_text,
+            app.motion.tab(now),
+            app.motion.section_height(now),
+            &app.theme(),
+        ),
+        Modal::Report(dialog) => dialogs::report(dialog),
+        Modal::Refresh(dialog) => dialogs::refresh(dialog),
+        Modal::Remove { id, delete_file } => dialogs::remove(app.items.iter().find(|i| i.id == *id)?, *delete_file),
+        Modal::Details(id) => dialogs::details(
+            app.items.iter().find(|i| i.id == *id)?,
+            app.copied.as_deref(),
+            &app.item_limit_text,
+            app.details_torrent.as_ref(),
+        ),
+        Modal::Extension(browser) => dialogs::extension(*browser, app.settings.extension_connected, app.copied.as_deref()),
+        Modal::PowerCountdown { action, deadline } => {
+            let left = deadline.saturating_duration_since(now);
+            dialogs::power_countdown(*action, left.as_secs_f64().ceil() as u64)
+        }
+    })
+}
+
+/// `content` drawn with every color at `shown` (0 to 1) of its opacity, and
+/// a few pixels lower until it's fully in: a dialog fading and rising in.
+pub fn faded<'a>(theme: &Theme, shown: f32, content: Element<'a, Message>) -> Element<'a, Message> {
+    if shown >= 1.0 {
+        return content;
+    }
+    let lift = (1.0 - shown) * 10.0;
+    container(themer(Some(style::faded_theme(theme, shown)), content).text_color(|t| style::colors(t).text))
+        .padding(iced::Padding {
+            top: lift,
+            ..iced::Padding::ZERO
+        })
+        .into()
+}
+
+/// Shows `content` centered over a dimmed `base`, the dimming `shown` (0 to 1)
+/// of the way in. Clicking outside closes it. While it fades out, with
+/// `interactive` false, nothing in it can be clicked.
+fn modal<'a>(base: impl Into<Element<'a, Message>>, content: Element<'a, Message>, shown: f32, interactive: bool) -> Element<'a, Message> {
+    let layer = center(opaque(content)).style(style::backdrop(shown));
+    let layer: Element<'a, Message> = if interactive {
+        mouse_area(layer).on_press(Message::CloseModal).into()
+    } else {
+        stack![layer, mouse_area(container(space()).width(Fill).height(Fill))].into()
+    };
+    stack![base.into(), opaque(layer)].into()
 }
 
 /// Text in one of the theme's colors.
@@ -465,7 +505,7 @@ fn update_banner(app: &App) -> Option<Element<'_, Message>> {
     };
     let (line, actions): (String, Vec<Element<'_, Message>>) = match &app.update {
         Update::Available(release) => (
-            format!("BDownloader {} is available.", release.version),
+            format!("B-Downloader {} is available.", release.version),
             vec![
                 small("What's new", Message::OpenReleasePage, false),
                 small(if update::is_installed() { "Update now" } else { "Download" }, Message::UpdateNow, true),
@@ -473,7 +513,7 @@ fn update_banner(app: &App) -> Option<Element<'_, Message>> {
         ),
         Update::Downloading { .. } if app.update_manual => (app.update.status(), Vec::new()),
         Update::Ready { release, .. } if app.update_manual || !app.settings.auto_update => (
-            format!("BDownloader {} is ready. Restart to finish updating.", release.version),
+            format!("B-Downloader {} is ready. Restart to finish updating.", release.version),
             vec![
                 small("What's new", Message::OpenReleasePage, false),
                 small("Restart now", Message::UpdateNow, true),

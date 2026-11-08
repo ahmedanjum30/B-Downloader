@@ -1,0 +1,66 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Settings</title>
+<link rel="stylesheet" href="screens.css">
+<script src="screens.js"></script>
+</head>
+<body>
+<div class="window" data-backdrop>
+  <div class="scrim">
+    <section class="dialog wide" role="dialog" aria-label="Settings">
+      <header class="dlg-head"><h1>Settings</h1><a class="icon-btn" href="main.html" aria-label="Close"><svg class="i lg"><use href="icons.svg#close"/></svg></a></header>
+      <div class="settings">
+        <nav class="tabs" data-tabs><button data-tab="general" aria-selected="true">General</button><button data-tab="downloads" aria-selected="false">Downloads</button><button data-tab="queue" aria-selected="false">Queue</button><button data-tab="torrents" aria-selected="false">Torrents</button><button data-tab="updates" aria-selected="false">Updates</button><button data-tab="help" aria-selected="false">Help</button></nav>
+        <div>
+        <section class="panel" data-panel="general">
+          <div class="panel-head"><h2>General</h2><p>Where downloads go and how BDownloader looks.</p></div>
+          <div class="field"><span class="label">Download folder</span><div class="input-row"><input class="input" value="C:\Users\you\Downloads\BDownloader"><button class="btn">Browse</button></div></div>
+          <div class="field"><label class="check"><input type="checkbox" checked>Sort downloads into folders by type</label><span class="hint">Compressed, Documents, Music, Programs and Video folders inside it. A folder you pick for a download is used as it is.</span></div>
+          <div class="field"><span class="label">Theme</span><div class="seg"><button aria-pressed="false">System</button><button aria-pressed="true">Dark</button><button aria-pressed="false">Light</button></div></div>
+          <div class="field"><span class="label">When I close the window</span><div class="seg"><button aria-pressed="true">Keep running in the tray</button><button aria-pressed="false">Exit BDownloader</button></div><span class="hint">In the tray, BDownloader still takes downloads from the browser and runs the queue's schedule.</span></div>
+        </section>
+        <section class="panel" data-panel="downloads" hidden>
+          <div class="panel-head"><h2>Downloads</h2><p>How each download uses your connection.</p></div>
+          <div class="field"><span class="label">Connections per download</span><div class="stepper"><button class="icon-btn"><svg class="i"><use href="icons.svg#minus"/></svg></button><span class="val">8</span><button class="icon-btn"><svg class="i"><use href="icons.svg#plus"/></svg></button><div class="slider"><i style="width:25%"></i><b style="left:25%"></b></div></div><span class="hint">Each file downloads in parts over up to this many connections, adding them while the server keeps up. Sites that allow fewer get fewer.</span></div>
+          <div class="field"><span class="label">Speed limits</span><span class="hint">For all downloads together, torrents too: the gauge button in the top bar. For one download: its details (the i button).</span></div>
+        </section>
+        <section class="panel" data-panel="queue" hidden>
+          <div class="panel-head"><h2>Queue</h2><p>Downloads saved for later, and when they run.</p></div>
+          <p class="hint" style="margin:0">Downloads you add with Download later wait in the queue, under Queue in the sidebar.</p>
+          <div class="field"><span class="label">Downloads at the same time</span><div class="stepper"><button class="icon-btn"><svg class="i"><use href="icons.svg#minus"/></svg></button><span class="val">2</span><button class="icon-btn"><svg class="i"><use href="icons.svg#plus"/></svg></button></div><span class="hint">The queue starts the next download as each one finishes.</span></div>
+          <div class="field"><span class="label">Schedule</span>
+            <div style="display:flex;align-items:center;gap:10px"><label class="check"><input type="checkbox" checked>Start the queue every day at</label><input class="input" style="width:84px" value="01:30"></div>
+            <div style="display:flex;align-items:center;gap:10px"><label class="check"><input type="checkbox" checked>Stop it every day at</label><input class="input" style="width:84px" value="07:00"></div>
+            <span class="hint">Use 24-hour time, like 01:30</span></div>
+        </section>
+        <section class="panel" data-panel="torrents" hidden>
+          <div class="panel-head"><h2>Torrents</h2><p>Magnet links and .torrent files, and sharing them back.</p></div>
+          <div class="field"><span class="label">Sharing (seeding)</span><label class="check"><input type="checkbox" checked>Keep sharing finished torrents</label>
+            <div style="display:flex;align-items:center;gap:8px" class="hint">Until they've uploaded <input class="input" style="width:64px;height:34px" value="1"> times their size</div>
+            <span class="hint">Torrents download from other people, and work because people share back. Sharing as much as you downloaded (1) is the usual courtesy.</span></div>
+          <div class="field"><span class="label">Opening torrents</span><span class="hint">Magnet links and .torrent files open in BDownloader from the browser extension, the Add download dialog, or Windows: choose BDownloader for them in Settings &gt; Apps &gt; Default apps.</span></div>
+          <div class="field"><span class="label">Choosing files</span><span class="hint">A torrent's details (the i button) list its files. Tick or untick them at any time, also while it downloads.</span></div>
+        </section>
+        <section class="panel" data-panel="updates" hidden>
+          <div class="panel-head"><h2>Updates</h2><p>How BDownloader stays up to date.</p></div>
+          <div class="field"><span class="label num">Version 1.3.1</span><span class="hint">You have the latest version.</span></div>
+          <div class="field"><span class="label">New versions</span><div class="seg"><button aria-pressed="true">Install automatically</button><button aria-pressed="false">Ask me first</button></div><span class="hint">Automatic updates install while nothing is downloading and no dialog is open.</span></div>
+          <button class="btn" style="align-self:flex-start"><svg class="i"><use href="icons.svg#retry"/></svg>Check now</button>
+        </section>
+        <section class="panel" data-panel="help" hidden>
+          <div class="panel-head"><h2>Help</h2><p>Report a problem, or find the log.</p></div>
+          <div class="field"><span class="label">Something not working?</span><a class="btn" style="align-self:flex-start" href="report.html">Report a problem</a></div>
+          <div class="field"><span class="label">Log</span><span class="hint">A record of connection errors, retries and updates. Links are kept without their tokens, and cookies never.</span><button class="btn" style="align-self:flex-start"><svg class="i"><use href="icons.svg#folder"/></svg>Open log folder</button></div>
+          <div class="field"><span class="label">Questions and ideas</span><span class="hint">Ask in Discussions on GitHub: github.com/ahmedanjum30/B-Downloader/discussions</span></div>
+        </section>
+        </div>
+      </div>
+      <footer class="dlg-foot"><a class="btn ghost" href="main.html">Cancel</a><button class="btn primary">Save changes</button></footer>
+    </section>
+  </div>
+</div>
+</body>
+</html>

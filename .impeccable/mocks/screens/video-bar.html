@@ -1,0 +1,123 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Video bar</title>
+<link rel="stylesheet" href="screens.css">
+<script src="screens.js"></script>
+<style>
+  /* The page around it: a video site, so the bar is judged where it lives. */
+  .site { width: 1120px; max-width: 100%; display: flex; flex-direction: column; gap: 18px; }
+  .player {
+    position: relative; aspect-ratio: 16 / 9; border-radius: 12px; overflow: hidden;
+    background:
+      radial-gradient(120% 90% at 30% 35%, #5b6b5a 0%, #2f3b33 45%, #121614 100%);
+  }
+  .player .hill { position: absolute; inset: auto 0 0 0; height: 48%; background: linear-gradient(180deg, #24302a, #0e1210); clip-path: polygon(0 40%, 18% 22%, 34% 38%, 52% 12%, 70% 34%, 86% 20%, 100% 30%, 100% 100%, 0 100%); }
+  .player .controls { position: absolute; inset: auto 0 0 0; height: 48px; background: linear-gradient(transparent, rgba(0,0,0,.6)); display: flex; align-items: flex-end; padding: 0 16px 12px; }
+  .player .scrub { flex: 1; height: 3px; background: rgba(255,255,255,.3); border-radius: 2px; }
+  .player .scrub i { display: block; width: 34%; height: 100%; background: #e33; border-radius: 2px; }
+  .page-title { color: var(--text); font-size: 20px; font-weight: 600; margin: 0; }
+  .states { display: flex; gap: 16px; flex-wrap: wrap; align-items: center; padding: 14px 16px; border: 1px dashed var(--border); border-radius: 12px; }
+  .states .note-label { color: var(--muted); font-size: 12.5px; margin-right: 6px; }
+
+  /* ---- The extension's bar and menu (lives in a shadow root on any page,
+     so it carries its own colours: always the dark world, readable on any video). ---- */
+  .bdl { --b-bg: rgba(28, 28, 33, 0.94); --b-panel: #1c1c21; --b-hover: #2c2c34; --b-line: #34343d;
+         --b-text: #e6e6ea; --b-muted: #8d8d98; --b-from: #4a8df6; --b-to: #a35bf7;
+         --b-ok: #3fb950; --b-bad: #f85149;
+         font: 600 12.5px/16px "Segoe UI Variable Text", "Segoe UI", system-ui, sans-serif; color: var(--b-text); }
+  .bdl-anchor { position: absolute; top: 12px; right: 12px; display: flex; flex-direction: column; align-items: flex-end; gap: 6px; }
+  .bdl-bar { display: inline-flex; align-items: center; gap: 0; padding: 0; border-radius: 6px; overflow: hidden; background: var(--b-bg);
+             border: 1px solid rgba(255,255,255,.08); box-shadow: 0 6px 20px rgba(0,0,0,.35), 0 1px 3px rgba(0,0,0,.3); backdrop-filter: blur(6px); }
+  .bdl-main { all: unset; cursor: pointer; display: inline-flex; align-items: center; gap: 5px; height: 18px; padding: 0 8px;
+              border-radius: 0; color: #fff; background: linear-gradient(90deg, var(--b-from), var(--b-to)); font: inherit; font-size: 11px; line-height: 14px; }
+  .bdl-main:hover { filter: brightness(1.08); }
+  .bdl-main:focus-visible, .bdl-x:focus-visible, .bdl-row:focus-visible { outline: 2px solid var(--b-from); outline-offset: 2px; }
+  .bdl-main svg, .bdl-x svg, .bdl-row svg { width: 12px; height: 12px; flex: none; }
+  .bdl-x svg { width: 11px; height: 11px; }
+  .bdl-row svg { width: 14px; height: 14px; }
+  .bdl-main .chev { width: 11px; height: 11px; opacity: .85; margin-left: 0; }
+  /* Segoe UI's lowercase sits low in its line: centred on the capitals,
+     the label reads below the middle, so it's lifted a pixel (icons stay). */
+  .bdl-label { position: relative; top: -1px; }
+  .bdl-x { all: unset; cursor: pointer; width: 22px; height: 18px; border-radius: 0; display: grid; place-items: center; color: var(--b-muted); }
+  .bdl-x:hover { background: var(--b-hover); color: var(--b-text); }
+  .bdl-main.ok { background: var(--b-ok); }
+  .bdl-main.bad { background: var(--b-bad); }
+
+  .bdl-menu { width: 320px; border-radius: 12px; background: var(--b-panel); border: 1px solid var(--b-line);
+              box-shadow: 0 16px 40px rgba(0,0,0,.5), 0 2px 6px rgba(0,0,0,.3); overflow: hidden;
+              animation: bdl-in 160ms cubic-bezier(0.16, 1, 0.3, 1) both; transform-origin: top right; }
+  @keyframes bdl-in { from { opacity: 0; transform: translateY(-4px) scale(.98); } }
+  .bdl-head { padding: 12px 14px 10px; border-bottom: 1px solid var(--b-line); }
+  .bdl-title { font-size: 13px; line-height: 18px; font-weight: 600; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+  .bdl-meta { margin-top: 2px; color: var(--b-muted); font-weight: 400; font-size: 12px; font-variant-numeric: tabular-nums; }
+  .bdl-list { padding: 4px; display: flex; flex-direction: column; }
+  .bdl-row { all: unset; cursor: pointer; display: grid; grid-template-columns: 52px 1fr auto; align-items: center; gap: 8px; height: 28px;
+             padding: 0 10px; border-radius: 8px; font: inherit; }
+  .bdl-row:hover { background: var(--b-hover); }
+  .bdl-row:hover .bdl-size { color: var(--b-text); }
+  .bdl-q { font-weight: 600; font-variant-numeric: tabular-nums; }
+  .bdl-fmt { color: var(--b-muted); font-weight: 400; display: flex; align-items: center; gap: 6px; }
+  .bdl-best { font-size: 10.5px; line-height: 16px; padding: 0 6px; border-radius: 999px; color: #fff; background: linear-gradient(90deg, var(--b-from), var(--b-to)); font-weight: 600; }
+  .bdl-size { color: var(--b-muted); font-weight: 400; font-variant-numeric: tabular-nums; text-align: right; }
+  .bdl-sep { height: 1px; background: var(--b-line); margin: 4px 6px; }
+  .bdl-row .bdl-q svg { color: var(--b-muted); }
+  @media (prefers-reduced-motion: reduce) { .bdl-menu { animation: none; } }
+</style>
+</head>
+<body>
+<div class="site">
+  <div class="player">
+    <div class="hill"></div>
+    <div class="controls"><div class="scrub"><i></i></div></div>
+
+    <div class="bdl bdl-anchor">
+      <div class="bdl-bar">
+        <button class="bdl-main" aria-haspopup="menu" aria-expanded="true">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" x2="12" y1="15" y2="3"/></svg><span class="bdl-label">Download this video</span><svg class="chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg>
+        </button>
+        <button class="bdl-x" aria-label="Hide on this video">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M18 6 6 18M6 6l12 12"/></svg>
+        </button>
+      </div>
+
+      <div class="bdl-menu" role="menu" aria-label="Choose a quality">
+        <div class="bdl-head">
+          <div class="bdl-title">Kayaking Lake Bled at sunrise, filmed in 4K</div>
+          <div class="bdl-meta">6 min 0 sec · Goes to B-Downloader</div>
+        </div>
+        <div class="bdl-list">
+          <button class="bdl-row" role="menuitem"><span class="bdl-q">1080p</span><span class="bdl-fmt">MP4 <span class="bdl-best">Best</span></span><span class="bdl-size">63 MB</span></button>
+          <button class="bdl-row" role="menuitem"><span class="bdl-q">720p</span><span class="bdl-fmt">MP4</span><span class="bdl-size">22 MB</span></button>
+          <button class="bdl-row" role="menuitem"><span class="bdl-q">480p</span><span class="bdl-fmt">MP4</span><span class="bdl-size">14 MB</span></button>
+          <button class="bdl-row" role="menuitem"><span class="bdl-q">360p</span><span class="bdl-fmt">MP4</span><span class="bdl-size">11 MB</span></button>
+          <button class="bdl-row" role="menuitem"><span class="bdl-q">240p</span><span class="bdl-fmt">MP4</span><span class="bdl-size">9 MB</span></button>
+          <button class="bdl-row" role="menuitem"><span class="bdl-q">144p</span><span class="bdl-fmt">MP4</span><span class="bdl-size">8 MB</span></button>
+          <div class="bdl-sep" role="separator"></div>
+          <button class="bdl-row" role="menuitem"><span class="bdl-q"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></svg></span><span class="bdl-fmt">Sound only · M4A</span><span class="bdl-size">6 MB</span></button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <h1 class="page-title">Kayaking Lake Bled at sunrise, filmed in 4K</h1>
+
+  <div class="states">
+    <span class="note-label">Other states:</span>
+    <div class="bdl"><div class="bdl-bar">
+      <button class="bdl-main"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" x2="12" y1="15" y2="3"/></svg><span class="bdl-label">Download this video</span></button>
+      <button class="bdl-x" aria-label="Hide on this video"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M18 6 6 18M6 6l12 12"/></svg></button>
+    </div></div>
+    <div class="bdl"><div class="bdl-bar">
+      <button class="bdl-main ok"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg><span class="bdl-label">Sent to B-Downloader</span></button>
+    </div></div>
+    <div class="bdl"><div class="bdl-bar">
+      <button class="bdl-main bad"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 8v5M12 16h.01"/></svg><span class="bdl-label">B-Downloader isn't running</span></button>
+    </div></div>
+  </div>
+</div>
+</body>
+</html>

@@ -1,0 +1,141 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Main window</title>
+<link rel="stylesheet" href="screens.css">
+<script src="screens.js"></script>
+</head>
+<body>
+<div class="window">
+  <div class="titlebar">
+    <span class="logo-sm"><svg class="i"><use href="icons.svg#download"/></svg></span>BDownloader
+    <span class="caption">
+      <span><svg viewBox="0 0 10 10"><path d="M0 5h10"/></svg></span>
+      <span><svg viewBox="0 0 10 10"><rect x="0.5" y="0.5" width="9" height="9"/></svg></span>
+      <span><svg viewBox="0 0 10 10"><path d="M0 0l10 10M10 0L0 10"/></svg></span>
+    </span>
+  </div>
+  <div class="body">
+    <aside class="sidebar">
+      <nav class="side-card" aria-label="Downloads">
+        <a class="side-item active"><svg class="i"><use href="icons.svg#folder"/></svg>All downloads<span class="count">8</span></a>
+        <a class="side-item sub"><svg class="i"><use href="icons.svg#compressed"/></svg>Compressed<span class="count">3</span></a>
+        <a class="side-item sub"><svg class="i"><use href="icons.svg#document"/></svg>Documents<span class="count">1</span></a>
+        <a class="side-item sub"><svg class="i"><use href="icons.svg#music"/></svg>Music</a>
+        <a class="side-item sub"><svg class="i"><use href="icons.svg#program"/></svg>Programs<span class="count">2</span></a>
+        <a class="side-item sub"><svg class="i"><use href="icons.svg#video"/></svg>Video<span class="count">2</span></a>
+      </nav>
+      <nav class="side-card" aria-label="Lists">
+        <a class="side-item" href="queue.html"><svg class="i"><use href="icons.svg#clock"/></svg>Queue<span class="count">1</span></a>
+        <a class="side-item" href="torrents.html"><svg class="i"><use href="icons.svg#torrent"/></svg>Torrents</a>
+      </nav>
+      <div class="side-foot">
+        <a class="side-item" href="extension.html"><svg class="i"><use href="icons.svg#globe"/></svg>Browser extension</a>
+        <a class="side-item" href="settings.html"><svg class="i"><use href="icons.svg#settings"/></svg>Settings</a>
+        <a class="side-item"><svg class="i"><use href="icons.svg#heart"/></svg>Support B-Downloader</a>
+      </div>
+    </aside>
+    <div class="vrule"></div>
+    <main class="main">
+      <div class="toolbar">
+        <a class="add-url" href="add.html"><svg class="i lg"><use href="icons.svg#link"/></svg>Add URL<span class="grad-tile"><svg class="i lg"><use href="icons.svg#download"/></svg></span></a>
+        <button class="tool"><svg class="i lg"><use href="icons.svg#play"/></svg>Resume all</button>
+        <button class="tool"><svg class="i lg"><use href="icons.svg#pause"/></svg>Pause all</button>
+        <span class="tool-sep"></span>
+        <button class="tool"><svg class="i lg"><use href="icons.svg#clock"/></svg>Start queue</button>
+        <a class="tool" href="settings.html"><svg class="i lg"><use href="icons.svg#settings"/></svg>Settings</a>
+        <label class="search"><svg class="i"><use href="icons.svg#search"/></svg><input placeholder="Search downloads"></label>
+      </div>
+      <div class="list">
+        <div class="group-head">Downloading now <span class="pill">2</span><span class="group-note num">16.5 MB/s together</span></div>
+        <article class="run">
+          <div class="run-top">
+            <span class="badge">MKV</span>
+            <div style="min-width:0">
+              <div class="run-name">nature-documentary-4k.mkv</div>
+              <div class="run-meta num"><span class="state-chip">Downloading</span>281 MB of 700 MB · 11.0 MB/s · 38s left · 8 connections</div>
+            </div>
+            <span class="pct">40%</span>
+            <button class="icon-btn" aria-label="Pause"><svg class="i lg"><use href="icons.svg#pause"/></svg></button>
+            <a class="icon-btn" aria-label="Details" href="details.html"><svg class="i lg"><use href="icons.svg#info"/></svg></a>
+            <a class="icon-btn" aria-label="Remove" href="remove.html"><svg class="i lg"><use href="icons.svg#trash"/></svg></a>
+          </div>
+          <div class="bar"><i style="width:40%"></i></div>
+          <div class="parts"><i><b style="width:44%"></b></i><i><b style="width:41%"></b></i><i><b style="width:39%"></b></i><i><b style="width:42%"></b></i><i><b style="width:38%"></b></i><i><b style="width:40%"></b></i><i><b style="width:43%"></b></i><i><b style="width:37%"></b></i></div>
+        </article>
+        <article class="run">
+          <div class="run-top">
+            <span class="badge">ISO</span>
+            <div style="min-width:0">
+              <div class="run-name">debian-13.1.0-amd64-DVD-1.iso</div>
+              <div class="run-meta num"><span class="state-chip">Downloading</span>141 MB of 3.8 GB · 5.4 MB/s · 11m 27s left · 8 connections</div>
+            </div>
+            <span class="pct">4%</span>
+            <button class="icon-btn" aria-label="Pause"><svg class="i lg"><use href="icons.svg#pause"/></svg></button>
+            <a class="icon-btn" aria-label="Details" href="details.html"><svg class="i lg"><use href="icons.svg#info"/></svg></a>
+            <a class="icon-btn" aria-label="Remove" href="remove.html"><svg class="i lg"><use href="icons.svg#trash"/></svg></a>
+          </div>
+          <div class="bar"><i style="width:4%"></i></div>
+          <div class="parts"><i><b style="width:5%"></b></i><i><b style="width:4%"></b></i><i><b style="width:4%"></b></i><i><b style="width:3%"></b></i><i><b style="width:5%"></b></i><i><b style="width:4%"></b></i><i><b style="width:3%"></b></i><i><b style="width:4%"></b></i></div>
+        </article>
+
+        <div class="group-head">Needs you <span class="pill">3</span></div>
+        <div class="rows">
+          <div class="row">
+            <div class="name"><b>documentary-4k.mkv</b><span class="kind">Video</span></div>
+            <div class="state t-warn">Paused</div>
+            <div class="size">520 MB of 1.4 GB</div>
+            <div class="acts"><button class="btn sm"><svg class="i"><use href="icons.svg#play"/></svg>Resume</button><a class="icon-btn" href="details.html"><svg class="i lg"><use href="icons.svg#info"/></svg></a><a class="icon-btn" href="remove.html"><svg class="i lg"><use href="icons.svg#trash"/></svg></a></div>
+          </div>
+          <div class="row">
+            <div class="name"><b>annual-report-2025.pdf</b><span class="kind">Documents</span></div>
+            <div class="state t-danger">Failed · Network error: no such host is known</div>
+            <div class="size"></div>
+            <div class="acts"><button class="btn sm"><svg class="i"><use href="icons.svg#retry"/></svg>Try again</button><a class="icon-btn" href="details.html"><svg class="i lg"><use href="icons.svg#info"/></svg></a><a class="icon-btn" href="remove.html"><svg class="i lg"><use href="icons.svg#trash"/></svg></a></div>
+          </div>
+          <div class="row">
+            <div class="name"><b>game-setup-part1.rar</b><span class="kind">Compressed</span></div>
+            <div class="state t-danger">Failed · The server returned HTTP 403</div>
+            <div class="size">612 MB of 2.1 GB</div>
+            <div class="acts"><a class="btn sm" href="refresh.html"><svg class="i"><use href="icons.svg#link"/></svg>Refresh link</a><a class="icon-btn" href="details.html"><svg class="i lg"><use href="icons.svg#info"/></svg></a><a class="icon-btn" href="remove.html"><svg class="i lg"><use href="icons.svg#trash"/></svg></a></div>
+          </div>
+        </div>
+
+        <div class="group-head">Queued <span class="pill">1</span></div>
+        <div class="rows">
+          <div class="row">
+            <div class="name"><b>ubuntu-24.04.3-desktop-amd64.iso</b><span class="kind">Programs</span></div>
+            <div class="state t-muted">Queued</div>
+            <div class="size">5.9 GB</div>
+            <div class="acts"><button class="btn sm">Start now</button><a class="icon-btn" href="details.html"><svg class="i lg"><use href="icons.svg#info"/></svg></a><a class="icon-btn" href="remove.html"><svg class="i lg"><use href="icons.svg#trash"/></svg></a></div>
+          </div>
+        </div>
+
+        <div class="group-head">Finished <span class="pill">2</span></div>
+        <div class="rows">
+          <div class="row">
+            <div class="name"><b>album-flac.zip</b><span class="kind">Compressed</span></div>
+            <div class="state t-ok">Completed</div>
+            <div class="size">880 MB</div>
+            <div class="acts"><button class="icon-btn" aria-label="Open"><svg class="i lg"><use href="icons.svg#open"/></svg></button><button class="icon-btn" aria-label="Show in folder"><svg class="i lg"><use href="icons.svg#folder"/></svg></button><a class="icon-btn" href="details.html"><svg class="i lg"><use href="icons.svg#info"/></svg></a><a class="icon-btn" href="remove.html"><svg class="i lg"><use href="icons.svg#trash"/></svg></a></div>
+          </div>
+          <div class="row">
+            <div class="name"><b>blender-4.2.3-windows-x64.zip</b><span class="kind">Compressed</span></div>
+            <div class="state t-ok">Completed</div>
+            <div class="size">344 MB</div>
+            <div class="acts"><button class="icon-btn" aria-label="Open"><svg class="i lg"><use href="icons.svg#open"/></svg></button><button class="icon-btn" aria-label="Show in folder"><svg class="i lg"><use href="icons.svg#folder"/></svg></button><a class="icon-btn" href="details.html"><svg class="i lg"><use href="icons.svg#info"/></svg></a><a class="icon-btn" href="remove.html"><svg class="i lg"><use href="icons.svg#trash"/></svg></a></div>
+          </div>
+        </div>
+      </div>
+    </main>
+  </div>
+  <footer class="statusbar">
+    <button class="chip"><svg class="i"><use href="icons.svg#gauge"/></svg>No speed limit</button>
+    <a class="chip" href="countdown.html"><svg class="i"><use href="icons.svg#power"/></svg>When done: nothing<svg class="i caret" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg></a>
+    <div class="right"><span>2 downloading</span><span>1 queued</span><strong><svg class="i"><use href="icons.svg#download"/></svg>16.5 MB/s</strong></div>
+  </footer>
+</div>
+</body>
+</html>

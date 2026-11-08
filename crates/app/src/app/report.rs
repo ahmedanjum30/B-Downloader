@@ -19,6 +19,16 @@ pub struct ReportDialog {
     pub include_log: bool,
 }
 
+/// A copy, for the dialog's fade-out once it closes.
+impl Clone for ReportDialog {
+    fn clone(&self) -> Self {
+        Self {
+            description: text_editor::Content::with_text(&self.description.text()),
+            include_log: self.include_log,
+        }
+    }
+}
+
 impl App {
     pub(super) fn handle_report(&mut self, message: Message) -> Task<Message> {
         match message {

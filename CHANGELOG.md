@@ -6,6 +6,28 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+## [1.3.2] - 2026-11-08
+
+### Changed
+- The app is called B-Downloader everywhere Windows shows it: installed
+  apps, the Start menu and desktop shortcuts, Default apps, the taskbar,
+  Task Manager, the tray and the window title. The shortcuts named
+  BDownloader are replaced on update.
+- A new icon: the blue-to-violet tile from inside the app, on the
+  taskbar, the Start menu, the tray and the installer.
+- Dialogs fade and rise in as they open and fade out as they close,
+  instead of appearing and vanishing at once. In Settings, a section
+  fades in when its tab is picked, and the dialog grows or shrinks to it
+  smoothly.
+- The Connections slider is thinner, filled with the gradient, with a
+  white knob.
+- Browser extension 1.1.0: the "Download this video" bar has the app's
+  look, and its menu shows the title and length once, then one row per
+  quality with its size lined up, the best marked and sound only last.
+  The bar shows a tick or an alert after sending. The extension is
+  called B-Downloader too, as is its "Download with B-Downloader" menu
+  item.
+
 ## [1.3.1] - 2026-11-05
 
 ### Changed

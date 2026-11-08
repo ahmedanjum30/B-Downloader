@@ -12,7 +12,7 @@ bindir = "..\\target\\release"
 [app]
 # Never change it: it's the AppId of the Inno Setup installs this one updates.
 id = "6A1E3C52-8F0B-4D7E-9B2A-5C4F1D3E7A90"
-name = "BDownloader"
+name = "B-Downloader"
 version = "${version}"
 publisher = "Ahmad Anjum"
 url = "https://github.com/ahmedanjum30/B-Downloader"
@@ -23,8 +23,9 @@ icon = '${root}\crates\app\assets\bdownloader.ico'
 license = '${root}\LICENSE'
 output = '${root}\dist\BDownloader-Setup-${version}.exe'
 
-# Versions before 1.0.11 shipped the Firefox add-on; it's on Firefox Add-ons now.
-delete = ['{app}\bdownloader-firefox.xpi']
+# Versions before 1.0.11 shipped the Firefox add-on; it's on Firefox Add-ons now. Before
+# 1.3.2 the shortcuts were named BDownloader (updates keep the desktop shortcut choice).
+delete = ['{app}\bdownloader-firefox.xpi', '{programs}\BDownloader.lnk', '{desktop}\BDownloader.lnk']
 
 [[task]]
 name = "desktopicon"
@@ -57,11 +58,11 @@ source = '${root}\PRIVACY.md'
 dest = '{app}'
 
 [[shortcut]]
-path = '{programs}\BDownloader'
+path = '{programs}\B-Downloader'
 target = '{app}\BDownloader.exe'
 
 [[shortcut]]
-path = '{desktop}\BDownloader'
+path = '{desktop}\B-Downloader'
 target = '{app}\BDownloader.exe'
 task = "desktopicon"
 
@@ -150,7 +151,7 @@ value = ""
 root = "HKA"
 key = 'Software\BDownloader\Capabilities'
 name = "ApplicationName"
-value = "BDownloader"
+value = "B-Downloader"
 uninstall = "key"
 
 [[registry]]

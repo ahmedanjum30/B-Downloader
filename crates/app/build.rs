@@ -7,8 +7,8 @@ fn main() {
     let mut resource = winresource::WindowsResource::new();
     resource
         .set_icon("assets/bdownloader.ico")
-        .set("ProductName", "BDownloader")
-        .set("FileDescription", "BDownloader")
+        .set("ProductName", "B-Downloader")
+        .set("FileDescription", "B-Downloader")
         .set("LegalCopyright", "Copyright 2026 Ahmad Anjum. PolyForm Noncommercial 1.0.0.");
     if let Err(e) = resource.compile() {
         // Without a resource compiler the app still builds, just without an icon.

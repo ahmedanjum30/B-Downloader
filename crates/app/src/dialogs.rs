@@ -3,8 +3,8 @@
 use std::path::Path;
 
 use bdownloader_core::{MAX_CONNECTIONS, TorrentInfo};
-use iced::widget::{button, checkbox, column, container, pick_list, row, scrollable, slider, space, text, text_editor, text_input};
-use iced::{Center, Element, Fill, Shrink};
+use iced::widget::{button, checkbox, column, container, pick_list, row, scrollable, sensor, slider, space, text, text_editor, text_input};
+use iced::{Center, Element, Fill, Length, Shrink, Theme};
 
 use crate::app::{AddDialog, MAX_AT_ONCE, Message, Probe, RefreshDialog, ReportDialog, SettingsTab, WhenDone};
 use crate::browser::Browser;
@@ -79,7 +79,9 @@ fn stepper<'a>(value: usize, max: usize, on_change: fn(usize) -> Message) -> Ele
         step(&icons::MINUS, value > 1, value.saturating_sub(1)),
         container(text(value.to_string()).size(15).font(SEMIBOLD)).center_x(44),
         step(&icons::PLUS, value < max, value + 1),
-        slider(1..=max as u32, value as u32, move |n| on_change(n as usize)).width(Fill),
+        slider(1..=max as u32, value as u32, move |n| on_change(n as usize))
+            .width(Fill)
+            .style(style::slider),
     ]
     .spacing(8)
     .align_y(Center)
@@ -440,7 +442,7 @@ fn help<'a>() -> Element<'a, Message> {
             column![
                 hint(
                     "Tell us what happened. It opens a report on GitHub, filled in with your app and Windows \
-                     versions and BDownloader's log, for you to check before sending."
+                     versions and B-Downloader's log, for you to check before sending."
                 ),
                 row![
                     button(text("Report a problem").size(14).font(SEMIBOLD))
@@ -520,7 +522,7 @@ fn queue_settings(draft: &Settings) -> Element<'_, Message> {
                     Message::SettingsQueueStopDaily,
                     Message::SettingsQueueStop,
                 ),
-                hint("24-hour time. BDownloader has to be running then; it can be in the tray."),
+                hint("24-hour time. B-Downloader has to be running then; it can be in the tray."),
             ]
             .spacing(10)
         ),
@@ -562,11 +564,11 @@ fn general(draft: &Settings) -> Element<'_, Message> {
             "When I close the window",
             column![
                 choices(
-                    &[(true, "Keep running in the tray"), (false, "Exit BDownloader")],
+                    &[(true, "Keep running in the tray"), (false, "Exit B-Downloader")],
                     draft.close_to_tray,
                     Message::SettingsCloseToTray
                 ),
-                hint("In the tray, BDownloader still takes downloads from the browser and runs the queue's schedule."),
+                hint("In the tray, B-Downloader still takes downloads from the browser and runs the queue's schedule."),
             ]
             .spacing(8)
         ),
@@ -610,8 +612,8 @@ fn torrents<'a>(draft: &'a Settings, seed_ratio_text: &'a str) -> Element<'a, Me
         field(
             "Opening torrents",
             hint(
-                "Magnet links and .torrent files open in BDownloader from the browser extension, the Add download \
-                 dialog, or Windows: choose BDownloader for them in Settings > Apps > Default apps.",
+                "Magnet links and .torrent files open in B-Downloader from the browser extension, the Add download \
+                 dialog, or Windows: choose B-Downloader for them in Settings > Apps > Default apps.",
             ),
         ),
         field(
@@ -648,7 +650,17 @@ fn downloads(draft: &Settings) -> Element<'_, Message> {
     .into()
 }
 
-pub fn settings<'a>(draft: &'a Settings, update_status: String, tab: SettingsTab, seed_ratio_text: &'a str) -> Element<'a, Message> {
+/// `tab_shown` (0 to 1): how far the section is in, as it fades in after
+/// its tab is picked.
+pub fn settings<'a>(
+    draft: &'a Settings,
+    update_status: String,
+    tab: SettingsTab,
+    seed_ratio_text: &'a str,
+    tab_shown: f32,
+    section_height: Option<f32>,
+    theme: &Theme,
+) -> Element<'a, Message> {
     let tabs = column(SettingsTab::ALL.map(|t| {
         button(text(t.label()).size(14).font(if t == tab { SEMIBOLD } else { crate::view::FONT }))
             .padding([8, 10])
@@ -660,14 +672,14 @@ pub fn settings<'a>(draft: &'a Settings, update_status: String, tab: SettingsTab
     .spacing(2)
     .width(140);
     let (content, about) = match tab {
-        SettingsTab::General => (general(draft), "Where downloads go and how BDownloader looks."),
+        SettingsTab::General => (general(draft), "Where downloads go and how B-Downloader looks."),
         SettingsTab::Downloads => (downloads(draft), "How each download uses your connection."),
         SettingsTab::Torrents => (
             torrents(draft, seed_ratio_text),
             "Magnet links and .torrent files, and sharing them back.",
         ),
         SettingsTab::Queue => (queue_settings(draft), "Downloads saved for later, and when they run."),
-        SettingsTab::Updates => (updates(draft, update_status), "How BDownloader stays up to date."),
+        SettingsTab::Updates => (updates(draft, update_status), "How B-Downloader stays up to date."),
         SettingsTab::Help => (help(), "Report a problem, or find the log."),
     };
     let section = column![
@@ -676,6 +688,15 @@ pub fn settings<'a>(draft: &'a Settings, update_status: String, tab: SettingsTab
         content,
     ]
     .spacing(18);
+    // Measured at its natural height (the scrollable lets it be taller than
+    // what shows), so the dialog can grow or shrink to it smoothly instead
+    // of jumping when another tab is picked.
+    let section = sensor(crate::view::faded(theme, tab_shown, section.into()))
+        .on_show(|size| Message::SettingsSection(size.height))
+        .on_resize(|size| Message::SettingsSection(size.height));
+    let section = scrollable(section)
+        .direction(scrollable::Direction::Vertical(scrollable::Scrollbar::hidden()))
+        .height(section_height.map_or(Shrink, Length::Fixed));
     let body = row![tabs, container(section).width(Fill)].spacing(26);
     sized_frame("Settings", body.into(), footer("Save changes", Some(Message::SaveSettings)), 760.0)
 }
@@ -697,7 +718,7 @@ pub fn report(dialog: &ReportDialog) -> Element<'_, Message> {
             .spacing(8)
         ),
         checkbox(dialog.include_log)
-            .label("Include BDownloader's log (the latest part)")
+            .label("Include B-Downloader's log (the latest part)")
             .on_toggle(Message::ReportIncludeLog)
             .size(18)
             .text_size(14)
@@ -780,7 +801,7 @@ fn copy_field<'a>(value: String, copied: bool) -> Element<'a, Message> {
 
 pub fn extension<'a>(browser: Browser, connected: bool, copied: Option<&str>) -> Element<'a, Message> {
     let (title, detail, pick): (&str, &str, style::Pick) = if connected {
-        ("Connected", "Downloads from your browser come to BDownloader.", |c| c.success)
+        ("Connected", "Downloads from your browser come to B-Downloader.", |c| c.success)
     } else {
         ("Not connected", "Add the extension to your browser.", |c| c.muted)
     };
@@ -822,8 +843,8 @@ pub fn extension<'a>(browser: Browser, connected: bool, copied: Option<&str>) ->
     let mut body = column![
         status,
         muted("What it does").size(13).font(SEMIBOLD),
-        text("• Downloads you start in the browser go to BDownloader.").size(14),
-        text("• Right-click a link and choose Download with BDownloader.").size(14),
+        text("• Downloads you start in the browser go to B-Downloader.").size(14),
+        text("• Right-click a link and choose Download with B-Downloader.").size(14),
         text("• Videos, YouTube too, get a Download this video bar.").size(14),
         muted("How to add it").size(13).font(SEMIBOLD),
         container(tabs).padding(4).style(style::panel),
@@ -869,7 +890,7 @@ pub fn extension<'a>(browser: Browser, connected: bool, copied: Option<&str>) ->
             .push(step("3", "Click Load unpacked and choose this folder:"))
             .push(copy_field(folder, folder_copied))
     };
-    body = body.push(muted("It shows as connected here once the browser has talked to BDownloader.").size(13));
+    body = body.push(muted("It shows as connected here once the browser has talked to B-Downloader.").size(13));
 
     let footer = row![
         space().width(Fill),
@@ -905,13 +926,14 @@ pub fn refresh(dialog: &RefreshDialog) -> Element<'_, Message> {
     .width(Fill)
     .style(style::panel);
 
-    let mut body =
-        column![
+    let mut body = column![
         file,
-        text("Download links often stop working after a while. Give BDownloader a new link to the same file, and it continues from where it stopped.")
-            .size(14),
+        text(
+            "Download links often stop working after a while. Give B-Downloader a new link to the same file, and it continues from where it stopped."
+        )
+        .size(14),
     ]
-        .spacing(16);
+    .spacing(16);
 
     if dialog.referrer.is_some() {
         body = body.push(
@@ -920,7 +942,7 @@ pub fn refresh(dialog: &RefreshDialog) -> Element<'_, Message> {
                     .padding([10, 16])
                     .style(style::secondary)
                     .on_press(Message::RefreshFromPage),
-                muted("Then click the download again in your browser. BDownloader picks up the new link.").size(13),
+                muted("Then click the download again in your browser. B-Downloader picks up the new link.").size(13),
             ]
             .spacing(12)
             .align_y(Center),

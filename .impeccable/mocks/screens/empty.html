@@ -1,0 +1,70 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>First run</title>
+<link rel="stylesheet" href="screens.css">
+<script src="screens.js"></script>
+</head>
+<body>
+<div class="window">
+  <div class="titlebar">
+    <span class="logo-sm"><svg class="i"><use href="icons.svg#download"/></svg></span>BDownloader
+    <span class="caption">
+      <span><svg viewBox="0 0 10 10"><path d="M0 5h10"/></svg></span>
+      <span><svg viewBox="0 0 10 10"><rect x="0.5" y="0.5" width="9" height="9"/></svg></span>
+      <span><svg viewBox="0 0 10 10"><path d="M0 0l10 10M10 0L0 10"/></svg></span>
+    </span>
+  </div>
+  <div class="body">
+    <aside class="sidebar">
+      <nav class="side-card" aria-label="Downloads">
+        <a class="side-item active" href="main.html"><svg class="i"><use href="icons.svg#folder"/></svg>All downloads</a>
+        <a class="side-item sub"><svg class="i"><use href="icons.svg#compressed"/></svg>Compressed</a>
+        <a class="side-item sub"><svg class="i"><use href="icons.svg#document"/></svg>Documents</a>
+        <a class="side-item sub"><svg class="i"><use href="icons.svg#music"/></svg>Music</a>
+        <a class="side-item sub"><svg class="i"><use href="icons.svg#program"/></svg>Programs</a>
+        <a class="side-item sub"><svg class="i"><use href="icons.svg#video"/></svg>Video</a>
+      </nav>
+      <nav class="side-card" aria-label="Lists">
+        <a class="side-item" href="queue.html"><svg class="i"><use href="icons.svg#clock"/></svg>Queue</a>
+        <a class="side-item" href="torrents.html"><svg class="i"><use href="icons.svg#torrent"/></svg>Torrents</a>
+      </nav>
+      <div class="side-foot">
+        <a class="side-item" href="extension.html"><svg class="i"><use href="icons.svg#globe"/></svg>Browser extension</a>
+        <a class="side-item" href="settings.html"><svg class="i"><use href="icons.svg#settings"/></svg>Settings</a>
+        <a class="side-item"><svg class="i"><use href="icons.svg#heart"/></svg>Support B-Downloader</a>
+      </div>
+    </aside>
+    <div class="vrule"></div>
+    <main class="main">
+      <div class="toolbar">
+        <a class="add-url" href="add.html"><svg class="i lg"><use href="icons.svg#link"/></svg>Add URL<span class="grad-tile"><svg class="i lg"><use href="icons.svg#download"/></svg></span></a>
+        <button class="tool"><svg class="i lg"><use href="icons.svg#play"/></svg>Resume all</button>
+        <button class="tool"><svg class="i lg"><use href="icons.svg#pause"/></svg>Pause all</button>
+        <span class="tool-sep"></span>
+        <button class="tool"><svg class="i lg"><use href="icons.svg#clock"/></svg>Start queue</button>
+        <a class="tool" href="settings.html"><svg class="i lg"><use href="icons.svg#settings"/></svg>Settings</a>
+        <label class="search"><svg class="i"><use href="icons.svg#search"/></svg><input placeholder="Search downloads"></label>
+      </div>
+      <div class="list">
+        <div class="empty">
+          <div>
+            <div class="art"><svg class="i"><use href="icons.svg#download"/></svg></div>
+            <h2>No downloads yet</h2>
+            <p>Copy a link and press <kbd>Ctrl</kbd> <kbd>V</kbd>, or click Add download.</p>
+            <a class="btn primary" href="add.html"><svg class="i"><use href="icons.svg#plus"/></svg>Add download</a>
+          </div>
+        </div>
+      </div>
+    </main>
+  </div>
+  <footer class="statusbar">
+    <button class="chip"><svg class="i"><use href="icons.svg#gauge"/></svg>No speed limit</button>
+    <a class="chip" href="countdown.html"><svg class="i"><use href="icons.svg#power"/></svg>When done: nothing<svg class="i caret" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg></a>
+    <div class="right"><strong><svg class="i"><use href="icons.svg#download"/></svg>0 B/s</strong></div>
+  </footer>
+</div>
+</body>
+</html>

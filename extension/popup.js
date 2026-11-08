@@ -63,7 +63,7 @@ function row(tabId, title, video) {
     const status = document.createElement("span");
     status.className = ok ? "status ok" : "status bad";
     status.textContent = ok ? "Sent" : "Failed";
-    status.title = ok ? "Confirm it in BDownloader" : "BDownloader isn't installed, or couldn't be started";
+    status.title = ok ? "Confirm it in B-Downloader" : "B-Downloader isn't installed, or couldn't be started";
     button.replaceWith(status);
   });
   item.append(info, button);
@@ -85,7 +85,7 @@ async function show() {
     videos = await chrome.runtime.sendMessage({ type: "videos", tabId: tab.id });
   } catch {
     // The extension's background part isn't running this version yet.
-    note("BDownloader's extension needs a restart: open chrome://extensions and click the reload button on BDownloader.");
+    note("B-Downloader's extension needs a restart: open chrome://extensions and click the reload button on B-Downloader.");
     return;
   }
   if (!videos || videos.length === 0) {

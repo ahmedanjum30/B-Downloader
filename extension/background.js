@@ -168,7 +168,7 @@ chrome.runtime.onInstalled.addListener(() => {
   chrome.contextMenus.removeAll(() => {
     chrome.contextMenus.create({
       id: MENU_ID,
-      title: "Download with BDownloader",
+      title: "Download with B-Downloader",
       contexts: ["link", "image", "video", "audio"],
     });
   });

@@ -9,7 +9,8 @@ Add-Type -AssemblyName System.Drawing
 $out = Join-Path (Split-Path $PSScriptRoot -Parent) 'store\images'
 New-Item -ItemType Directory -Force $out | Out-Null
 
-$accent = [Drawing.Color]::FromArgb(255, 0x25, 0x63, 0xeb)
+$accent = [Drawing.Color]::FromArgb(255, 0x4a, 0x8d, 0xf6)
+$accentEnd = [Drawing.Color]::FromArgb(255, 0xa3, 0x5b, 0xf7)
 
 function New-Canvas([int]$w, [int]$h) {
     $bmp = New-Object Drawing.Bitmap $w, $h
@@ -33,7 +34,9 @@ function Draw-Icon($g, [float]$x, [float]$y, [float]$size) {
     $s = $size / 24.0
     $path = New-Object Drawing.Drawing2D.GraphicsPath
     Add-RoundRect $path $x $y $size $size (6 * $s)
-    $g.FillPath((New-Object Drawing.SolidBrush $accent), $path)
+    # The app's gradient, blue to violet, left to right (style.rs: accent to accent_end).
+    $rect = New-Object Drawing.RectangleF ($x - 1), $y, ($size + 2), $size
+    $g.FillPath((New-Object Drawing.Drawing2D.LinearGradientBrush $rect, $accent, $accentEnd, 0.0), $path)
     $pen = New-Object Drawing.Pen ([Drawing.Color]::White), (2.2 * $s)
     $pen.StartCap = 'Round'; $pen.EndCap = 'Round'; $pen.LineJoin = 'Round'
     $p = { param($a, $b) New-Object Drawing.PointF ($x + $a * $s), ($y + $b * $s) }

@@ -1,0 +1,33 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Add torrent</title>
+<link rel="stylesheet" href="screens.css">
+<script src="screens.js"></script>
+</head>
+<body>
+<div class="window" data-backdrop>
+  <div class="scrim">
+    <section class="dialog" role="dialog" aria-label="Add torrent">
+      <header class="dlg-head"><h1>Add torrent</h1><a class="icon-btn" href="main.html" aria-label="Close"><svg class="i lg"><use href="icons.svg#close"/></svg></a></header>
+      <div class="file-card"><span class="badge"><svg class="i lg"><use href="icons.svg#torrent"/></svg></span><div><div class="name">Big Buck Bunny (2008) 1080p</div><div class="meta num">Torrent · 5 files · 1.9 GB</div></div></div>
+      <div class="field"><span class="label">Files</span>
+        <div class="files">
+          <label class="f check"><input type="checkbox" checked><span>All files</span><span class="sz num">1.9 GB</span></label>
+          <label class="f check"><input type="checkbox" checked><span>Big Buck Bunny.mp4</span><span class="sz num">1.8 GB</span></label>
+          <label class="f check"><input type="checkbox" checked><span>Big Buck Bunny.en.srt</span><span class="sz num">42 KB</span></label>
+          <label class="f check"><input type="checkbox"><span>Big Buck Bunny.de.srt</span><span class="sz num">44 KB</span></label>
+          <label class="f check"><input type="checkbox"><span>Extras/making-of.mp4</span><span class="sz num">96 MB</span></label>
+          <label class="f check"><input type="checkbox" checked><span>poster.jpg</span><span class="sz num">1.2 MB</span></label>
+        </div>
+        <span class="hint num">4 of 5 files · 1.8 GB</span>
+      </div>
+      <div class="field"><span class="label">Save to</span><div class="input-row"><input class="input" value="C:\Users\you\Downloads\BDownloader"><button class="btn">Browse</button></div></div>
+      <footer class="dlg-foot"><a class="btn ghost" href="main.html">Cancel</a><button class="btn">Download later</button><button class="btn primary">Add torrent</button></footer>
+    </section>
+  </div>
+</div>
+</body>
+</html>

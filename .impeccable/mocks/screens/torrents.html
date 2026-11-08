@@ -1,0 +1,80 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Torrents</title>
+<link rel="stylesheet" href="screens.css">
+<script src="screens.js"></script>
+</head>
+<body>
+<div class="window">
+  <div class="titlebar">
+    <span class="logo-sm"><svg class="i"><use href="icons.svg#download"/></svg></span>BDownloader
+    <span class="caption">
+      <span><svg viewBox="0 0 10 10"><path d="M0 5h10"/></svg></span>
+      <span><svg viewBox="0 0 10 10"><rect x="0.5" y="0.5" width="9" height="9"/></svg></span>
+      <span><svg viewBox="0 0 10 10"><path d="M0 0l10 10M10 0L0 10"/></svg></span>
+    </span>
+  </div>
+  <div class="body">
+    <aside class="sidebar">
+      <nav class="side-card" aria-label="Downloads">
+        <a class="side-item" href="main.html"><svg class="i"><use href="icons.svg#folder"/></svg>All downloads<span class="count">8</span></a>
+        <a class="side-item sub"><svg class="i"><use href="icons.svg#compressed"/></svg>Compressed<span class="count">3</span></a>
+        <a class="side-item sub"><svg class="i"><use href="icons.svg#document"/></svg>Documents<span class="count">1</span></a>
+        <a class="side-item sub"><svg class="i"><use href="icons.svg#music"/></svg>Music</a>
+        <a class="side-item sub"><svg class="i"><use href="icons.svg#program"/></svg>Programs<span class="count">2</span></a>
+        <a class="side-item sub"><svg class="i"><use href="icons.svg#video"/></svg>Video<span class="count">2</span></a>
+      </nav>
+      <nav class="side-card" aria-label="Lists">
+        <a class="side-item" href="queue.html"><svg class="i"><use href="icons.svg#clock"/></svg>Queue<span class="count">1</span></a>
+        <a class="side-item active" href="torrents.html"><svg class="i"><use href="icons.svg#torrent"/></svg>Torrents</a>
+      </nav>
+      <div class="side-foot">
+        <a class="side-item" href="extension.html"><svg class="i"><use href="icons.svg#globe"/></svg>Browser extension</a>
+        <a class="side-item" href="settings.html"><svg class="i"><use href="icons.svg#settings"/></svg>Settings</a>
+        <a class="side-item"><svg class="i"><use href="icons.svg#heart"/></svg>Support B-Downloader</a>
+      </div>
+    </aside>
+    <div class="vrule"></div>
+    <main class="main">
+      <div class="toolbar">
+        <a class="add-url" href="add.html"><svg class="i lg"><use href="icons.svg#link"/></svg>Add URL<span class="grad-tile"><svg class="i lg"><use href="icons.svg#download"/></svg></span></a>
+        <button class="tool"><svg class="i lg"><use href="icons.svg#play"/></svg>Resume all</button>
+        <button class="tool"><svg class="i lg"><use href="icons.svg#pause"/></svg>Pause all</button>
+        <span class="tool-sep"></span>
+        <button class="tool"><svg class="i lg"><use href="icons.svg#clock"/></svg>Start queue</button>
+        <a class="tool" href="settings.html"><svg class="i lg"><use href="icons.svg#settings"/></svg>Settings</a>
+        <label class="search"><svg class="i"><use href="icons.svg#search"/></svg><input placeholder="Search downloads"></label>
+      </div>
+      <div class="list">
+        <div class="group-head">Downloading now <span class="pill">1</span><span class="group-note num">7.8 MB/s together</span></div>
+        <article class="run">
+          <div class="run-top">
+            <span class="badge"><svg class="i lg"><use href="icons.svg#torrent"/></svg></span>
+            <div style="min-width:0">
+              <div class="run-name">Big Buck Bunny (2008) 1080p</div>
+              <div class="run-meta num"><span class="state-chip">Downloading</span>612 MB of 1.9 GB · 7.8 MB/s · 2m 49s left · 41 seeds · 12 peers · ↑ 320 KB/s</div>
+            </div>
+            <span class="pct">32%</span>
+            <button class="icon-btn" aria-label="Pause"><svg class="i lg"><use href="icons.svg#pause"/></svg></button><a href="details-torrent.html" class="icon-btn" aria-label="Details"><svg class="i lg"><use href="icons.svg#info"/></svg></a><a href="remove.html" class="icon-btn" aria-label="Remove"><svg class="i lg"><use href="icons.svg#trash"/></svg></a>
+          </div>
+          <div class="bar"><i style="width:32%"></i></div>
+        </article>
+        <div class="group-head">Finished <span class="pill">2</span></div>
+        <div class="rows">
+          <div class="row"><div class="name"><b>archlinux-2026.11.01-x86_64.iso</b><span class="kind">Torrent</span></div><div class="state t-ok">Seeding · Ratio 0.42</div><div class="size">1.4 GB</div><div class="acts"><button class="btn sm">Stop seeding</button><button class="icon-btn" aria-label="Open"><svg class="i lg"><use href="icons.svg#open"/></svg></button><a href="details-torrent.html" class="icon-btn" aria-label="Details"><svg class="i lg"><use href="icons.svg#info"/></svg></a><a href="remove.html" class="icon-btn" aria-label="Remove"><svg class="i lg"><use href="icons.svg#trash"/></svg></a></div></div>
+          <div class="row"><div class="name"><b>Sintel (2010) open movie</b><span class="kind">Torrent</span></div><div class="state t-ok">Completed</div><div class="size">4.2 GB</div><div class="acts"><button class="icon-btn" aria-label="Open"><svg class="i lg"><use href="icons.svg#open"/></svg></button><button class="icon-btn" aria-label="Show in folder"><svg class="i lg"><use href="icons.svg#folder"/></svg></button><a href="details-torrent.html" class="icon-btn" aria-label="Details"><svg class="i lg"><use href="icons.svg#info"/></svg></a><a href="remove.html" class="icon-btn" aria-label="Remove"><svg class="i lg"><use href="icons.svg#trash"/></svg></a></div></div>
+        </div>
+      </div>
+    </main>
+  </div>
+  <footer class="statusbar">
+    <button class="chip"><svg class="i"><use href="icons.svg#gauge"/></svg>No speed limit</button>
+    <a class="chip" href="countdown.html"><svg class="i"><use href="icons.svg#power"/></svg>When done: nothing<svg class="i caret" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg></a>
+    <div class="right"><span>1 downloading</span><span>1 seeding</span><strong><svg class="i"><use href="icons.svg#download"/></svg>7.8 MB/s</strong></div>
+  </footer>
+</div>
+</body>
+</html>

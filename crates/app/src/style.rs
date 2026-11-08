@@ -10,6 +10,7 @@ use std::sync::LazyLock;
 
 use iced::gradient::Linear;
 use iced::theme::Palette;
+use iced::widget::slider::{self as slider_widget, HandleShape};
 use iced::widget::{button, container, pick_list, progress_bar, scrollable, text_input};
 use iced::{Background, Border, Color, Degrees, Gradient, Shadow, Theme};
 
@@ -42,8 +43,10 @@ const fn rgb(hex: u32) -> Color {
     }
 }
 
+/// The color at `a` of its opacity (all theme colors start fully opaque, so
+/// this is `a`, except while a dialog fades and its colors are see-through).
 pub const fn alpha(color: Color, a: f32) -> Color {
-    Color { a, ..color }
+    Color { a: color.a * a, ..color }
 }
 
 pub const DARK: Colors = Colors {
@@ -102,8 +105,68 @@ fn theme_from(name: &'static str, c: &Colors) -> Theme {
 pub static DARK_THEME: LazyLock<Theme> = LazyLock::new(|| theme_from("BDownloader Dark", &DARK));
 pub static LIGHT_THEME: LazyLock<Theme> = LazyLock::new(|| theme_from("BDownloader Light", &LIGHT));
 
+/// Steps a fading dialog's colors go through.
+const FADE_STEPS: usize = 24;
+
+fn faded(c: &Colors, a: f32) -> Colors {
+    Colors {
+        background: alpha(c.background, a),
+        sidebar: alpha(c.sidebar, a),
+        surface: alpha(c.surface, a),
+        surface_hover: alpha(c.surface_hover, a),
+        border: alpha(c.border, a),
+        text: alpha(c.text, a),
+        muted: alpha(c.muted, a),
+        accent: alpha(c.accent, a),
+        accent_end: alpha(c.accent_end, a),
+        on_accent: alpha(c.on_accent, a),
+        success: alpha(c.success, a),
+        warning: alpha(c.warning, a),
+        danger: alpha(c.danger, a),
+        track: alpha(c.track, a),
+    }
+}
+
+/// Each theme at every fade step, from nearly see-through to nearly opaque:
+/// a fading dialog draws with these, so all its colors fade together.
+static FADES: LazyLock<[Vec<(Theme, Colors)>; 2]> = LazyLock::new(|| {
+    let steps = |name: &'static str, c: &Colors| {
+        (0..FADE_STEPS)
+            .map(|i| {
+                let colors = faded(c, i as f32 / FADE_STEPS as f32);
+                (theme_from(name, &colors), colors)
+            })
+            .collect()
+    };
+    [steps("BDownloader Dark", &DARK), steps("BDownloader Light", &LIGHT)]
+});
+
+fn fade_step(a: f32) -> Option<usize> {
+    (a < 1.0).then(|| ((a.max(0.0) * FADE_STEPS as f32) as usize).min(FADE_STEPS - 1))
+}
+
+/// `theme` with every color at `a` of its opacity, for a fading dialog.
+pub fn faded_theme(theme: &Theme, a: f32) -> Theme {
+    let dark = theme.extended_palette().is_dark;
+    match fade_step(a) {
+        Some(step) => FADES[usize::from(!dark)][step].0.clone(),
+        None => {
+            if dark {
+                DARK_THEME.clone()
+            } else {
+                LIGHT_THEME.clone()
+            }
+        }
+    }
+}
+
 pub fn colors(theme: &Theme) -> &'static Colors {
-    if theme.extended_palette().is_dark { &DARK } else { &LIGHT }
+    let dark = theme.extended_palette().is_dark;
+    match fade_step(theme.palette().background.a) {
+        Some(step) => &FADES[usize::from(!dark)][step].1,
+        None if dark => &DARK,
+        None => &LIGHT,
+    }
 }
 
 /// Controls: buttons, inputs, tabs.
@@ -175,9 +238,10 @@ pub fn dialog(theme: &Theme) -> container::Style {
     }
 }
 
-pub fn backdrop(_theme: &Theme) -> container::Style {
-    container::Style {
-        background: Some(alpha(Color::BLACK, 0.6).into()),
+/// The dimmed window behind a dialog, `shown` (0 to 1) of the way in.
+pub fn backdrop(shown: f32) -> impl Fn(&Theme) -> container::Style {
+    move |_| container::Style {
+        background: Some(alpha(Color::BLACK, 0.6 * shown).into()),
         ..container::Style::default()
     }
 }
@@ -458,6 +522,29 @@ pub fn scrollbar(theme: &Theme, status: scrollable::Status) -> scrollable::Style
         horizontal_rail: rail,
         gap: None,
         ..scrollable::default(theme, status)
+    }
+}
+
+/// A thin rail, filled with the gradient up to a white knob that grows a
+/// little under the mouse and while dragged.
+pub fn slider(theme: &Theme, status: slider_widget::Status) -> slider_widget::Style {
+    let c = colors(theme);
+    let busy = !matches!(status, slider_widget::Status::Active);
+    slider_widget::Style {
+        rail: slider_widget::Rail {
+            backgrounds: (gradient(c), c.track.into()),
+            width: 3.0,
+            border: border(Color::TRANSPARENT, 0.0, 2.0),
+        },
+        handle: slider_widget::Handle {
+            shape: HandleShape::Circle {
+                radius: if busy { 8.0 } else { 7.0 },
+            },
+            background: c.on_accent.into(),
+            border_width: 1.0,
+            // Fades with the dialog, like the theme's own colors.
+            border_color: alpha(Color::BLACK, 0.3 * c.text.a),
+        },
     }
 }
 

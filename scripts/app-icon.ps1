@@ -26,7 +26,10 @@ function Draw-Icon([int]$size) {
     $path.AddArc($x + $w - 2 * $r, $y + $w - 2 * $r, 2 * $r, 2 * $r, 0, 90)
     $path.AddArc($x, $y + $w - 2 * $r, 2 * $r, 2 * $r, 90, 90)
     $path.CloseFigure()
-    $g.FillPath((New-Object Drawing.SolidBrush ([Drawing.Color]::FromArgb(255, 0x25, 0x63, 0xeb))), $path)
+    # The app's gradient, blue to violet, left to right (style.rs: accent to accent_end).
+    $rect = New-Object Drawing.RectangleF ($x - 1), $y, ($w + 2), $w
+    $brush = New-Object Drawing.Drawing2D.LinearGradientBrush $rect, ([Drawing.Color]::FromArgb(255, 0x4a, 0x8d, 0xf6)), ([Drawing.Color]::FromArgb(255, 0xa3, 0x5b, 0xf7)), 0.0
+    $g.FillPath($brush, $path)
     $pen = New-Object Drawing.Pen ([Drawing.Color]::White), ([Math]::Max(1.6, 2.3 * $s))
     $pen.StartCap = 'Round'; $pen.EndCap = 'Round'; $pen.LineJoin = 'Round'
     $p = { param($a, $b) New-Object Drawing.PointF ($x + $a * $s), ($y + $b * $s) }

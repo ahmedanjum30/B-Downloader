@@ -19,7 +19,7 @@
   }
 
   function ask(message) {
-    if (!connected()) return Promise.reject(new Error("BDownloader's extension was reloaded"));
+    if (!connected()) return Promise.reject(new Error("B-Downloader's extension was reloaded"));
     try {
       return chrome.runtime.sendMessage(message);
     } catch (e) {
@@ -64,46 +64,83 @@
   let host = null;
   let bar = null;
   let label = null;
+  let icon = null;
   let menu = null;
 
+  // Lucide icons (https://lucide.dev, ISC license), as in the app.
+  const ICON = {
+    download: '<path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" x2="12" y1="15" y2="3"/>',
+    check: '<path d="M20 6 9 17l-5-5"/>',
+    alert: '<circle cx="12" cy="12" r="9"/><path d="M12 8v5M12 16h.01"/>',
+    chevron: '<path d="m6 9 6 6 6-6"/>',
+    close: '<path d="M18 6 6 18M6 6l12 12"/>',
+    music: '<path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/>',
+  };
+  function svg(name, className = "") {
+    return `<svg class="${className}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round">${ICON[name]}</svg>`;
+  }
+
+  // The bar sits on videos on any site, so it carries its own colours: always
+  // B-Downloader's dark look, readable on any picture.
   function build() {
     host = document.createElement("div");
     host.style.cssText = "all: initial; position: fixed; z-index: 2147483647; top: 0; left: 0; display: none;";
     const root = host.attachShadow({ mode: "closed" });
     root.innerHTML = `
       <style>
-        * { box-sizing: border-box; font: 600 11px/14px "Segoe UI", system-ui, sans-serif; }
-        .bar { display: flex; align-items: center; border-radius: 5px; overflow: hidden;
-               background: rgba(24, 26, 34, .92); color: #fff; box-shadow: 0 2px 10px rgba(0,0,0,.35); }
-        button { all: unset; cursor: pointer; padding: 2px 8px; display: flex; align-items: center; gap: 5px; color: #fff; }
-        button:hover { background: rgba(255,255,255,.12); }
-        .main { background: #6c63ff; }
-        .main:hover { background: #5a52e6; }
-        .close { padding: 2px 6px; color: rgba(255,255,255,.7); }
-        svg { width: 12px; height: 12px; }
-        .menu { position: absolute; right: 0; top: 100%; margin-top: 4px; padding: 4px 0; border-radius: 6px;
-                background: rgba(32, 33, 36, .97); color: #fff; box-shadow: 0 4px 16px rgba(0,0,0,.45);
-                display: none; width: max-content; max-width: min(560px, 90vw); }
-        .menu button { display: block; width: 100%; box-sizing: border-box; padding: 6px 16px; font-weight: 400; font-size: 12.5px;
-                       line-height: 18px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-        .menu .all { font-weight: 600; }
-        .menu .heading { padding: 6px 16px 4px; font-size: 12.5px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 420px; }
-        .menu hr { border: 0; border-top: 1px solid rgba(255,255,255,.15); margin: 4px 0; }
-        .ok { background: #1f9d55 !important; }
-        .bad { background: #c0392b !important; }
+        :host { --bg: rgba(28, 28, 33, .94); --panel: #1c1c21; --hover: #2c2c34; --line: #34343d; --text: #e6e6ea;
+                --muted: #8d8d98; --from: #4a8df6; --to: #a35bf7; --ok: #3fb950; --bad: #f85149; }
+        * { box-sizing: border-box; font: 600 11px/14px "Segoe UI Variable Text", "Segoe UI", system-ui, sans-serif; color: var(--text); }
+        .bar { display: flex; align-items: center; border-radius: 6px; overflow: hidden; background: var(--bg);
+               border: 1px solid rgba(255, 255, 255, .08); box-shadow: 0 6px 20px rgba(0, 0, 0, .35), 0 1px 3px rgba(0, 0, 0, .3); }
+        button { all: unset; box-sizing: border-box; cursor: pointer; display: flex; align-items: center; }
+        button:focus-visible { outline: 2px solid var(--from); outline-offset: -2px; }
+        .main { gap: 5px; height: 18px; padding: 0 8px; color: #fff; background: linear-gradient(90deg, var(--from), var(--to)); }
+        .main:hover { filter: brightness(1.08); }
+        .main * { color: #fff; }
+        /* Segoe UI's lowercase sits low in its line: centred on the capitals,
+           the label reads below the middle, so it's lifted a pixel. */
+        .label { position: relative; top: -1px; }
+        .main.ok { background: var(--ok); }
+        .main.bad { background: var(--bad); }
+        .close { width: 22px; height: 18px; justify-content: center; color: var(--muted); }
+        .close:hover { background: var(--hover); }
+        .close svg { width: 11px; height: 11px; }
+        svg { width: 12px; height: 12px; flex: none; }
+        .chevron { width: 11px; height: 11px; opacity: .85; }
+        .menu { position: absolute; right: 0; top: 100%; margin-top: 6px; width: 320px; max-width: 90vw; border-radius: 12px;
+                background: var(--panel); border: 1px solid var(--line); overflow: hidden; display: none;
+                box-shadow: 0 16px 40px rgba(0, 0, 0, .5), 0 2px 6px rgba(0, 0, 0, .3);
+                animation: open 160ms cubic-bezier(.16, 1, .3, 1) both; transform-origin: top right; }
+        @keyframes open { from { opacity: 0; transform: translateY(-4px) scale(.98); } }
+        @media (prefers-reduced-motion: reduce) { .menu { animation: none; } }
+        .head { padding: 12px 14px 10px; border-bottom: 1px solid var(--line); }
+        .title { font-size: 13px; line-height: 18px; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+        .meta { margin-top: 2px; color: var(--muted); font-weight: 400; font-size: 12px; line-height: 16px; font-variant-numeric: tabular-nums; }
+        .list { padding: 4px; display: flex; flex-direction: column; max-height: 60vh; overflow-y: auto; }
+        .row { display: grid; grid-template-columns: 52px 1fr auto; gap: 8px; height: 28px; padding: 0 10px; border-radius: 8px; font-size: 12.5px; line-height: 16px; }
+        .row:hover { background: var(--hover); }
+        .row:hover .size { color: var(--text); }
+        .row.plain { display: block; height: auto; padding: 6px 10px; font-weight: 400; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        .row.all { font-weight: 600; }
+        .q { font-size: 12.5px; font-variant-numeric: tabular-nums; display: flex; align-items: center; }
+        .q svg { width: 14px; height: 14px; color: var(--muted); }
+        .fmt { display: flex; align-items: center; gap: 6px; color: var(--muted); font-weight: 400; font-size: 12.5px; }
+        .best { font-size: 10.5px; line-height: 16px; padding: 0 6px; border-radius: 999px; color: #fff;
+                background: linear-gradient(90deg, var(--from), var(--to)); }
+        .size { color: var(--muted); font-weight: 400; font-size: 12.5px; font-variant-numeric: tabular-nums; text-align: right; }
+        .sep { height: 1px; background: var(--line); margin: 4px 6px; }
       </style>
       <div class="bar">
-        <button class="main" title="Download with BDownloader">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round">
-            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" x2="12" y1="15" y2="3"/>
-          </svg>
-          <span>Download this video</span>
+        <button class="main" title="Download with B-Downloader" aria-haspopup="menu">
+          <span class="icon">${svg("download")}</span><span class="label">Download this video</span>
         </button>
-        <button class="close" title="Hide">&#x2715;</button>
+        <button class="close" title="Hide on this video" aria-label="Hide on this video">${svg("close")}</button>
       </div>
-      <div class="menu"></div>`;
+      <div class="menu" role="menu"></div>`;
     bar = root.querySelector(".main");
-    label = root.querySelector(".main span");
+    label = root.querySelector(".main .label");
+    icon = root.querySelector(".main .icon");
     menu = root.querySelector(".menu");
     bar.addEventListener("click", onDownloadClick);
     root.querySelector(".close").addEventListener("click", () => {
@@ -274,9 +311,11 @@
 
   function flash(ok, text) {
     bar.classList.add(ok ? "ok" : "bad");
-    label.textContent = text || (ok ? "Sent to BDownloader" : "BDownloader isn't running");
+    icon.innerHTML = svg(ok ? "check" : "alert");
+    label.textContent = text || (ok ? "Sent to B-Downloader" : "B-Downloader isn't running");
     setTimeout(() => {
       bar.classList.remove("ok", "bad");
+      icon.innerHTML = svg("download");
       label.textContent = "Download this video";
       place();
     }, 2500);
@@ -289,15 +328,48 @@
     for (const video of videos) {
       ok = Boolean(await ask({ type: "download-from-page", video }).catch(() => false)) && ok;
     }
-    flash(ok, ok && videos.length > 1 ? `Sent ${videos.length} videos to BDownloader` : null);
+    flash(ok, ok && videos.length > 1 ? `Sent ${videos.length} videos to B-Downloader` : null);
   }
 
   function menuItem(text, onClick, className) {
     const item = document.createElement("button");
     item.textContent = text;
-    if (className) item.className = className;
+    item.className = `row plain ${className || ""}`;
+    item.setAttribute("role", "menuitem");
     item.addEventListener("click", onClick);
     return item;
+  }
+
+  function separator() {
+    const line = document.createElement("div");
+    line.className = "sep";
+    line.setAttribute("role", "separator");
+    return line;
+  }
+
+  // The menu: a heading (the title, and a line under it), then the choices.
+  function showMenu(title, meta, items) {
+    const list = document.createElement("div");
+    list.className = "list";
+    list.replaceChildren(...items);
+    const parts = [list];
+    if (title) {
+      const head = document.createElement("div");
+      head.className = "head";
+      const t = document.createElement("div");
+      t.className = "title";
+      t.textContent = title;
+      head.append(t);
+      if (meta) {
+        const m = document.createElement("div");
+        m.className = "meta";
+        m.textContent = meta;
+        head.append(m);
+      }
+      parts.unshift(head);
+    }
+    menu.replaceChildren(...parts);
+    menu.style.display = "block";
   }
 
   async function onDownloadClick() {
@@ -318,12 +390,11 @@
     const playing = current && (current.currentSrc || current.src);
     const own = videos.find((v) => v.url === playing);
     if (own) return send([own]);
-    menu.replaceChildren(
+    showMenu(title, `${videos.length} videos on this page`, [
       menuItem("Download all", () => send(videos), "all"),
-      document.createElement("hr"),
+      separator(),
       ...videos.map((video, i) => menuItem(`${i + 1}. ${describe(video, title)}`, () => send([video]))),
-    );
-    menu.style.display = "block";
+    ]);
   }
 
   // --- YouTube ---------------------------------------------------------------
@@ -369,28 +440,43 @@
     if (info.live) return flash(false, "Live streams can't be downloaded");
     const choices = (await ask({ type: "youtube-choices", info }).catch(() => [])) || [];
     if (choices.length === 0) return flash(false, "No downloadable format");
-    const label = (choice) => {
+    // The title and length once on top, then one row per quality: what
+    // tells them apart (quality and size) lines up in columns.
+    const row = (choice, best) => {
       const size = [choice.video, choice.audio].reduce((sum, f) => sum + ((f && f.contentLength) || 0), 0);
-      const kind = choice.video ? `${choice.video.qualityLabel || choice.height + "p"} MP4` : "Sound only (M4A)";
-      return [kind, length(info.lengthSeconds), size ? `${(size / 1048576).toFixed(0)} MB` : null].filter(Boolean).join("  ·  ");
+      const item = document.createElement("button");
+      item.className = "row";
+      item.setAttribute("role", "menuitem");
+      const q = document.createElement("span");
+      q.className = "q";
+      const fmt = document.createElement("span");
+      fmt.className = "fmt";
+      if (choice.video) {
+        q.textContent = choice.video.qualityLabel || `${choice.height}p`;
+        fmt.textContent = "MP4";
+        if (best) fmt.insertAdjacentHTML("beforeend", '<span class="best">Best</span>');
+      } else {
+        q.innerHTML = svg("music");
+        fmt.textContent = "Sound only · M4A";
+      }
+      const sz = document.createElement("span");
+      sz.className = "size";
+      sz.textContent = size ? `${(size / 1048576).toFixed(0)} MB` : "";
+      item.append(q, fmt, sz);
+      item.addEventListener("click", async () => {
+        menu.style.display = "none";
+        const ok = await ask({ type: "download-youtube", info, choice }).catch(() => false);
+        flash(Boolean(ok), ok ? null : "Play the video for a few seconds, then try again");
+      });
+      return item;
     };
-    // The title once on top, then one short line per quality, so long titles
-    // don't push what tells the qualities apart out of sight.
-    const heading = document.createElement("div");
-    heading.className = "heading";
-    heading.textContent = info.title;
-    menu.replaceChildren(
-      heading,
-      document.createElement("hr"),
-      ...choices.map((choice) =>
-        menuItem(label(choice), async () => {
-          menu.style.display = "none";
-          const ok = await ask({ type: "download-youtube", info, choice }).catch(() => false);
-          flash(Boolean(ok), ok ? null : "Play the video for a few seconds, then try again");
-        }),
-      ),
-    );
-    menu.style.display = "block";
+    const videos = choices.filter((c) => c.video);
+    const sound = choices.filter((c) => !c.video);
+    showMenu(info.title, [length(info.lengthSeconds), "Goes to B-Downloader"].filter(Boolean).join(" · "), [
+      ...videos.map((choice, i) => row(choice, i === 0)),
+      ...(videos.length && sound.length ? [separator()] : []),
+      ...sound.map((choice) => row(choice, false)),
+    ]);
   }
 
   chrome.runtime.onMessage.addListener((message, sender, reply) => {

@@ -1,0 +1,7 @@
+{
+  "files": [".impeccable/mocks/screens/*.html"],
+  "exclude": [".impeccable/mocks/screens/index.html"],
+  "insertBefore": "</body>",
+  "commentSyntax": "html",
+  "cspChecked": true
+}

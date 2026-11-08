@@ -1,0 +1,25 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Report a problem</title>
+<link rel="stylesheet" href="screens.css">
+<script src="screens.js"></script>
+</head>
+<body>
+<div class="window" data-backdrop>
+  <div class="scrim">
+    <section class="dialog" role="dialog" aria-label="Report a problem">
+      <header class="dlg-head"><h1>Report a problem</h1><a class="icon-btn" href="main.html" aria-label="Close"><svg class="i lg"><use href="icons.svg#close"/></svg></a></header>
+      <div class="field"><span class="label">What went wrong?</span>
+        <textarea class="input" placeholder="For example: the download from this site stops at 50% and says the link expired."></textarea>
+        <span class="hint">The first line becomes the report's title.</span>
+      </div>
+      <label class="check"><input type="checkbox" checked>Include BDownloader's log (the latest part)</label>
+      <footer class="dlg-foot"><a class="btn ghost" href="main.html">Cancel</a><button class="btn primary"><svg class="i"><use href="icons.svg#open"/></svg>Open on GitHub</button></footer>
+    </section>
+  </div>
+</div>
+</body>
+</html>

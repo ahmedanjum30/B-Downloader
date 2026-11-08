@@ -6,6 +6,7 @@
 
 mod add;
 mod downloads;
+mod motion;
 mod power;
 mod queue;
 mod refresh;
@@ -103,6 +104,7 @@ impl Filter {
     }
 }
 
+#[derive(Clone)]
 pub enum Modal {
     Add(Box<AddDialog>),
     Settings(Settings),
@@ -128,6 +130,10 @@ pub enum Modal {
 #[derive(Debug, Clone)]
 pub enum Message {
     Tick,
+    /// A frame passed while a dialog or Settings section animates.
+    Frame(std::time::Instant),
+    /// The Settings section showing measured this tall.
+    SettingsSection(f32),
     Finished(u64, Result<Outcome, String>),
     /// Gives unused memory back to Windows if the app is still idle.
     TrimMemory,
@@ -336,6 +342,8 @@ pub struct App {
     /// Downloads from the browser held back for the Refresh link dialog or an
     /// expired download, until their check says the app gets the file.
     held_offers: std::collections::HashMap<u64, AddRequest>,
+    /// Dialogs fading in and out, and Settings sections fading in.
+    pub motion: motion::Motion,
 }
 
 impl App {
@@ -378,6 +386,7 @@ impl App {
             settings_tab: SettingsTab::General,
             seed_ratio_text,
             details_torrent: None,
+            motion: motion::Motion::default(),
             checked: std::collections::HashMap::new(),
             held_offers: std::collections::HashMap::new(),
         };
@@ -443,9 +452,9 @@ impl App {
     pub fn title(&self) -> String {
         let active: Vec<&Item> = self.items.iter().filter(|i| i.state.is_running()).collect();
         match active.as_slice() {
-            [] => "BDownloader".into(),
-            [one] => format!("{:.0}% · {} — BDownloader", one.fraction() * 100.0, one.display_name()),
-            many => format!("{} downloads — BDownloader", many.len()),
+            [] => "B-Downloader".into(),
+            [one] => format!("{:.0}% · {} — B-Downloader", one.fraction() * 100.0, one.display_name()),
+            many => format!("{} downloads — B-Downloader", many.len()),
         }
     }
 
@@ -475,6 +484,9 @@ impl App {
         }
         if self.settings.queue_start_daily || self.settings.queue_stop_daily {
             subscriptions.push(time::every(Duration::from_secs(20)).map(|_| Message::QueueClock));
+        }
+        if self.motion.is_animating(std::time::Instant::now()) {
+            subscriptions.push(window::frames().map(Message::Frame));
         }
         if matches!(self.modal, Some(Modal::PowerCountdown { .. })) {
             subscriptions.push(time::every(Duration::from_secs(1)).map(|_| Message::PowerTick));
@@ -520,6 +532,22 @@ impl App {
     }
 
     pub fn update(&mut self, message: Message) -> Task<Message> {
+        // The routine refreshes never close a dialog, so they skip keeping a
+        // copy of it for its fade-out.
+        let routine = matches!(
+            message,
+            Message::Tick | Message::SeedTick | Message::QueueClock | Message::Frame(_) | Message::SettingsSection(_)
+        );
+        let before = self.modal.as_ref().map(std::mem::discriminant);
+        let snapshot = if routine { None } else { self.modal.clone() };
+        let tab = self.settings_tab;
+        let task = self.update_dialogs(message);
+        let after = self.modal.as_ref().map(std::mem::discriminant);
+        self.motion.follow(before, snapshot, after, tab != self.settings_tab);
+        task
+    }
+
+    fn update_dialogs(&mut self, message: Message) -> Task<Message> {
         let task = self.handle(message);
         // Once no dialog is showing, the next download from the browser asks for confirmation.
         if self.modal.is_none()
@@ -659,6 +687,8 @@ impl App {
             | Message::ConfirmRefresh) => return self.handle_refresh(m),
 
             Message::Tick => return self.tick(),
+            Message::Frame(now) => self.motion.frame(now),
+            Message::SettingsSection(height) => self.motion.section_measured(height),
             Message::BrowserOffer(id, add) => {
                 if !add.is_valid() {
                     return Task::none();
@@ -970,8 +1000,8 @@ impl App {
         let running: Vec<&Item> = self.items.iter().filter(|i| i.state.is_running()).collect();
         let speed: f64 = running.iter().map(|i| i.rate()).sum();
         tray.set_tooltip(&match running.len() {
-            0 => "BDownloader".to_owned(),
-            n => format!("BDownloader\n{n} downloading · {}", format::speed(speed)),
+            0 => "B-Downloader".to_owned(),
+            n => format!("B-Downloader\n{n} downloading · {}", format::speed(speed)),
         });
     }
 }

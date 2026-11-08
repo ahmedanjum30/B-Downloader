@@ -1,0 +1,30 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Add download</title>
+<link rel="stylesheet" href="screens.css">
+<script src="screens.js"></script>
+</head>
+<body>
+<div class="window" data-backdrop>
+  <div class="scrim">
+    <section class="dialog" role="dialog" aria-label="Add download">
+      <header class="dlg-head"><h1>Add download</h1><a class="icon-btn" href="main.html" aria-label="Close"><svg class="i lg"><use href="icons.svg#close"/></svg></a></header>
+      <div class="field"><span class="label">Link</span>
+        <div class="input-row"><input class="input" value="https://releases.ubuntu.com/24.04/ubuntu-24.04.3-desktop-amd64.iso"><button class="btn"><svg class="i"><use href="icons.svg#folder"/></svg>Torrent file</button></div>
+      </div>
+      <div class="file-card"><span class="badge">ISO</span><div><div class="name">ubuntu-24.04.3-desktop-amd64.iso</div><div class="meta num">5.9 GB · Multiple connections · can resume</div></div></div>
+      <div class="field"><span class="label">Save as</span><input class="input" value="ubuntu-24.04.3-desktop-amd64.iso"></div>
+      <div class="field"><span class="label">Save to</span><div class="input-row"><input class="input" value="C:\Users\you\Downloads\BDownloader\Programs"><button class="btn">Browse</button></div></div>
+      <div class="field"><span class="label">Connections</span>
+        <div class="stepper"><button class="icon-btn" aria-label="Fewer"><svg class="i"><use href="icons.svg#minus"/></svg></button><span class="val">8</span><button class="icon-btn" aria-label="More"><svg class="i"><use href="icons.svg#plus"/></svg></button><div class="slider"><i style="width:25%"></i><b style="left:25%"></b></div></div>
+      </div>
+      <label class="check"><input type="checkbox">Verify checksum when finished</label>
+      <footer class="dlg-foot"><a class="btn ghost" href="main.html">Cancel</a><button class="btn">Download later</button><button class="btn primary">Download</button></footer>
+    </section>
+  </div>
+</div>
+</body>
+</html>
