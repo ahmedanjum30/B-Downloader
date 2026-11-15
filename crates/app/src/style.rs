@@ -238,6 +238,16 @@ pub fn dialog(theme: &Theme) -> container::Style {
     }
 }
 
+/// A dialog that is a window of its own: the window's ground, no card edge.
+pub fn dialog_window(theme: &Theme) -> container::Style {
+    let c = colors(theme);
+    container::Style {
+        background: Some(c.background.into()),
+        text_color: Some(c.text),
+        ..container::Style::default()
+    }
+}
+
 /// The dimmed window behind a dialog, `shown` (0 to 1) of the way in.
 pub fn backdrop(shown: f32) -> impl Fn(&Theme) -> container::Style {
     move |_| container::Style {

@@ -6,7 +6,18 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+## [1.3.3] - 2026-11-15
+
+### Added
+- Windows notifications: "Download added" (or "Added to the queue") when a
+  download is added while B-Downloader is in the tray, and "Download
+  complete" when one finishes while you're not looking at B-Downloader.
+
 ### Changed
+- A download from the browser while B-Downloader is in the tray opens just
+  its dialog, in a small window of its own, instead of the whole app. It
+  closes once the download is added or cancelled; opening B-Downloader
+  meanwhile moves the dialog into its window.
 - Browser extension 1.1.1: its icon is the new blue-to-violet tile, like
   the app's. Published to Firefox and Edge on its own (2026-11-09).
 

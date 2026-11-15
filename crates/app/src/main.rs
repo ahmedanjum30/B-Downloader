@@ -10,6 +10,7 @@ mod instance;
 mod item;
 mod logging;
 mod memory;
+mod notify;
 mod store;
 mod style;
 mod tray;
@@ -49,25 +50,38 @@ fn main() -> iced::Result {
     }
     // Not fatal: without it only the browser extension can't reach the app.
     let _ = browser::register();
+    notify::register();
 
-    iced::application(App::new, App::update, view::view)
+    // A daemon rather than one window: a download from the browser while the
+    // app is in the tray gets its dialog in a window of its own. The app opens
+    // its main window itself (App::new).
+    iced::daemon(App::new, App::update, view::window_view)
         .executor::<Executor>()
         .title(App::title)
         .theme(App::theme)
         .subscription(App::subscription)
         .default_font(view::FONT)
-        .window(window::Settings {
-            // The close button is handled by the app: hide to the tray or exit, per Settings.
-            exit_on_close_request: false,
-            // `--background`: started by an update while the app was in the tray.
-            visible: !std::env::args().any(|a| a == "--background"),
-            size: WINDOW_SIZE,
-            min_size: Some(Size::new(820.0, 520.0)),
-            icon: window::icon::from_rgba(include_bytes!("../assets/icon-64.rgba").to_vec(), 64, 64).ok(),
-            ..window::Settings::default()
-        })
-        .centered()
         .run()
+}
+
+/// The app's icon, for its windows' title bars and the taskbar.
+pub fn window_icon() -> Option<window::Icon> {
+    window::icon::from_rgba(include_bytes!("../assets/icon-64.rgba").to_vec(), 64, 64).ok()
+}
+
+/// The main window.
+pub fn main_window() -> window::Settings {
+    window::Settings {
+        // The close button is handled by the app: hide to the tray or exit, per Settings.
+        exit_on_close_request: false,
+        // `--background`: started by an update while the app was in the tray.
+        visible: !std::env::args().any(|a| a == "--background"),
+        size: WINDOW_SIZE,
+        min_size: Some(Size::new(820.0, 520.0)),
+        position: window::Position::Centered,
+        icon: window_icon(),
+        ..window::Settings::default()
+    }
 }
 
 fn exit_with(result: std::io::Result<()>) -> iced::Result {

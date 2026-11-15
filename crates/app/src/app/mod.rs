@@ -45,9 +45,9 @@ fn trim_memory_soon() -> Task<Message> {
     Task::perform(tokio::time::sleep(Duration::from_secs(3)), |_| Message::TrimMemory)
 }
 
-/// Restores and focuses the window.
+/// Restores and focuses the main window (the first one opened).
 fn focus_window() -> Task<Message> {
-    window::latest().and_then(|id| {
+    window::oldest().and_then(|id| {
         Task::batch([
             // Brings it back if it was closed to the tray.
             window::set_mode(id, window::Mode::Windowed),
@@ -278,7 +278,13 @@ pub enum Message {
 
     /// The window's close button.
     CloseRequested(window::Id),
-    Resized(f32),
+    Resized(window::Id, f32),
+    /// The dialog window's contents measured this big: the window takes their size.
+    DialogWindowSized(iced::Size),
+    /// Shows the dialog window, measured or not by now.
+    DialogWindowShow,
+    /// The main window got (true) or lost the focus.
+    MainFocus(window::Id, bool),
     Tray(TrayAction),
     /// Downloads are paused and saved; leave.
     Quit,
@@ -344,6 +350,14 @@ pub struct App {
     held_offers: std::collections::HashMap<u64, AddRequest>,
     /// Dialogs fading in and out, and Settings sections fading in.
     pub motion: motion::Motion,
+    pub main_window: Option<window::Id>,
+    /// A dialog for a download from the browser, shown in a window of its own
+    /// while the main window is in the tray.
+    pub dialog_window: Option<window::Id>,
+    /// The dialog window is showing (it opens hidden until it has its size).
+    dialog_window_shown: bool,
+    /// The main window has the focus: someone's looking at the downloads.
+    main_focused: bool,
 }
 
 impl App {
@@ -387,6 +401,10 @@ impl App {
             seed_ratio_text,
             details_torrent: None,
             motion: motion::Motion::default(),
+            main_window: None,
+            dialog_window: None,
+            dialog_window_shown: false,
+            main_focused: false,
             checked: std::collections::HashMap::new(),
             held_offers: std::collections::HashMap::new(),
         };
@@ -404,7 +422,10 @@ impl App {
 
         // `BDownloader.exe URL...` starts those downloads right away; magnet
         // links and .torrent files ask which files to download first.
-        let mut tasks: Vec<Task<Message>> = instance::from_args().into_iter().map(|r| Task::done(Message::External(r))).collect();
+        let (main_window, opened) = window::open(crate::main_window());
+        app.main_window = Some(main_window);
+        let mut tasks: Vec<Task<Message>> = vec![opened.discard()];
+        tasks.extend(instance::from_args().into_iter().map(|r| Task::done(Message::External(r))));
         tasks.extend([
             system::theme().map(Message::SystemTheme),
             // Give the app a moment to settle before going online.
@@ -436,10 +457,65 @@ impl App {
         (app, Task::batch(tasks))
     }
 
-    /// Shows the window, also when it was hidden in the tray.
+    /// Shows the window, also when it was hidden in the tray. A dialog in a
+    /// window of its own moves into it.
     fn show_window(&mut self) -> Task<Message> {
         self.window_hidden = false;
-        focus_window()
+        Task::batch([self.close_dialog_window(), focus_window()])
+    }
+
+    /// Shows a dialog for a download from the browser: in the main window
+    /// when it's open; while it's in the tray, in a window of its own, so the
+    /// whole app doesn't come up for one download.
+    fn show_dialog(&mut self) -> Task<Message> {
+        if !self.window_hidden || self.tray.is_none() {
+            return self.show_window();
+        }
+        if let Some(id) = self.dialog_window {
+            return window::gain_focus(id);
+        }
+        let (id, opened) = window::open(window::Settings {
+            size: iced::Size::new(600.0, 560.0),
+            position: window::Position::Centered,
+            // Opens hidden, and shows once it has its contents' size.
+            visible: false,
+            resizable: false,
+            // Opens on top of the browser it came from; once it shows, it's
+            // an ordinary window again (see `reveal_dialog_window`).
+            level: window::Level::AlwaysOnTop,
+            icon: crate::window_icon(),
+            exit_on_close_request: false,
+            ..window::Settings::default()
+        });
+        self.dialog_window = Some(id);
+        self.dialog_window_shown = false;
+        Task::batch([
+            opened.discard(),
+            // In case it's never measured, it still shows.
+            Task::perform(tokio::time::sleep(Duration::from_millis(400)), |_| Message::DialogWindowShow),
+        ])
+    }
+
+    fn close_dialog_window(&mut self) -> Task<Message> {
+        self.dialog_window_shown = false;
+        self.dialog_window.take().map_or_else(Task::none, window::close)
+    }
+
+    fn reveal_dialog_window(&mut self) -> Task<Message> {
+        match self.dialog_window {
+            Some(id) if !self.dialog_window_shown => {
+                self.dialog_window_shown = true;
+                Task::batch([
+                    window::set_mode(id, window::Mode::Windowed),
+                    window::gain_focus(id),
+                    // Shown on top, it goes back to an ordinary window, so
+                    // switching to another window puts that one in front.
+                    Task::perform(tokio::time::sleep(Duration::from_millis(300)), |_| ())
+                        .then(move |()| window::set_level(id, window::Level::Normal)),
+                ])
+            }
+            _ => Task::none(),
+        }
     }
 
     fn extension_connected(&mut self) {
@@ -449,7 +525,13 @@ impl App {
         }
     }
 
-    pub fn title(&self) -> String {
+    pub fn title(&self, window: window::Id) -> String {
+        if Some(window) == self.dialog_window {
+            return match &self.modal {
+                Some(Modal::Refresh(_)) => "Refresh download link — B-Downloader".into(),
+                _ => "Add download — B-Downloader".into(),
+            };
+        }
         let active: Vec<&Item> = self.items.iter().filter(|i| i.state.is_running()).collect();
         match active.as_slice() {
             [] => "B-Downloader".into(),
@@ -458,7 +540,11 @@ impl App {
         }
     }
 
-    pub fn theme(&self) -> Theme {
+    pub fn theme(&self, _window: window::Id) -> Theme {
+        self.current_theme()
+    }
+
+    pub fn current_theme(&self) -> Theme {
         let dark = match self.settings.theme {
             ThemeChoice::System => self.system_dark,
             ThemeChoice::Dark => true,
@@ -474,7 +560,12 @@ impl App {
             Subscription::run(instance::listen),
             Subscription::run(tray::events),
             window::close_requests().map(Message::CloseRequested),
-            window::resize_events().map(|(_, size)| Message::Resized(size.width)),
+            window::resize_events().map(|(id, size)| Message::Resized(id, size.width)),
+            window::events().filter_map(|(id, event)| match event {
+                window::Event::Focused => Some(Message::MainFocus(id, true)),
+                window::Event::Unfocused => Some(Message::MainFocus(id, false)),
+                _ => None,
+            }),
         ];
         if self.items.iter().any(|i| i.handle.is_some()) || matches!(self.update, Update::Downloading { .. }) {
             subscriptions.push(time::every(REFRESH).map(|_| Message::Tick));
@@ -541,10 +632,34 @@ impl App {
         let before = self.modal.as_ref().map(std::mem::discriminant);
         let snapshot = if routine { None } else { self.modal.clone() };
         let tab = self.settings_tab;
+        let added = self.items.len();
         let task = self.update_dialogs(message);
         let after = self.modal.as_ref().map(std::mem::discriminant);
         self.motion.follow(before, snapshot, after, tab != self.settings_tab);
+        // While the window is in the tray, a download added says so.
+        if self.window_hidden && self.items.len() > added {
+            self.notify_added(added);
+        }
+        // Its dialog is done: the dialog's own window goes (it doesn't fade out).
+        if self.dialog_window.is_some() && self.modal.is_none() {
+            self.motion.closing = None;
+            return Task::batch([task, self.close_dialog_window()]);
+        }
         task
+    }
+
+    /// A notification for the downloads added from index `from` on.
+    fn notify_added(&self, from: usize) {
+        let added = &self.items[from..];
+        let queued = added.iter().all(|i| i.queued);
+        let title = match (added.len(), queued) {
+            (1, false) => "Download added".to_owned(),
+            (1, true) => "Added to the queue".to_owned(),
+            (n, false) => format!("{n} downloads added"),
+            (n, true) => format!("{n} downloads added to the queue"),
+        };
+        let names: Vec<String> = added.iter().map(Item::display_name).collect();
+        crate::notify::show(&title, &names.join(", "));
     }
 
     fn update_dialogs(&mut self, message: Message) -> Task<Message> {
@@ -713,7 +828,7 @@ impl App {
                     self.covered.push(open);
                 }
                 self.pending.push_back(Pending::Offer(id, add));
-                return self.show_window();
+                return self.show_dialog();
             }
             Message::BrowserChecked(id, result) => {
                 if let Some(add) = self.held_offers.remove(&id) {
@@ -753,6 +868,7 @@ impl App {
                 let engine = self.engine.clone();
                 let seed = self.settings.seed_ratio().is_some();
                 let paused = matches!(result, Ok(Outcome::Paused));
+                let notify_done = self.window_hidden || !self.main_focused;
                 if let Some(item) = self.item(id) {
                     item.segments.clear();
                     item.active_connections = 0;
@@ -763,6 +879,9 @@ impl App {
                             item.size = Some(item.size.unwrap_or(item.downloaded));
                             item.downloaded = item.size.unwrap_or(item.downloaded);
                             item.state = State::Completed;
+                            if notify_done {
+                                crate::notify::show("Download complete", &item.display_name());
+                            }
                             // With seeding off, a torrent is done once downloaded.
                             if !seed && let Some(torrent) = &mut item.torrent {
                                 torrent.seeded = true;
@@ -838,13 +957,18 @@ impl App {
                         self.covered.push(open);
                     }
                     self.pending.push_back(Pending::TorrentFile(PathBuf::from(path)));
-                    return self.show_window();
+                    return self.show_dialog();
                 }
                 // A magnet link asks which files to download first.
                 Request::Add(add) if add.start && !add.is_magnet() => {
                     self.add(add);
                     self.show(Filter::All);
-                    return self.show_window();
+                    // In the tray, the notification says it was added.
+                    return if self.window_hidden && self.tray.is_some() {
+                        Task::none()
+                    } else {
+                        self.show_window()
+                    };
                 }
                 // From the browser: ask where to save it first. Several queue up.
                 // The Refresh link dialog is waiting for a link: this is it.
@@ -855,7 +979,7 @@ impl App {
                         dialog.url = add.url.trim().to_owned();
                         dialog.headers = add.headers();
                     }
-                    return Task::batch([self.show_window(), self.refresh_probe()]);
+                    return Task::batch([self.show_dialog(), self.refresh_probe()]);
                 }
                 Request::Add(add) => {
                     if add.is_valid() {
@@ -873,7 +997,7 @@ impl App {
                         }
                         self.pending.push_back(Pending::Add(add));
                     }
-                    return self.show_window();
+                    return self.show_dialog();
                 }
             },
             Message::OpenLogs => {
@@ -882,7 +1006,26 @@ impl App {
                 store::open_file(&dir);
             }
 
-            Message::Resized(width) => self.width = width,
+            Message::Resized(id, width) => {
+                if Some(id) == self.main_window {
+                    self.width = width;
+                }
+            }
+            Message::DialogWindowSized(size) => {
+                if let Some(id) = self.dialog_window {
+                    // Not taller than most screens: past that, it scrolls.
+                    let size = iced::Size::new(size.width.ceil(), size.height.ceil().min(760.0));
+                    return Task::batch([window::resize(id, size), self.reveal_dialog_window()]);
+                }
+            }
+            Message::DialogWindowShow => return self.reveal_dialog_window(),
+            Message::MainFocus(id, focused) => {
+                if Some(id) == self.main_window {
+                    self.main_focused = focused;
+                }
+            }
+            // Closing the dialog's own window cancels the dialog.
+            Message::CloseRequested(id) if Some(id) == self.dialog_window => self.modal = None,
             Message::CloseRequested(id) => {
                 // Without a tray icon there'd be no way back to a hidden window.
                 if self.settings.close_to_tray && self.tray.is_some() {

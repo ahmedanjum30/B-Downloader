@@ -19,15 +19,35 @@ fn frame<'a>(title: &'a str, body: Element<'a, Message>, footer: Element<'a, Mes
     sized_frame(title, body, footer, 540.0)
 }
 
+thread_local! {
+    /// Dialogs being built as a window's whole contents (see `bare`).
+    static BARE: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
+}
+
+/// Builds dialogs as a window of their own: no card around them (the window
+/// is the dialog) and no close button of their own (the title bar has one).
+pub fn bare<T>(build: impl FnOnce() -> T) -> T {
+    BARE.set(true);
+    let built = build();
+    BARE.set(false);
+    built
+}
+
 fn sized_frame<'a>(title: &'a str, body: Element<'a, Message>, footer: Element<'a, Message>, width: f32) -> Element<'a, Message> {
-    let header = row![
-        text(title).size(20).font(BOLD).width(Fill),
+    let mut header = row![text(title).size(20).font(BOLD).width(Fill)].align_y(Center);
+    if BARE.get() {
+        return container(column![header, body, footer].spacing(22))
+            .padding(26)
+            .width(width)
+            .style(style::dialog_window)
+            .into();
+    }
+    header = header.push(
         button(icon(&icons::CLOSE, 18.0, |c| c.muted))
             .padding(6)
             .style(style::icon_button)
             .on_press(Message::CloseModal),
-    ]
-    .align_y(Center);
+    );
     let dialog = container(column![header, body, footer].spacing(22))
         .padding(26)
         .width(width)

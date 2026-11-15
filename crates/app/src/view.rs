@@ -3,8 +3,8 @@
 use bdownloader_core::Category;
 use iced::font::Weight;
 use iced::widget::{
-    Space, button, center, column, container, mouse_area, opaque, pick_list, progress_bar, row, scrollable, space, stack, text, text_input, themer,
-    tooltip,
+    Space, button, center, column, container, mouse_area, opaque, pick_list, progress_bar, row, scrollable, sensor, space, stack, text, text_input,
+    themer, tooltip,
 };
 use iced::{Center, Element, Fill, FillPortion, Font, Padding, Theme};
 
@@ -28,6 +28,29 @@ pub const BOLD: Font = Font {
     ..FONT
 };
 
+/// What `window` shows: the main window, or a dialog in a window of its own.
+pub fn window_view(app: &App, window: iced::window::Id) -> Element<'_, Message> {
+    if Some(window) == app.dialog_window {
+        dialog_window(app)
+    } else {
+        view(app)
+    }
+}
+
+/// A dialog for a download from the browser, in its own window while the main
+/// window is in the tray. Measured at its natural size (the scrollable lets it
+/// be taller than the window), so the window can take that size.
+fn dialog_window(app: &App) -> Element<'_, Message> {
+    let now = std::time::Instant::now();
+    let content = dialogs::bare(|| app.modal.as_ref().and_then(|open| dialog(app, open, now))).unwrap_or_else(|| space().into());
+    let measured = sensor(content).on_show(Message::DialogWindowSized).on_resize(Message::DialogWindowSized);
+    container(scrollable(measured).direction(scrollable::Direction::Vertical(scrollable::Scrollbar::hidden())))
+        .width(Fill)
+        .height(Fill)
+        .style(style::app_background)
+        .into()
+}
+
 pub fn view(app: &App) -> Element<'_, Message> {
     let divider = container(space()).width(1).height(Fill).style(style::rule);
     let base = container(column![row![sidebar(app), divider, main_panel(app)].height(Fill), status_bar(app)])
@@ -35,8 +58,8 @@ pub fn view(app: &App) -> Element<'_, Message> {
         .height(Fill)
         .style(style::app_background);
     let now = std::time::Instant::now();
-    let theme = app.theme();
-    if let Some(open) = &app.modal {
+    let theme = app.current_theme();
+    if let Some(open) = app.modal.as_ref().filter(|_| app.dialog_window.is_none()) {
         let shown = app.motion.dialog(now);
         return match dialog(app, open, now) {
             Some(content) => modal(base, faded(&theme, shown, content), shown, true),
@@ -44,7 +67,7 @@ pub fn view(app: &App) -> Element<'_, Message> {
         };
     }
     // The dialog that just closed, fading out. It no longer takes input.
-    if let Some(closing) = &app.motion.closing {
+    if let Some(closing) = app.motion.closing.as_ref().filter(|_| app.dialog_window.is_none()) {
         let shown = app.motion.dialog(now);
         let content = closing
             .as_ref()
@@ -66,7 +89,7 @@ fn dialog<'a>(app: &'a App, modal: &'a Modal, now: std::time::Instant) -> Option
             &app.seed_ratio_text,
             app.motion.tab(now),
             app.motion.section_height(now),
-            &app.theme(),
+            &app.current_theme(),
         ),
         Modal::Report(dialog) => dialogs::report(dialog),
         Modal::Refresh(dialog) => dialogs::refresh(dialog),
