@@ -6,6 +6,15 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+## [1.3.7] - 2026-11-18
+
+### Fixed
+- A program downloaded by torrent (an installer, say) can be started while
+  the torrent is still being shared. Windows said the file was in use by
+  another program until B-Downloader was closed, because the torrent kept
+  its files open for writing; a finished torrent's files are now open for
+  reading only.
+
 ## [1.3.6] - 2026-11-18
 
 ### Changed
