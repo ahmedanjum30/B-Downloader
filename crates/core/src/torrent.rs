@@ -510,8 +510,11 @@ pub(crate) async fn download(
                 torrents.seed(session, handle, info.info_hash, source.uploaded);
                 return Ok(Outcome::Completed(path));
             }
-            // Paused from elsewhere.
-            TorrentStatsState::Paused => return Ok(Outcome::Paused),
+            // Paused while this download wants it running: the session restored
+            // it paused (the app pauses torrents as it closes) and a resume
+            // asked for while it was checking its files didn't take, as the
+            // check ends paused. Started again, it runs.
+            TorrentStatsState::Paused => session.unpause(&handle).await.map_err(torrent_error)?,
             _ => {}
         }
         tokio::select! {
@@ -833,6 +836,71 @@ mod tests {
         assert!(!handle.is_finished());
         // Every piece but the damaged one counts as downloaded.
         assert_eq!(waited.downloaded, 200_000 - 16384);
+        handle.pause();
+        assert_eq!(handle.wait().await.unwrap(), Outcome::Paused);
+    }
+
+    /// A torrent paused when the app closed (an update restarts it) resumes
+    /// when started again after the restart, instead of stopping at once as
+    /// "paused" every time.
+    #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+    async fn a_torrent_paused_at_exit_resumes_after_a_restart() {
+        let temp = tempfile::tempdir().unwrap();
+        let source = temp.path().join("source");
+        std::fs::create_dir_all(&source).unwrap();
+        let data: Vec<u8> = (0..400_000u32).map(|i| (i * 7 % 251) as u8).collect();
+        std::fs::write(source.join("movie.bin"), &data).unwrap();
+        let options = librqbit::CreateTorrentOptions {
+            name: None,
+            trackers: Vec::new(),
+            piece_length: Some(16384),
+        };
+        let spawner = librqbit::spawn_utils::BlockingSpawner::new(4);
+        let created = librqbit::create_torrent(&source.join("movie.bin"), options, &spawner).await.unwrap();
+        let bytes = created.as_bytes().unwrap().to_vec();
+        // Most of it there already, one piece missing: it runs, waiting for peers.
+        let dir = temp.path().join("downloads");
+        std::fs::create_dir_all(&dir).unwrap();
+        let mut partial = data.clone();
+        partial[100_000] ^= 0xff;
+        std::fs::write(dir.join("movie.bin"), &partial).unwrap();
+        let start = |engine: &Engine| {
+            let mut options = DownloadOptions::new("magnet:?xt=urn:btih:test", &dir);
+            options.torrent = Some(TorrentSource {
+                bytes: bytes.clone(),
+                files: None,
+                uploaded: 0,
+            });
+            engine.start(options)
+        };
+        let running = |handle: &crate::DownloadHandle| {
+            let progress = handle.progress();
+            !handle.is_finished() && (progress.status == Status::Downloading || progress.status == Status::Starting && progress.downloaded > 0)
+        };
+        let wait_running = |handle: crate::DownloadHandle| async move {
+            tokio::time::timeout(Duration::from_secs(10), async {
+                while !running(&handle) {
+                    assert!(!handle.is_finished(), "it stopped instead of running");
+                    tokio::time::sleep(Duration::from_millis(50)).await;
+                }
+            })
+            .await
+            .expect("never started running");
+            handle
+        };
+
+        // Before: running, then paused as the app closes.
+        let state = temp.path().join("state");
+        let engine = Engine::new().unwrap().with_torrents(state.clone());
+        let handle = wait_running(start(&engine)).await;
+        handle.pause();
+        assert_eq!(handle.wait().await.unwrap(), Outcome::Paused);
+        engine.torrents.session().await.unwrap().stop().await;
+        drop(engine);
+
+        // After the restart: the same torrent, started again, runs.
+        let engine = Engine::new().unwrap().with_torrents(state);
+        let handle = wait_running(start(&engine)).await;
         handle.pause();
         assert_eq!(handle.wait().await.unwrap(), Outcome::Paused);
     }

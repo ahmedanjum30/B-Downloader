@@ -6,6 +6,13 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+## [1.3.5] - 2026-11-18
+
+### Fixed
+- A torrent running when B-Downloader closed (for example for an update)
+  could stay stuck after the restart: every Resume stopped it again at once
+  as "paused". It now resumes.
+
 ## [1.3.4] - 2026-11-18
 
 ### Fixed
