@@ -6,6 +6,16 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+## [1.3.6] - 2026-11-18
+
+### Changed
+- With a SOCKS5 proxy set in Windows that also relays UDP (such as Proxy
+  GUI 1.5), torrents send everything through it: TCP to peers, and uTP,
+  DHT and UDP trackers through its UDP relay. Peers reachable only over uTP
+  are reached again while the proxy is on. Without UDP support in the
+  proxy, UDP stays direct as before; incoming connections still arrive
+  directly.
+
 ## [1.3.5] - 2026-11-18
 
 ### Fixed

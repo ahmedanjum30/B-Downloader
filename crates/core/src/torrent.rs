@@ -20,8 +20,8 @@ use std::time::Duration;
 use librqbit::dht::DhtPersistenceConfig;
 use librqbit::limits::LimitsConfig;
 use librqbit::{
-    AddTorrent, AddTorrentOptions, AddTorrentResponse, ConnectionOptions, DhtSessionConfig, ListOnlyResponse, ListenerMode, ListenerOptions,
-    ManagedTorrent, Session, SessionOptions, SessionPersistenceConfig, TorrentStatsState,
+    AddTorrent, AddTorrentOptions, AddTorrentResponse, DhtSessionConfig, ListOnlyResponse, ListenerMode, ListenerOptions, ManagedTorrent, Session,
+    SessionOptions, SessionPersistenceConfig, TorrentStatsState,
 };
 use tokio_util::sync::CancellationToken;
 
@@ -149,17 +149,15 @@ impl Torrents {
         self.session
             .get_or_try_init(|| async {
                 std::fs::create_dir_all(&dir)?;
-                // The proxy Windows uses (a proxy tool's, say), so torrents
-                // take the same route as other downloads: peer connections and
-                // trackers go through it. DHT and uTP run over UDP, which a
-                // SOCKS5 proxy here doesn't carry: DHT stays direct, and
-                // outgoing peer connections are TCP only meanwhile.
+                // The proxy Windows uses (a proxy tool's, say), so torrents take
+                // the same route as other downloads. It's set in librqbit's
+                // socket layer (patched): TCP to peers goes through it as
+                // SOCKS5 CONNECT, and UDP (uTP, DHT, UDP trackers) through its
+                // UDP relay when it has one, else directly. Incoming
+                // connections still arrive directly.
                 let proxy = crate::sysproxy::socks5_proxy().await;
+                librqbit_dualstack_sockets::set_socks5_proxy(proxy);
                 let options = SessionOptions {
-                    connect: proxy.clone().map(|proxy_url| ConnectionOptions {
-                        proxy_url: Some(proxy_url),
-                        ..Default::default()
-                    }),
                     dht: Some(DhtSessionConfig {
                         persistence: Some(DhtPersistenceConfig {
                             config_filename: Some(dir.join("dht.json")),
@@ -206,7 +204,10 @@ impl Torrents {
                 log::info!(
                     "torrent session started, listening on {:?}, {}",
                     session.listen_addr(),
-                    proxy.map_or_else(|| "connecting directly".to_owned(), |p| format!("connecting through {p}"))
+                    proxy.map_or_else(
+                        || "connecting directly".to_owned(),
+                        |p| format!("connecting through the SOCKS5 proxy {p}")
+                    )
                 );
                 Ok::<_, Error>(session)
             })

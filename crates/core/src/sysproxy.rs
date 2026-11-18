@@ -3,17 +3,17 @@
 //! the torrent engine connects to peers itself and takes a proxy only as a
 //! SOCKS5 address.
 
-/// The system proxy as a SOCKS5 address, when there is one and it speaks
-/// SOCKS5 (many local proxies serve HTTP and SOCKS5 on one port). An
-/// HTTP-only proxy can't carry torrent connections, so torrents go direct.
-pub(crate) async fn socks5_proxy() -> Option<String> {
+/// The system proxy, when there is one and it speaks SOCKS5 (many local
+/// proxies serve HTTP and SOCKS5 on one port). An HTTP-only proxy can't carry
+/// torrent connections, so torrents go direct.
+pub(crate) async fn socks5_proxy() -> Option<std::net::SocketAddr> {
     // Tests run their own peers on this PC: the machine's proxy stays out.
     if cfg!(test) {
         return None;
     }
     let addr = system_proxy()?;
     if speaks_socks5(&addr).await {
-        Some(format!("socks5://{addr}"))
+        tokio::net::lookup_host(addr.as_str()).await.ok()?.find(std::net::SocketAddr::is_ipv4)
     } else {
         log::info!("the system proxy {addr} doesn't speak SOCKS5; torrents connect directly");
         None

@@ -30,6 +30,10 @@ librqbit = { version = "9.0.1", default-features = false }
 librqbit-core = { version = "9.0.1", default-features = false, features = ["sha1-crypto-hash"] }
 librqbit-sha1-wrapper = { version = "9.0.1", default-features = false, features = ["sha1-crypto-hash"] }
 
+# librqbit's socket layer (patched, see the workspace Cargo.toml): set to the
+# proxy so torrents' TCP and UDP take its route.
+librqbit-dualstack-sockets = "0.7"
+
 [target.'cfg(windows)'.dependencies]
 # Reads Windows' proxy setting, so torrents can use the same proxy.
 winreg = "0.56"
