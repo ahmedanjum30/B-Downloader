@@ -27,6 +27,7 @@ mod sabr;
 mod scrape;
 mod segment;
 mod state;
+mod sysproxy;
 mod torrent;
 
 pub use category::{Category, sorted_dir};

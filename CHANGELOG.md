@@ -6,6 +6,16 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+## [1.3.4] - 2026-11-18
+
+### Fixed
+- Torrents use the proxy Windows is set to (for example one set by a proxy
+  tool), like other downloads already did, when that proxy speaks SOCKS5:
+  peer connections and trackers go through it. DHT and uTP run over UDP,
+  which such a proxy doesn't carry, so DHT stays direct and peers are
+  reached over TCP meanwhile. An HTTP-only proxy leaves torrents direct, as
+  before. The proxy is read when torrents start.
+
 ## [1.3.3] - 2026-11-15
 
 ### Added
