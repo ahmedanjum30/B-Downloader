@@ -508,6 +508,9 @@ pub(crate) async fn download(
                 return Err(Error::Torrent(stats.error.unwrap_or_else(|| "it stopped with an error".into())));
             }
             TorrentStatsState::Live if stats.finished => {
+                // Shared from here on, which only reads: its files go back to
+                // read-only, so a downloaded program can run while it's shared.
+                librqbit::storage::filesystem::release_write_access(&path);
                 torrents.seed(session, handle, info.info_hash, source.uploaded);
                 return Ok(Outcome::Completed(path));
             }
@@ -752,6 +755,19 @@ mod tests {
         // Done, so it seeds until it has shared as much: nothing yet.
         let seeding = engine.seed_status(&info.info_hash).expect("seeding");
         assert!(!seeding.done);
+        // While it's shared, nothing holds the file open for writing: Windows
+        // starts a program only when it can open its file sharing reads alone.
+        #[cfg(windows)]
+        {
+            use std::os::windows::fs::OpenOptionsExt;
+            const FILE_SHARE_READ: u32 = 1;
+            const FILE_SHARE_DELETE: u32 = 4;
+            std::fs::OpenOptions::new()
+                .read(true)
+                .share_mode(FILE_SHARE_READ | FILE_SHARE_DELETE)
+                .open(downloads.join("pack").join("big.bin"))
+                .expect("the finished file is still open for writing while it's shared");
+        }
 
         // The other file chosen afterwards: seeding steps aside and it downloads that too.
         let small_file = info.files.iter().find(|f| f.path.ends_with("small.txt")).unwrap();

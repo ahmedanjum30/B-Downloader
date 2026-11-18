@@ -34,3 +34,7 @@ incremental = true
 # UDP trackers) through a SOCKS5 proxy: see third_party/librqbit-dualstack-sockets/PATCHED.md.
 [patch.crates-io]
 librqbit-dualstack-sockets = { path = "third_party/librqbit-dualstack-sockets" }
+# librqbit itself, patched so a finished torrent's files aren't held open for
+# writing while it's shared (a downloaded installer can run): see
+# third_party/librqbit/PATCHED.md.
+librqbit = { path = "third_party/librqbit" }
