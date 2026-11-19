@@ -16,12 +16,13 @@ static OFFERS: AtomicU64 = AtomicU64::new(1);
 
 /// What the command line asks for: web links, which start right away, and
 /// magnet links and .torrent files (opened from the browser or Explorer),
-/// which ask which files to download first.
+/// which ask which files to download first. On macOS those come as events
+/// instead (open_events.rs).
 pub fn from_args() -> Vec<Request> {
     std::env::args().skip(1).filter_map(|arg| request_for(&arg)).collect()
 }
 
-fn request_for(arg: &str) -> Option<Request> {
+pub(crate) fn request_for(arg: &str) -> Option<Request> {
     if arg.starts_with("http://") || arg.starts_with("https://") {
         return Some(Request::Add(AddRequest {
             start: true,

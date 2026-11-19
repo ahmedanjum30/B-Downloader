@@ -53,7 +53,7 @@ With [Homebrew](https://brew.sh) on a Mac with Apple Silicon (M1 or later):
 brew install --cask ahmedanjum30/tap/b-downloader
 ```
 
-`brew upgrade` updates it. It keeps its list and settings in `~/Library/Application Support/B-Downloader` and sits in the menu bar when its window is closed. Not there yet: opening magnet links and .torrent files from the browser or Finder (add them in the Add download dialog instead).
+`brew upgrade` updates it. It keeps its list and settings in `~/Library/Application Support/B-Downloader` and sits in the menu bar when its window is closed. Magnet links and .torrent files open in it from the browser and Finder.
 
 To build it yourself instead (you need [Rust](https://rustup.rs/) and Xcode's command-line tools, `xcode-select --install`):
 

@@ -11,6 +11,8 @@ mod item;
 mod logging;
 mod memory;
 mod notify;
+#[cfg(target_os = "macos")]
+mod open_events;
 mod store;
 mod style;
 mod tray;
@@ -52,6 +54,9 @@ fn main() -> iced::Result {
     // Not fatal: without it only the browser extension can't reach the app.
     let _ = browser::register();
     notify::register();
+    // Magnet links and .torrent files from the browser or Finder.
+    #[cfg(target_os = "macos")]
+    open_events::install();
 
     // A daemon rather than one window: a download from the browser while the
     // app is in the tray gets its dialog in a window of its own. The app opens

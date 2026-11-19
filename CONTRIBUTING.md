@@ -52,7 +52,7 @@ brew install --cask local/bdl-test/b-downloader
 
 To check from Windows that the code compiles for macOS: `rustup target add aarch64-apple-darwin`, then `cargo clippy --workspace --all-targets --target aarch64-apple-darwin -- -D warnings`.
 
-What differs on macOS: a Unix socket in `$TMPDIR` instead of the named pipe, the bridge's manifests in `~/Library/Application Support/<browser>/NativeMessagingHosts/` instead of the registry, the system proxy from `scutil --proxy`, notifications through `osascript`, sleep with `pmset sleepnow`, and the Metal renderer instead of DirectX 12.
+What differs on macOS: a Unix socket in `$TMPDIR` instead of the named pipe, the bridge's manifests in `~/Library/Application Support/<browser>/NativeMessagingHosts/` instead of the registry, the system proxy from `scutil --proxy`, magnet links and .torrent files as Apple Events (`crates/app/src/open_events.rs`, declared in the `Info.plist` by `scripts/macos-app.sh`) instead of command-line arguments, notifications through `osascript`, sleep with `pmset sleepnow`, and the Metal renderer instead of DirectX 12.
 
 ### Browser extension
 

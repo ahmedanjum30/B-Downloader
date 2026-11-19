@@ -42,6 +42,11 @@ windows-sys = { version = "0.61", features = ["Win32_Foundation", "Win32_Storage
 [target.'cfg(target_os = "macos")'.dependencies]
 # The GPU renderer's Metal back-end, the one macOS has.
 wgpu = { version = "27", default-features = false, features = ["metal"] }
+# Receiving magnet links and .torrent files opened from the browser or Finder
+# (open_events.rs). The versions the clipboard and tray libraries already use.
+objc2 = "0.6"
+objc2-foundation = { version = "0.3", default-features = false, features = ["std", "NSAppleEventDescriptor", "NSAppleEventManager", "NSNotification", "NSString", "NSURL"] }
+objc2-app-kit = { version = "0.3", default-features = false, features = ["std", "NSApplication", "NSResponder"] }
 
 [dev-dependencies]
 tokio = { version = "1.53", features = ["macros", "rt-multi-thread"] }

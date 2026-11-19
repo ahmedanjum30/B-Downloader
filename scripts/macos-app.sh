@@ -69,6 +69,58 @@ cat > "$app/Contents/Info.plist" <<EOF
     <string>public.app-category.utilities</string>
     <key>NSHighResolutionCapable</key>
     <true/>
+    <key>CFBundleURLTypes</key>
+    <array>
+        <dict>
+            <key>CFBundleURLName</key>
+            <string>Magnet link</string>
+            <key>CFBundleURLSchemes</key>
+            <array>
+                <string>magnet</string>
+            </array>
+        </dict>
+    </array>
+    <key>CFBundleDocumentTypes</key>
+    <array>
+        <dict>
+            <key>CFBundleTypeName</key>
+            <string>BitTorrent file</string>
+            <key>CFBundleTypeRole</key>
+            <string>Viewer</string>
+            <key>CFBundleTypeIconFile</key>
+            <string>bdownloader</string>
+            <key>LSHandlerRank</key>
+            <string>Default</string>
+            <key>LSItemContentTypes</key>
+            <array>
+                <string>org.bittorrent.torrent</string>
+            </array>
+        </dict>
+    </array>
+    <key>UTImportedTypeDeclarations</key>
+    <array>
+        <dict>
+            <key>UTTypeIdentifier</key>
+            <string>org.bittorrent.torrent</string>
+            <key>UTTypeDescription</key>
+            <string>BitTorrent file</string>
+            <key>UTTypeConformsTo</key>
+            <array>
+                <string>public.data</string>
+            </array>
+            <key>UTTypeTagSpecification</key>
+            <dict>
+                <key>public.filename-extension</key>
+                <array>
+                    <string>torrent</string>
+                </array>
+                <key>public.mime-type</key>
+                <array>
+                    <string>application/x-bittorrent</string>
+                </array>
+            </dict>
+        </dict>
+    </array>
     <key>NSHumanReadableCopyright</key>
     <string>Ahmad Anjum</string>
 </dict>
