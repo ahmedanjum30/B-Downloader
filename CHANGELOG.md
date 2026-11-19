@@ -6,15 +6,15 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+## [1.3.8] - 2026-11-19
+
 ### Added
-- macOS version (being tested, built from source with
-  `scripts/macos-app.sh`): downloads, torrents, the browser extension, the
-  menu-bar icon, notifications, sleep or shut down when done, and torrents
-  through the system's SOCKS5 proxy. Not yet: opening magnet links and
-  .torrent files from the browser or Finder, and updates.
-- Homebrew install for Apple Silicon Macs:
-  `brew install --cask ahmedanjum30/tap/b-downloader`. Each release builds
-  the Mac app and updates the cask, so `brew upgrade` updates it.
+- macOS version for Apple Silicon (M1 and later, macOS 11 or later),
+  installed with Homebrew: `brew install --cask ahmedanjum30/tap/b-downloader`,
+  and updated with `brew upgrade`. Downloads, torrents, the browser
+  extension, the menu-bar icon, notifications, sleep or shut down when done,
+  and torrents through the system's SOCKS5 proxy. Not yet: opening magnet
+  links and .torrent files from the browser or Finder.
 
 ### Fixed
 - macOS: downloads go to the Downloads folder by default. They failed with
