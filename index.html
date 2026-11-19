@@ -107,6 +107,11 @@
   .brew button { flex: none; border: 1px solid var(--line); background: var(--bg-soft); color: var(--fg); border-radius: 7px; padding: 5px 10px; font: inherit; font-size: 13.5px; cursor: pointer; }
   .brew button:hover { border-color: var(--accent); }
   @media (max-width: 640px) { .brew { flex-wrap: wrap; justify-content: center; } }
+  /* On a Mac, Homebrew is the way to install: the command takes the main button's place. */
+  .brew.featured { margin: 0; padding: 10px 10px 10px 18px; font-size: 16px; border-color: color-mix(in srgb, var(--accent) 55%, var(--line)); box-shadow: 0 6px 24px color-mix(in srgb, var(--accent) 25%, transparent); }
+  .brew.featured code { font-size: 15.5px; }
+  .brew.featured button { background: var(--grad); color: var(--accent-fg); border: 0; padding: 8px 14px; font-weight: 600; }
+  .alt { margin: 12px 0 0; color: var(--muted); font-size: 14.5px; }
 </style>
 </head>
 <body>
@@ -142,6 +147,7 @@
       </div>
       <p class="meta">Windows 10 and 11 · macOS 11 or later on Apple Silicon · About 5 MB · No admin rights needed · Free for personal use</p>
       <div class="brew" id="mac"><span>On a Mac:</span><code id="brew-command">brew install --cask ahmedanjum30/tap/b-downloader</code><button type="button" id="brew-copy">Copy</button></div>
+      <p class="alt" id="mac-zip" hidden>Not using Homebrew? <a id="mac-zip-link" href="https://github.com/ahmedanjum30/B-Downloader/releases/latest">Download the app</a> (.zip) and drag it to Applications.</p>
       <div class="shot"><img src="images/app.png" width="1400" height="900" alt="BDownloader with two files downloading over 8 connections each, then the downloads that need you (one paused, two failed, one offering Refresh link), a queued download and finished ones"></div>
     </div>
   </div>
@@ -270,7 +276,7 @@
             <img src="https://get.microsoft.com/images/en-us%20dark.svg" width="200" height="48" alt="Get it from Microsoft">
           </picture>
         </a>
-        <a class="button secondary" href="#mac">Get it for Mac</a>
+        <a class="button secondary" id="get-mac" href="#mac">Get it for Mac</a>
         <a class="button secondary" href="https://www.patreon.com/cw/ahmedanjum30">Support on Patreon</a>
       </div>
     </div>
@@ -285,25 +291,41 @@
 </footer>
 
 <script>
-  // On a Mac (Apple Silicon only, but browsers don't tell which), the buttons
-  // offer the Mac app; elsewhere, the Windows installer.
+  // On a Mac (Apple Silicon only, but browsers don't tell which), Homebrew
+  // is the way to install: its command becomes the main button, and the app's
+  // zip a link under it. Elsewhere, the Windows installer.
   const mac = /mac/i.test((navigator.userAgentData && navigator.userAgentData.platform) || navigator.platform || "");
-  const label = mac ? "Download for Mac" : "Download for Windows";
-  document.getElementById("download-label").textContent = label;
-  document.getElementById("download-bottom").textContent = label;
-  // The Microsoft Store is Windows only.
-  if (mac) document.querySelectorAll(".store").forEach((badge) => (badge.hidden = true));
+  const bottom = document.getElementById("download-bottom");
+  if (mac) {
+    const brew = document.getElementById("mac");
+    brew.classList.add("featured");
+    brew.querySelector("span").textContent = "Install with Homebrew:";
+    document.getElementById("download").replaceWith(brew);
+    const zip = document.getElementById("mac-zip");
+    zip.hidden = false;
+    document.querySelector(".hero .cta").after(zip);
+    // The Microsoft Store is Windows only.
+    document.querySelectorAll(".store").forEach((badge) => (badge.hidden = true));
+    document.getElementById("get-mac").hidden = true;
+    bottom.textContent = "Install with Homebrew";
+    bottom.href = "#mac";
+  }
 
   // The newest download and its version, straight from GitHub. Without it,
-  // the buttons still lead to the latest release.
+  // the links still lead to the latest release.
   fetch("https://api.github.com/repos/ahmedanjum30/B-Downloader/releases/latest")
     .then((r) => (r.ok ? r.json() : null))
     .then((release) => {
       const name = mac ? /^B-Downloader-.*-macos\.zip$/ : /^BDownloader-Setup-.*\.exe$/;
       const asset = release && release.assets.find((a) => name.test(a.name));
       if (!asset) return;
-      for (const id of ["download", "download-bottom"]) document.getElementById(id).href = asset.browser_download_url;
-      document.getElementById("download-label").textContent = label + " · " + release.tag_name;
+      if (mac) {
+        document.getElementById("mac-zip-link").href = asset.browser_download_url;
+        return;
+      }
+      document.getElementById("download").href = asset.browser_download_url;
+      bottom.href = asset.browser_download_url;
+      document.getElementById("download-label").textContent = "Download for Windows · " + release.tag_name;
     })
     .catch(() => {});
 
