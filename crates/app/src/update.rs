@@ -38,7 +38,7 @@ async fn check_against(engine: Engine, current: &str) -> Result<Option<Release>,
     if !is_newer(&version, current) {
         return Ok(None);
     }
-    let installer_name = format!("BDownloader-Setup-{version}.exe");
+    let installer_name = installer_name(&version);
     let sums = engine
         .get_text(&format!("{REPO}/releases/download/{tag}/SHA256SUMS.txt"), 64 * 1024)
         .await
@@ -51,6 +51,16 @@ async fn check_against(engine: Engine, current: &str) -> Result<Option<Release>,
         page,
         sha256,
     }))
+}
+
+/// The release file for this platform. On macOS a release counts only once
+/// its Mac build is there (the app is updated by Homebrew, or by hand).
+fn installer_name(version: &str) -> String {
+    if cfg!(target_os = "macos") {
+        format!("B-Downloader-{version}-macos.zip")
+    } else {
+        format!("BDownloader-Setup-{version}.exe")
+    }
 }
 
 /// Compares dotted version numbers: `0.1.10` is newer than `0.1.9`.
@@ -150,7 +160,7 @@ mod tests {
         let engine = Engine::new().unwrap();
         let release = check_against(engine.clone(), "0.0.1").await.unwrap().expect("a newer release");
         println!("{release:?}");
-        assert!(release.installer_url.ends_with(".exe"));
+        assert!(release.installer_url.ends_with(&release.installer_name));
         assert_eq!(release.sha256.len(), 64);
         assert_eq!(check_against(engine, "999.0.0").await.unwrap(), None);
     }

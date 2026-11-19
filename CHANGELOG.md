@@ -12,6 +12,15 @@ All notable changes to this project are documented here. The format follows
   menu-bar icon, notifications, sleep or shut down when done, and torrents
   through the system's SOCKS5 proxy. Not yet: opening magnet links and
   .torrent files from the browser or Finder, and updates.
+- Homebrew install for Apple Silicon Macs:
+  `brew install --cask ahmedanjum30/tap/b-downloader`. Each release builds
+  the Mac app and updates the cask, so `brew upgrade` updates it.
+
+### Fixed
+- macOS: downloads go to the Downloads folder by default. They failed with
+  "Read-only file system" when the app was opened from Finder.
+- macOS: bug reports name the macOS version and leave out the home folder.
+- macOS: the update notice only shows once a release has a Mac build.
 
 ## [1.3.7] - 2026-11-18
 

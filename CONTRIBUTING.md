@@ -41,6 +41,15 @@ The app icon is drawn by `scripts/app-icon.ps1` into `crates/app/assets` (includ
 
 `scripts/macos-app.sh` builds `dist/B-Downloader.app` and zips it as `dist/B-Downloader-<version>-macos.zip`: for Apple Silicon and Intel together (built for both and joined with `lipo`), or with `--native` only for the Mac it runs on. The app is signed ad hoc. CI builds the Apple Silicon app on every push to `main`; the run's artifacts have the zip.
 
+Homebrew: each release also builds the Apple Silicon zip, adds it to the release, and writes the cask (`scripts/homebrew-cask.sh`) to [ahmedanjum30/homebrew-tap](https://github.com/ahmedanjum30/homebrew-tap) with the `HOMEBREW_TAP_TOKEN` secret. The cask removes the quarantine flag after installing, since an ad hoc signed app isn't notarized and Gatekeeper would refuse it; that's also why it's in our own tap rather than homebrew/cask. To test a cask locally from a zip you built:
+
+```sh
+brew tap-new --no-git local/bdl-test
+URL="file://$PWD/dist/B-Downloader-<version>-macos.zip" sh scripts/homebrew-cask.sh <version> dist/B-Downloader-<version>-macos.zip \
+  > "$(brew --repository local/bdl-test)/Casks/b-downloader.rb"
+brew install --cask local/bdl-test/b-downloader
+```
+
 To check from Windows that the code compiles for macOS: `rustup target add aarch64-apple-darwin`, then `cargo clippy --workspace --all-targets --target aarch64-apple-darwin -- -D warnings`.
 
 What differs on macOS: a Unix socket in `$TMPDIR` instead of the named pipe, the bridge's manifests in `~/Library/Application Support/<browser>/NativeMessagingHosts/` instead of the registry, the system proxy from `scutil --proxy`, notifications through `osascript`, sleep with `pmset sleepnow`, and the Metal renderer instead of DirectX 12.

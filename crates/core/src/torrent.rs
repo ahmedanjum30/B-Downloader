@@ -669,9 +669,10 @@ mod tests {
             }]
         );
         assert_eq!(info.info_hash.len(), 40);
-        let (output, path) = locations(&info, Path::new(r"C:\Downloads"));
-        assert_eq!(output, Path::new(r"C:\Downloads"));
-        assert_eq!(path, Path::new(r"C:\Downloads\hello.txt"));
+        let downloads = Path::new("Downloads");
+        let (output, path) = locations(&info, downloads);
+        assert_eq!(output, downloads);
+        assert_eq!(path, downloads.join("hello.txt"));
     }
 
     #[test]

@@ -104,8 +104,13 @@ fn recent_log() -> String {
     let text = std::fs::read_to_string(path).unwrap_or_default();
     let lines: Vec<&str> = text.lines().collect();
     let tail = lines[lines.len().saturating_sub(LOG_LINES)..].join("\n");
-    match std::env::var("USERPROFILE") {
-        Ok(home) if !home.is_empty() => tail.replace(&home, "%USERPROFILE%"),
+    let (var, placeholder) = if cfg!(windows) {
+        ("USERPROFILE", "%USERPROFILE%")
+    } else {
+        ("HOME", "~")
+    };
+    match std::env::var(var) {
+        Ok(home) if !home.is_empty() => tail.replace(&home, placeholder),
         _ => tail,
     }
 }
@@ -121,13 +126,13 @@ fn system_info() -> String {
     format!(
         "BDownloader {} ({install}) on {}",
         env!("CARGO_PKG_VERSION"),
-        windows_version().unwrap_or_else(|| "Windows".to_owned())
+        os_version().unwrap_or_else(|| if cfg!(windows) { "Windows" } else { "macOS" }.to_owned())
     )
 }
 
 /// "Windows 11 24H2 (build 26100)", from the registry.
 #[cfg(windows)]
-fn windows_version() -> Option<String> {
+fn os_version() -> Option<String> {
     use winreg::RegKey;
     use winreg::enums::HKEY_LOCAL_MACHINE;
 
@@ -145,9 +150,19 @@ fn windows_version() -> Option<String> {
     Some(format!("{name} {release} (build {build})").replace("  ", " "))
 }
 
+/// "macOS 15.1 (24B83)", from `sw_vers`.
 #[cfg(not(windows))]
-fn windows_version() -> Option<String> {
-    None
+fn os_version() -> Option<String> {
+    let field = |flag: &str| -> Option<String> {
+        let out = std::process::Command::new("/usr/bin/sw_vers").arg(flag).output().ok()?;
+        let text = String::from_utf8(out.stdout).ok()?.trim().to_owned();
+        (out.status.success() && !text.is_empty()).then_some(text)
+    };
+    let version = field("-productVersion")?;
+    Some(match field("-buildVersion") {
+        Some(build) => format!("macOS {version} ({build})"),
+        None => format!("macOS {version}"),
+    })
 }
 
 /// Percent-encodes everything but letters, digits and `-_.~`.

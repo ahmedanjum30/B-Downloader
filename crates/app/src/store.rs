@@ -91,8 +91,12 @@ impl Settings {
     }
 }
 
+/// The user's Downloads folder. `USERPROFILE` on Windows, `HOME` on macOS:
+/// without it the fallback, `.`, is `/` for an app opened from Finder.
 pub fn default_download_dir() -> PathBuf {
-    std::env::var_os("USERPROFILE")
+    let home = if cfg!(windows) { "USERPROFILE" } else { "HOME" };
+    std::env::var_os(home)
+        .filter(|home| !home.is_empty())
         .map(|home| PathBuf::from(home).join("Downloads"))
         .unwrap_or_else(|| PathBuf::from("."))
 }
@@ -247,7 +251,12 @@ fn save<T: Serialize>(name: &str, value: &T) -> io::Result<()> {
 }
 
 pub fn load_settings() -> Settings {
-    load("settings.json")
+    let mut settings: Settings = load("settings.json");
+    // Saved by the first Mac builds, which didn't find the home folder.
+    if settings.download_dir.is_relative() {
+        settings.download_dir = default_download_dir();
+    }
+    settings
 }
 
 pub fn save_settings(settings: &Settings) -> io::Result<()> {

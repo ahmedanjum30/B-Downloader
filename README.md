@@ -9,7 +9,7 @@
 
 Free for personal and other non-commercial use. See [License](#license).
 
-**[Download the latest version](https://github.com/ahmedanjum30/B-Downloader/releases/latest)** for Windows 10 and 11, or get it from the [Microsoft Store](https://apps.microsoft.com/detail/xp89fxjjf4j45w). A macOS version (macOS 11 or later, Apple Silicon and Intel) is being tested; until it's released, you can [build it yourself](#macos).
+**[Download the latest version](https://github.com/ahmedanjum30/B-Downloader/releases/latest)** for Windows 10 and 11, or get it from the [Microsoft Store](https://apps.microsoft.com/detail/xp89fxjjf4j45w). On a Mac with Apple Silicon (M1 or later, macOS 11 or later), install it with [Homebrew](#macos).
 
 ## Features
 
@@ -47,7 +47,15 @@ To add the browser extension, open **Browser extension** in BDownloader and foll
 
 ### macOS
 
-The macOS version isn't released yet. To try it, build the app on your Mac (you need [Rust](https://rustup.rs/) and Xcode's command-line tools, `xcode-select --install`):
+With [Homebrew](https://brew.sh) on a Mac with Apple Silicon (M1 or later):
+
+```sh
+brew install --cask ahmedanjum30/tap/b-downloader
+```
+
+`brew upgrade` updates it. It keeps its list and settings in `~/Library/Application Support/B-Downloader` and sits in the menu bar when its window is closed. Not there yet: opening magnet links and .torrent files from the browser or Finder (add them in the Add download dialog instead).
+
+To build it yourself instead (you need [Rust](https://rustup.rs/) and Xcode's command-line tools, `xcode-select --install`):
 
 ```sh
 git clone https://github.com/ahmedanjum30/B-Downloader.git
@@ -55,7 +63,7 @@ cd B-Downloader
 sh scripts/macos-app.sh --native   # only for this Mac; leave out --native for Apple Silicon and Intel
 ```
 
-This makes `dist/B-Downloader.app`; drag it to Applications. It's signed ad hoc, not with an Apple Developer ID, so open it the first time with a right-click > **Open**, then **Open**. It keeps its list and settings in `~/Library/Application Support/B-Downloader` and sits in the menu bar when its window is closed. Not there yet: opening magnet links and .torrent files from the browser or Finder (add them in the Add download dialog instead), and updates (rebuild to update). A Homebrew install is planned.
+This makes `dist/B-Downloader.app`; drag it to Applications. It's signed ad hoc, not with an Apple Developer ID, so open it the first time with a right-click > **Open**, then **Open**.
 
 Questions or ideas? Ask in [Discussions](https://github.com/ahmedanjum30/B-Downloader/discussions). Found a bug? Open an [issue](https://github.com/ahmedanjum30/B-Downloader/issues).
 
