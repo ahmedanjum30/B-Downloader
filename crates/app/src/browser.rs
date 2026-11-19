@@ -19,17 +19,24 @@ pub enum Browser {
     Opera,
     Vivaldi,
     Firefox,
+    /// Shown on macOS only, to say the extension isn't there yet.
+    Safari,
 }
 
 impl Browser {
-    pub const ALL: [Browser; 6] = [
-        Browser::Chrome,
-        Browser::Edge,
-        Browser::Brave,
-        Browser::Opera,
-        Browser::Vivaldi,
-        Browser::Firefox,
-    ];
+    /// The dialog's tabs: Safari too on macOS.
+    pub fn tabs() -> &'static [Browser] {
+        &[
+            Browser::Chrome,
+            Browser::Edge,
+            Browser::Brave,
+            Browser::Opera,
+            Browser::Vivaldi,
+            Browser::Firefox,
+            #[cfg(target_os = "macos")]
+            Browser::Safari,
+        ]
+    }
 
     pub fn name(self) -> &'static str {
         match self {
@@ -39,6 +46,7 @@ impl Browser {
             Browser::Opera => "Opera",
             Browser::Vivaldi => "Vivaldi",
             Browser::Firefox => "Firefox",
+            Browser::Safari => "Safari",
         }
     }
 
@@ -52,6 +60,7 @@ impl Browser {
             Browser::Opera => "opera://extensions",
             Browser::Vivaldi => "vivaldi://extensions",
             Browser::Firefox => "about:debugging#/runtime/this-firefox",
+            Browser::Safari => "",
         }
     }
 
@@ -68,6 +77,7 @@ impl Browser {
     pub fn store_page(self) -> Option<String> {
         match self {
             Browser::Firefox => Some(FIREFOX_STORE_PAGE.to_owned()),
+            Browser::Safari => None,
             Browser::Edge => (!EDGE_STORE_ID.is_empty()).then(|| format!("https://microsoftedge.microsoft.com/addons/detail/{EDGE_STORE_ID}")),
             _ => (!CHROME_STORE_ID.is_empty()).then(|| format!("https://chromewebstore.google.com/detail/{CHROME_STORE_ID}")),
         }
@@ -83,6 +93,7 @@ impl Browser {
             Browser::Opera => "opera.exe",
             Browser::Vivaldi => "vivaldi.exe",
             Browser::Firefox => "firefox.exe",
+            Browser::Safari => "safari.exe",
         }
     }
 
@@ -213,6 +224,7 @@ pub fn add_extension(browser: Browser) -> io::Result<()> {
         Browser::Opera => "Opera",
         Browser::Vivaldi => "Vivaldi",
         Browser::Firefox => "Firefox",
+        Browser::Safari => "Safari",
     };
     let opened = std::process::Command::new("open").args(["-a", app, &page]).status()?;
     if opened.success() {

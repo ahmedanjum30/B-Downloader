@@ -52,6 +52,7 @@ cask "b-downloader" do
   zap trash: [
     "~/B-Downloader",
     "~/Library/Application Support/B-Downloader",
+    "~/Library/Containers/com.ahmadanjum.bdownloader.safari",
     "~/Library/Application Support/BraveSoftware/Brave-Browser/NativeMessagingHosts/com.bdownloader.host.json",
     "~/Library/Application Support/Chromium/NativeMessagingHosts/com.bdownloader.host.json",
     "~/Library/Application Support/com.operasoftware.Opera/NativeMessagingHosts/com.bdownloader.host.json",

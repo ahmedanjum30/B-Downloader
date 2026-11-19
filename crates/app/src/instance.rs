@@ -82,7 +82,7 @@ pub fn listen() -> impl Stream<Item = Message> {
             // Open the next instance before reading, so a client arriving now finds it.
             let Ok(next) = ServerOptions::new().create(&name) else { return };
             let client = std::mem::replace(&mut server, next);
-            tokio::spawn(read_requests(client, output.clone()));
+            tokio::spawn(read_requests(client, output.clone(), Peer::App));
         }
     })
 }
@@ -109,7 +109,7 @@ pub fn listen() -> impl Stream<Item = Message> {
         };
         loop {
             match listener.accept().await {
-                Ok((client, _)) => drop(tokio::spawn(read_requests(client, output.clone()))),
+                Ok((client, _)) => drop(tokio::spawn(read_requests(client, output.clone(), Peer::App))),
                 Err(e) => {
                     log::warn!("stopped listening for the browser: {e}");
                     return;
@@ -119,10 +119,59 @@ pub fn listen() -> impl Stream<Item = Message> {
     })
 }
 
+/// Requests from the Safari extension's helper, as app messages: on the
+/// loopback port, from connections that start with the greeting.
+#[cfg(target_os = "macos")]
+pub fn listen_safari() -> impl Stream<Item = Message> {
+    use bdownloader_ipc::{SAFARI_GREETING, SAFARI_PORT};
+    use tokio::net::TcpListener;
+
+    iced::stream::channel(32, async |output: Sender<Message>| {
+        let listener = match TcpListener::bind((std::net::Ipv4Addr::LOCALHOST, SAFARI_PORT)).await {
+            Ok(listener) => listener,
+            Err(e) => {
+                log::warn!("can't listen for Safari on port {SAFARI_PORT}: {e}");
+                return;
+            }
+        };
+        loop {
+            let Ok((mut client, _)) = listener.accept().await else { continue };
+            let output = output.clone();
+            tokio::spawn(async move {
+                // The greeting, read a byte at a time so nothing after it is
+                // taken from the requests; a stalled or foreign client is dropped.
+                let greeting = async {
+                    let mut line = Vec::new();
+                    while line.len() <= SAFARI_GREETING.len() {
+                        let byte = client.read_u8().await.ok()?;
+                        if byte == b'\n' {
+                            return Some(line);
+                        }
+                        line.push(byte);
+                    }
+                    None
+                };
+                let line = tokio::time::timeout(std::time::Duration::from_secs(5), greeting).await.ok().flatten();
+                if line.as_deref() == Some(SAFARI_GREETING.as_bytes()) {
+                    read_requests(client, output, Peer::Browser).await;
+                }
+            });
+        }
+    })
+}
+
+/// Who's on the other end. The browser (Safari's helper; Chrome's and
+/// Firefox's bridge checks these itself) may only add web and magnet links.
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum Peer {
+    App,
+    Browser,
+}
+
 /// Reads one request per line. A download the browser is holding (one with
 /// `expect`) is answered on the same pipe once its link is checked, and only
 /// taken over if the app gets the same file.
-async fn read_requests(client: impl AsyncRead + AsyncWrite, mut output: Sender<Message>) {
+async fn read_requests(client: impl AsyncRead + AsyncWrite, mut output: Sender<Message>, from: Peer) {
     let (read, mut write) = tokio::io::split(client);
     let mut reader = BufReader::new(read.take(MAX_MESSAGE as u64));
     let mut line = Vec::new();
@@ -135,6 +184,16 @@ async fn read_requests(client: impl AsyncRead + AsyncWrite, mut output: Sender<M
         let Ok(request) = serde_json::from_slice::<Request>(&line) else {
             continue;
         };
+        let allowed = match &request {
+            Request::Add(add) => add.is_valid(),
+            Request::Hello { .. } | Request::Show => true,
+            // Files on this computer are opened from Finder, never by a web page.
+            Request::OpenTorrentFile { .. } => from == Peer::App,
+        };
+        if !allowed {
+            log::warn!("refused a request from the browser");
+            continue;
+        }
         if let Request::Add(add) = &request
             && let Some(expected) = &add.expect
         {

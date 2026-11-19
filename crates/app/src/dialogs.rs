@@ -840,7 +840,7 @@ pub fn extension<'a>(browser: Browser, connected: bool, copied: Option<&str>) ->
     .style(style::panel);
 
     // One tab per browser; the steps below are for the chosen one.
-    let tabs = row(Browser::ALL.map(|b| {
+    let tabs = row(Browser::tabs().iter().map(|&b| {
         button(text(b.name()).size(13).width(Fill).center())
             .padding([7, 4])
             .width(Fill)
@@ -860,6 +860,31 @@ pub fn extension<'a>(browser: Browser, connected: bool, copied: Option<&str>) ->
         .spacing(12)
         .align_y(Center)
     };
+    // Safari: the extension comes inside the app; Safari only has to allow it.
+    // It isn't signed by Apple yet, so Safari takes it only with "Allow
+    // unsigned extensions", which it turns off whenever it quits.
+    if browser == Browser::Safari {
+        let body = column![
+            status,
+            muted("How to add it").size(13).font(SEMIBOLD),
+            container(tabs).padding(4).style(style::panel),
+            step("1", "In Safari, open Settings, then Advanced, and turn on Show features for web developers."),
+            step("2", "Open the Developer tab and turn on Allow unsigned extensions. Safari asks for your Mac's password."),
+            step("3", "Open the Extensions tab and turn on B-Downloader. Allow it on all websites."),
+            muted("Safari turns Allow unsigned extensions off when it quits, until B-Downloader is signed by Apple: after restarting Safari, repeat step 2.").size(13),
+            muted("In Safari, downloads don't come to B-Downloader by themselves: right-click a link and choose Download with B-Downloader, or use the Download this video bar.").size(13),
+        ]
+        .spacing(12);
+        let footer = row![
+            space().width(Fill),
+            button(text("Close").size(14))
+                .padding([10, 18])
+                .style(style::secondary)
+                .on_press(Message::CloseModal),
+        ];
+        return frame("Browser extension", body.into(), footer.into());
+    }
+
     let mut body = column![
         status,
         muted("What it does").size(13).font(SEMIBOLD),

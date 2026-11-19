@@ -54,6 +54,10 @@ To check from Windows that the code compiles for macOS: `rustup target add aarch
 
 What differs on macOS: a Unix socket in `$TMPDIR` instead of the named pipe, the bridge's manifests in `~/Library/Application Support/<browser>/NativeMessagingHosts/` instead of the registry, the system proxy from `scutil --proxy`, magnet links and .torrent files as Apple Events (`crates/app/src/open_events.rs`, declared in the `Info.plist` by `scripts/macos-app.sh`) instead of command-line arguments, notifications through `osascript`, sleep with `pmset sleepnow`, and the Metal renderer instead of DirectX 12.
 
+### Safari
+
+The Safari extension is a helper inside the app (`B-Downloader.app/Contents/PlugIns/B-Downloader Safari.appex`) that `scripts/macos-app.sh` compiles from `crates/app/safari/SafariWebExtensionHandler.swift` with `swiftc` (Xcode's command-line tools), together with the files in `extension`. Safari passes the extension's messages to the helper, which runs in a sandbox and so can't use the app's socket: it connects to the app on `127.0.0.1:47381` (`SAFARI_PORT` in `crates/ipc`) instead, starting each connection with the line `BDOWNLOADER/1`. The app drops connections without it, so web pages, which can also reach the port, can't send it anything. Until the app is signed with an Apple Developer ID, Safari only loads the extension with Settings > Developer > Allow unsigned extensions.
+
 ### Browser extension
 
 1. Build the workspace (`cargo build`), so `bdl-host.exe` sits next to `BDownloader.exe`, and start the app once. At startup it registers the bridge with every Chromium browser that has been used on the PC (`HKCU\Software\<browser>\NativeMessagingHosts\com.bdownloader.host`; on macOS, `com.bdownloader.host.json` in each browser's `NativeMessagingHosts` folder).

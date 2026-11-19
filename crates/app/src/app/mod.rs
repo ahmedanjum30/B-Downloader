@@ -568,7 +568,7 @@ impl App {
             }),
         ];
         #[cfg(target_os = "macos")]
-        subscriptions.push(Subscription::run(crate::open_events::events));
+        subscriptions.extend([Subscription::run(crate::open_events::events), Subscription::run(instance::listen_safari)]);
         if self.items.iter().any(|i| i.handle.is_some()) || matches!(self.update, Update::Downloading { .. }) {
             subscriptions.push(time::every(REFRESH).map(|_| Message::Tick));
         }

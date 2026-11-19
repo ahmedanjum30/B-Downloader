@@ -117,7 +117,11 @@ function hello() {
 // the download anywhere or asks where to save it. The download waits here
 // while BDownloader checks the link; if BDownloader takes it, it's cancelled
 // and never appears.
-if (chrome.downloads.onDeterminingFilename) {
+// Safari has no downloads API: there, downloads come only from the menu and
+// the video bar.
+if (!chrome.downloads) {
+  // Nothing to catch.
+} else if (chrome.downloads.onDeterminingFilename) {
   chrome.downloads.onDeterminingFilename.addListener((item, suggest) => {
     // Our own downloads stay in the browser.
     if (item.byExtensionId === chrome.runtime.id) return false;

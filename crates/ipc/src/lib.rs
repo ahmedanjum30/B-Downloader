@@ -11,6 +11,18 @@ use serde::{Deserialize, Serialize};
 /// Largest message the app accepts. Cookies can be long, but not this long.
 pub const MAX_MESSAGE: usize = 1024 * 1024;
 
+/// The Safari extension's way in, on macOS. Safari passes the extension's
+/// messages to a helper inside the app (`crates/app/safari`), which runs in a
+/// sandbox that can't reach the app's socket; so the app also listens on this
+/// port, on the loopback address only.
+pub const SAFARI_PORT: u16 = 47_381;
+
+/// The line each connection on [`SAFARI_PORT`] starts with. A web page can
+/// send a request to the port too, but it starts with an HTTP request line
+/// ("POST / HTTP/1.1"), which a page can't change; the app drops connections
+/// that don't start with this.
+pub const SAFARI_GREETING: &str = "BDOWNLOADER/1";
+
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(tag = "type", rename_all = "snake_case")]
 pub enum Request {

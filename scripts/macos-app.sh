@@ -127,8 +127,66 @@ cat > "$app/Contents/Info.plist" <<EOF
 </plist>
 EOF
 
-# Ad hoc: the bridge first, then the app around it.
+# The Safari extension: a helper Safari runs for the extension's messages
+# (crates/app/safari), with the extension's files. Safari finds it in the
+# app's PlugIns once the app is in Applications.
+appex="$app/Contents/PlugIns/B-Downloader Safari.appex"
+mkdir -p "$appex/Contents/MacOS" "$appex/Contents/Resources"
+if [ "${1:-}" = "--native" ]; then
+    swift_targets="$(uname -m)-apple-macos11"
+else
+    swift_targets="arm64-apple-macos11 x86_64-apple-macos11"
+fi
+helpers=""
+for target in $swift_targets; do
+    xcrun swiftc -O -parse-as-library -application-extension -module-name SafariExtension \
+        -target "$target" -framework SafariServices -framework AppKit \
+        -Xlinker -e -Xlinker _NSExtensionMain \
+        crates/app/safari/SafariWebExtensionHandler.swift -o "target/safari-$target"
+    helpers="$helpers target/safari-$target"
+done
+# shellcheck disable=SC2086
+lipo -create -output "$appex/Contents/MacOS/B-Downloader Safari" $helpers
+cp -R extension/. "$appex/Contents/Resources/"
+cat > "$appex/Contents/Info.plist" <<EOF
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>CFBundleIdentifier</key>
+    <string>com.ahmadanjum.bdownloader.safari</string>
+    <key>CFBundleName</key>
+    <string>B-Downloader</string>
+    <key>CFBundleDisplayName</key>
+    <string>B-Downloader</string>
+    <key>CFBundleExecutable</key>
+    <string>B-Downloader Safari</string>
+    <key>CFBundlePackageType</key>
+    <string>XPC!</string>
+    <key>CFBundleShortVersionString</key>
+    <string>$version</string>
+    <key>CFBundleVersion</key>
+    <string>$version</string>
+    <key>CFBundleInfoDictionaryVersion</key>
+    <string>6.0</string>
+    <key>LSMinimumSystemVersion</key>
+    <string>11.0</string>
+    <key>NSHumanReadableDescription</key>
+    <string>Sends downloads and videos from Safari to B-Downloader.</string>
+    <key>NSExtension</key>
+    <dict>
+        <key>NSExtensionPointIdentifier</key>
+        <string>com.apple.Safari.web-extension</string>
+        <key>NSExtensionPrincipalClass</key>
+        <string>SafariExtension.SafariWebExtensionHandler</string>
+    </dict>
+</dict>
+</plist>
+EOF
+
+# Ad hoc: the bridge and the Safari helper first, then the app around them.
 codesign --force --sign - "$app/Contents/MacOS/bdl-host"
+codesign --force --sign - --entitlements crates/app/safari/entitlements.plist "$appex"
 codesign --force --sign - "$app"
 codesign --verify --strict "$app"
 
