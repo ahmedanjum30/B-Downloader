@@ -6,6 +6,8 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+## [1.4.0] - 2026-11-19
+
 ### Fixed
 - macOS: clicking B-Downloader in the Dock brings its window back after it
   was closed to the menu bar. Nothing happened before.
