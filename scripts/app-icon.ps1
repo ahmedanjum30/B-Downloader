@@ -1,5 +1,6 @@
 # Draws the app icon into crates\app\assets:
 #   bdownloader.ico  - for the exe, shortcuts and the installer (16 to 256 px)
+#   bdownloader.icns - the macOS app's icon (128 to 1024 px)
 #   icon-64.rgba     - raw 64x64 RGBA pixels for the window's title bar and taskbar
 # and the browser extension's icons, extension\icons\16, 32, 48 and 128.png.
 #
@@ -10,13 +11,14 @@ Add-Type -AssemblyName System.Drawing
 $out = Join-Path (Split-Path $PSScriptRoot -Parent) 'crates\app\assets'
 New-Item -ItemType Directory -Force $out | Out-Null
 
-function Draw-Icon([int]$size) {
+function Draw-Icon([int]$size, [switch]$Mac) {
     $bmp = New-Object Drawing.Bitmap $size, $size, ([Drawing.Imaging.PixelFormat]::Format32bppArgb)
     $g = [Drawing.Graphics]::FromImage($bmp)
     $g.SmoothingMode = 'AntiAlias'
     $g.Clear([Drawing.Color]::Transparent)
     # Small sizes fill the square; larger ones keep a little margin like other Windows icons.
-    $pad = if ($size -le 32) { 0 } else { $size / 32 }
+    # macOS icons keep 100 of every 1024 pixels free on each side, as Apple's grid has it.
+    $pad = if ($Mac) { $size * 100 / 1024 } elseif ($size -le 32) { 0 } else { $size / 32 }
     $box = $size - 2 * $pad
     $s = $box / 24.0
     $r = 6 * $s
@@ -72,6 +74,26 @@ foreach ($size in 16, 32, 48, 128) {
     $bmp.Save((Join-Path $extIcons "$size.png"), [Drawing.Imaging.ImageFormat]::Png)
     $bmp.Dispose()
 }
+
+# The macOS app icon: an .icns holding one PNG per size (ic07 = 128 px up to ic10 = 1024 px).
+$icns = New-Object IO.MemoryStream
+$entries = foreach ($pair in @(@('ic07', 128), @('ic08', 256), @('ic09', 512), @('ic10', 1024))) {
+    $bmp = Draw-Icon $pair[1] -Mac
+    $ms = New-Object IO.MemoryStream
+    $bmp.Save($ms, [Drawing.Imaging.ImageFormat]::Png)
+    $bmp.Dispose()
+    , @($pair[0], $ms.ToArray())
+}
+function Write-BigEndian([IO.Stream]$stream, [uint32]$value) {
+    $bytes = [BitConverter]::GetBytes($value); [Array]::Reverse($bytes); $stream.Write($bytes, 0, 4)
+}
+$total = 8; foreach ($e in $entries) { $total += 8 + $e[1].Length }
+$icns.Write([Text.Encoding]::ASCII.GetBytes('icns'), 0, 4); Write-BigEndian $icns $total
+foreach ($e in $entries) {
+    $icns.Write([Text.Encoding]::ASCII.GetBytes($e[0]), 0, 4); Write-BigEndian $icns (8 + $e[1].Length)
+    $icns.Write($e[1], 0, $e[1].Length)
+}
+[IO.File]::WriteAllBytes((Join-Path $out 'bdownloader.icns'), $icns.ToArray())
 
 # Raw RGBA (GDI+ stores BGRA, so swap red and blue).
 $bmp = Draw-Icon 64

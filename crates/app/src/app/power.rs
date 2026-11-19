@@ -122,12 +122,27 @@ fn shut_down() -> std::io::Result<()> {
         .map(drop)
 }
 
-#[cfg(not(windows))]
+#[cfg(target_os = "macos")]
 fn sleep() -> std::io::Result<()> {
-    Err(std::io::Error::other("only on Windows"))
+    std::process::Command::new("/usr/bin/pmset").arg("sleepnow").spawn().map(drop)
 }
 
-#[cfg(not(windows))]
+/// A normal shutdown, as from the Apple menu: apps with unsaved work can
+/// still hold it up. macOS asks once to let B-Downloader control System Events.
+#[cfg(target_os = "macos")]
 fn shut_down() -> std::io::Result<()> {
-    Err(std::io::Error::other("only on Windows"))
+    std::process::Command::new("/usr/bin/osascript")
+        .args(["-e", r#"tell application "System Events" to shut down"#])
+        .spawn()
+        .map(drop)
+}
+
+#[cfg(not(any(windows, target_os = "macos")))]
+fn sleep() -> std::io::Result<()> {
+    Err(std::io::Error::other("not on this system"))
+}
+
+#[cfg(not(any(windows, target_os = "macos")))]
+fn shut_down() -> std::io::Result<()> {
+    Err(std::io::Error::other("not on this system"))
 }

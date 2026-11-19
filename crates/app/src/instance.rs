@@ -7,8 +7,7 @@ use bdownloader_core::{Engine, ProbeInfo};
 use bdownloader_ipc::{AddRequest, Expected, MAX_MESSAGE, Reply, Request, pipe_name};
 use iced::futures::channel::mpsc::Sender;
 use iced::futures::{SinkExt, Stream};
-use tokio::io::{AsyncBufReadExt, AsyncReadExt, AsyncWriteExt, BufReader};
-use tokio::net::windows::named_pipe::{NamedPipeServer, ServerOptions};
+use tokio::io::{AsyncBufReadExt, AsyncRead, AsyncReadExt, AsyncWrite, AsyncWriteExt, BufReader};
 
 use crate::app::Message;
 
@@ -58,7 +57,10 @@ pub fn hand_over(requests: &[Request]) -> bool {
 }
 
 /// Requests from other processes, as app messages.
+#[cfg(windows)]
 pub fn listen() -> impl Stream<Item = Message> {
+    use tokio::net::windows::named_pipe::ServerOptions;
+
     iced::stream::channel(32, async |output: Sender<Message>| {
         let name = pipe_name();
         // `first_pipe_instance` fails if another copy already owns the pipe.
@@ -84,10 +86,42 @@ pub fn listen() -> impl Stream<Item = Message> {
     })
 }
 
+/// Requests from other processes, as app messages.
+#[cfg(unix)]
+pub fn listen() -> impl Stream<Item = Message> {
+    use tokio::net::UnixListener;
+
+    iced::stream::channel(32, async |output: Sender<Message>| {
+        let path = std::path::PathBuf::from(pipe_name());
+        // A copy that answers owns the socket; one that doesn't crashed and left it behind.
+        if std::os::unix::net::UnixStream::connect(&path).is_ok() {
+            log::warn!("another BDownloader owns the browser's connection; downloads from the browser won't reach this window");
+            return;
+        }
+        let _ = std::fs::remove_file(&path);
+        let listener = match UnixListener::bind(&path) {
+            Ok(listener) => listener,
+            Err(e) => {
+                log::warn!("can't listen for the browser at {}: {e}", path.display());
+                return;
+            }
+        };
+        loop {
+            match listener.accept().await {
+                Ok((client, _)) => drop(tokio::spawn(read_requests(client, output.clone()))),
+                Err(e) => {
+                    log::warn!("stopped listening for the browser: {e}");
+                    return;
+                }
+            }
+        }
+    })
+}
+
 /// Reads one request per line. A download the browser is holding (one with
 /// `expect`) is answered on the same pipe once its link is checked, and only
 /// taken over if the app gets the same file.
-async fn read_requests(client: NamedPipeServer, mut output: Sender<Message>) {
+async fn read_requests(client: impl AsyncRead + AsyncWrite, mut output: Sender<Message>) {
     let (read, mut write) = tokio::io::split(client);
     let mut reader = BufReader::new(read.take(MAX_MESSAGE as u64));
     let mut line = Vec::new();

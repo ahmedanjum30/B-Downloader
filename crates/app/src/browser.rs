@@ -74,6 +74,7 @@ impl Browser {
     }
 
     /// The browser's program, as Windows' "App Paths" knows it.
+    #[cfg(windows)]
     fn exe(self) -> &'static str {
         match self {
             Browser::Chrome => "chrome.exe",
@@ -111,6 +112,7 @@ pub const EXTENSION_IDS: &[&str] = &[
 
 /// Where each browser looks for native messaging hosts, under `HKEY_CURRENT_USER`,
 /// with the key that shows the browser has been used on this PC.
+#[cfg(windows)]
 const BROWSERS: &[(&str, &str)] = &[
     (r"Software\Google\Chrome", r"Software\Google\Chrome\NativeMessagingHosts"),
     (r"Software\Microsoft\Edge", r"Software\Microsoft\Edge\NativeMessagingHosts"),
@@ -133,12 +135,13 @@ fn exe_dir() -> Option<PathBuf> {
     Some(std::env::current_exe().ok()?.parent()?.to_owned())
 }
 
-/// The extension folder: next to the app when installed, or in the source
-/// tree for development builds.
+/// The extension folder: next to the app when installed (in the bundle's
+/// Resources on macOS), or in the source tree for development builds.
 pub fn extension_dir() -> Option<PathBuf> {
     let installed = exe_dir()?.join("extension");
+    let bundled = exe_dir()?.join("../Resources/extension");
     let source = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../extension");
-    [installed, source]
+    [installed, bundled, source]
         .into_iter()
         .find(|dir| dir.join("manifest.json").exists())
         .and_then(|dir| dir.canonicalize().ok())
@@ -146,6 +149,27 @@ pub fn extension_dir() -> Option<PathBuf> {
 }
 
 /// Opens the extension's store page in the browser, where one click adds it.
+#[cfg(target_os = "macos")]
+pub fn add_extension(browser: Browser) -> io::Result<()> {
+    let page = browser.store_page().ok_or_else(|| io::Error::other("not on the store yet"))?;
+    let app = match browser {
+        Browser::Chrome => "Google Chrome",
+        Browser::Edge => "Microsoft Edge",
+        Browser::Brave => "Brave Browser",
+        Browser::Opera => "Opera",
+        Browser::Vivaldi => "Vivaldi",
+        Browser::Firefox => "Firefox",
+    };
+    let opened = std::process::Command::new("open").args(["-a", app, &page]).status()?;
+    if opened.success() {
+        return Ok(());
+    }
+    // Not installed: the default browser opens it instead.
+    std::process::Command::new("open").arg(page).spawn().map(drop)
+}
+
+/// Opens the extension's store page in the browser, where one click adds it.
+#[cfg(not(target_os = "macos"))]
 pub fn add_extension(browser: Browser) -> io::Result<()> {
     let page = browser.store_page().ok_or_else(|| io::Error::other("not on the store yet"))?;
     match browser_exe(browser) {
@@ -175,12 +199,13 @@ fn browser_exe(browser: Browser) -> Option<PathBuf> {
         .find(|path| path.exists())
 }
 
-#[cfg(not(windows))]
+#[cfg(not(any(windows, target_os = "macos")))]
 fn browser_exe(_browser: Browser) -> Option<PathBuf> {
     None
 }
 
 /// Where Firefox looks for native messaging hosts, under `HKEY_CURRENT_USER`.
+#[cfg(windows)]
 const FIREFOX_HOSTS: &str = r"Software\Mozilla\NativeMessagingHosts";
 
 /// `canonicalize` returns `\\?\C:\...`, which Explorer and Chrome don't accept.
@@ -269,12 +294,82 @@ pub fn unregister() -> io::Result<()> {
     Ok(())
 }
 
-#[cfg(not(windows))]
+/// Where each browser looks for native messaging hosts on macOS, under
+/// `~/Library/Application Support`. A browser's folder is there once it has
+/// been used; Firefox's `Mozilla` folder may be created by us.
+#[cfg(target_os = "macos")]
+const MAC_BROWSERS: &[&str] = &[
+    "Google/Chrome",
+    "Microsoft Edge",
+    "BraveSoftware/Brave-Browser",
+    "Chromium",
+    "Vivaldi",
+    "com.operasoftware.Opera",
+];
+
+#[cfg(target_os = "macos")]
+fn application_support() -> io::Result<PathBuf> {
+    let home = std::env::var_os("HOME").ok_or_else(|| io::Error::other("no HOME"))?;
+    Ok(PathBuf::from(home).join("Library/Application Support"))
+}
+
+/// Writes the host manifest into every used Chromium browser's folder, and
+/// Firefox's. Runs at every start, so the registration follows the app if it
+/// moves (dragged to another folder, or upgraded by Homebrew).
+#[cfg(target_os = "macos")]
+pub fn register() -> io::Result<()> {
+    let host = exe_dir().ok_or_else(|| io::Error::other("no exe folder"))?.join("bdl-host");
+    if !host.exists() {
+        return Ok(());
+    }
+    let chromium = serde_json::to_vec_pretty(&serde_json::json!({
+        "name": HOST_NAME,
+        "description": "BDownloader",
+        "path": host,
+        "type": "stdio",
+        "allowed_origins": EXTENSION_IDS.iter().filter(|id| !id.is_empty()).map(|id| format!("chrome-extension://{id}/")).collect::<Vec<_>>(),
+    }))?;
+    let firefox = serde_json::to_vec_pretty(&serde_json::json!({
+        "name": HOST_NAME,
+        "description": "BDownloader",
+        "path": host,
+        "type": "stdio",
+        "allowed_extensions": [FIREFOX_ADDON_ID],
+    }))?;
+    let support = application_support()?;
+    for browser in MAC_BROWSERS {
+        let dir = support.join(browser);
+        if dir.is_dir() {
+            let hosts = dir.join("NativeMessagingHosts");
+            std::fs::create_dir_all(&hosts)?;
+            std::fs::write(hosts.join(format!("{HOST_NAME}.json")), &chromium)?;
+        }
+    }
+    // Always registered: Firefox may be installed later.
+    let hosts = support.join("Mozilla/NativeMessagingHosts");
+    std::fs::create_dir_all(&hosts)?;
+    std::fs::write(hosts.join(format!("{HOST_NAME}.json")), &firefox)
+}
+
+/// Removes what [`register`] added.
+#[cfg(target_os = "macos")]
+pub fn unregister() -> io::Result<()> {
+    let support = application_support()?;
+    for browser in MAC_BROWSERS.iter().copied().chain(["Mozilla"]) {
+        match std::fs::remove_file(support.join(browser).join("NativeMessagingHosts").join(format!("{HOST_NAME}.json"))) {
+            Err(e) if e.kind() != io::ErrorKind::NotFound => return Err(e),
+            _ => {}
+        }
+    }
+    Ok(())
+}
+
+#[cfg(not(any(windows, target_os = "macos")))]
 pub fn register() -> io::Result<()> {
     Ok(())
 }
 
-#[cfg(not(windows))]
+#[cfg(not(any(windows, target_os = "macos")))]
 pub fn unregister() -> io::Result<()> {
     Ok(())
 }

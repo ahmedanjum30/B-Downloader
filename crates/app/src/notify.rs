@@ -34,8 +34,29 @@ pub fn register() {
 #[cfg(not(windows))]
 pub fn register() {}
 
+/// Shows a notification with a `title` line and a `body` line, through
+/// AppleScript, which needs no permission set up first.
+#[cfg(target_os = "macos")]
+pub fn show(title: &str, body: &str) {
+    // Passed as arguments, never put in the script, so a file name can't change it.
+    const SCRIPT: &str = "on run argv\ndisplay notification (item 2 of argv) with title (item 1 of argv)\nend run";
+    let (title, body) = (title.to_owned(), body.to_owned());
+    // Waited for on a thread of its own, so it doesn't stay behind as a zombie.
+    std::thread::spawn(move || {
+        let shown = std::process::Command::new("/usr/bin/osascript")
+            .args(["-e", SCRIPT, &title, &body])
+            .stdout(std::process::Stdio::null())
+            .stderr(std::process::Stdio::null())
+            .status();
+        if let Err(e) = shown {
+            log::warn!("couldn't show a notification: {e}");
+        }
+    });
+}
+
 /// Shows a notification with a `title` line and a `body` line, on a thread of
 /// its own: Windows takes a moment, and the window shouldn't wait.
+#[cfg(not(target_os = "macos"))]
 pub fn show(title: &str, body: &str) {
     let xml = format!(
         r#"<toast><visual><binding template="ToastGeneric"><text>{}</text><text>{}</text></binding></visual></toast>"#,
@@ -66,12 +87,13 @@ fn toast(xml: &str) -> windows::core::Result<()> {
     notifier.Show(&toast)
 }
 
-#[cfg(not(windows))]
+#[cfg(not(any(windows, target_os = "macos")))]
 fn toast(_xml: &str) -> Result<(), String> {
     Ok(())
 }
 
 /// `text` safe to put in the notification's XML.
+#[cfg_attr(target_os = "macos", allow(dead_code))]
 fn escape(text: &str) -> String {
     text.replace('&', "&amp;")
         .replace('<', "&lt;")

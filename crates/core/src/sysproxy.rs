@@ -1,5 +1,5 @@
-//! The proxy Windows is set to use (Settings > Network & internet > Proxy, as
-//! proxy tools set it), for torrents. The HTTP client follows it on its own;
+//! The proxy the system is set to use (Windows: Settings > Network & internet >
+//! Proxy, as proxy tools set it; macOS: the network's proxies), for torrents. The HTTP client follows it on its own;
 //! the torrent engine connects to peers itself and takes a proxy only as a
 //! SOCKS5 address.
 
@@ -36,9 +36,35 @@ fn system_proxy() -> Option<String> {
     parse_proxy_server(&key.get_value::<String, _>("ProxyServer").ok()?)
 }
 
-#[cfg(not(windows))]
+/// macOS's proxies (System Settings > Network > Details > Proxies), as
+/// `scutil --proxy` prints them.
+#[cfg(target_os = "macos")]
+fn system_proxy() -> Option<String> {
+    let out = std::process::Command::new("/usr/sbin/scutil").arg("--proxy").output().ok()?;
+    parse_proxy_server(&mac_proxies(&String::from_utf8_lossy(&out.stdout))?)
+}
+
+#[cfg(not(any(windows, target_os = "macos")))]
 fn system_proxy() -> Option<String> {
     None
+}
+
+/// The proxies switched on in `scutil --proxy`'s dictionary, in the
+/// per-protocol form Windows uses (`socks=h:p;https=h:p;http=h:p`).
+#[cfg(any(target_os = "macos", test))]
+fn mac_proxies(dump: &str) -> Option<String> {
+    let value = |key: &str| {
+        dump.lines()
+            .filter_map(|line| line.split_once(" : "))
+            .find(|(k, _)| k.trim() == key)
+            .map(|(_, v)| v.trim().to_owned())
+    };
+    let entries: Vec<String> = [("socks", "SOCKS"), ("https", "HTTPS"), ("http", "HTTP")]
+        .into_iter()
+        .filter(|(_, mac)| value(&format!("{mac}Enable")).as_deref() == Some("1"))
+        .filter_map(|(kind, mac)| Some(format!("{kind}={}:{}", value(&format!("{mac}Proxy"))?, value(&format!("{mac}Port"))?)))
+        .collect();
+    (!entries.is_empty()).then(|| entries.join(";"))
 }
 
 /// `host:port`, or per protocol, `http=h:p;https=h:p;socks=h:p` (a SOCKS
@@ -62,7 +88,6 @@ fn parse_proxy_server(setting: &str) -> Option<String> {
 }
 
 /// Whether `addr` answers a SOCKS5 greeting offering no authentication.
-#[cfg(windows)]
 async fn speaks_socks5(addr: &str) -> bool {
     use tokio::io::{AsyncReadExt, AsyncWriteExt};
 
@@ -76,14 +101,17 @@ async fn speaks_socks5(addr: &str) -> bool {
     matches!(tokio::time::timeout(std::time::Duration::from_secs(2), greet).await, Ok(Some(true)))
 }
 
-#[cfg(not(windows))]
-async fn speaks_socks5(_addr: &str) -> bool {
-    false
-}
-
 #[cfg(test)]
 mod tests {
-    use super::parse_proxy_server;
+    use super::{mac_proxies, parse_proxy_server};
+
+    #[test]
+    fn reads_mac_proxy_settings() {
+        let dump = "<dictionary> {\n  ExceptionsList : <array> {\n    0 : *.local\n  }\n  HTTPEnable : 1\n  HTTPPort : 8080\n  HTTPProxy : 127.0.0.1\n  HTTPSEnable : 1\n  HTTPSPort : 8080\n  HTTPSProxy : 127.0.0.1\n  SOCKSEnable : 0\n  SOCKSPort : 1080\n  SOCKSProxy : 10.0.0.1\n}\n";
+        assert_eq!(mac_proxies(dump).as_deref(), Some("https=127.0.0.1:8080;http=127.0.0.1:8080"));
+        assert_eq!(parse_proxy_server(&mac_proxies(dump).unwrap()).as_deref(), Some("127.0.0.1:8080"));
+        assert_eq!(mac_proxies("<dictionary> {\n  HTTPEnable : 0\n}\n"), None);
+    }
 
     #[test]
     fn reads_windows_proxy_settings() {

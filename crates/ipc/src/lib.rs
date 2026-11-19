@@ -1,13 +1,10 @@
 //! Messages sent to a running BDownloader.
 //!
-//! The app listens on a named pipe. A second copy of the app uses it to hand
+//! The app listens on a named pipe (a Unix socket on macOS). A second copy of the app uses it to hand
 //! over its links and exit, and the browser bridge (`bdl-host`) uses it to
 //! pass on downloads caught by the extension. Each message is one line of JSON.
 
-use std::fs::OpenOptions;
 use std::io::{self, Read, Write};
-use std::thread::sleep;
-use std::time::{Duration, Instant};
 
 use serde::{Deserialize, Serialize};
 
@@ -171,20 +168,28 @@ impl AddRequest {
     }
 }
 
-/// The pipe of the current Windows user, so users on the same PC don't see each other's app.
+/// The pipe of the current user, so users on the same computer don't see
+/// each other's app: a named pipe on Windows, a Unix socket in the user's
+/// own temporary folder on macOS.
 ///
 /// A copy started with its own data folder (`BDOWNLOADER_DATA`, used for
 /// development and testing) gets its own pipe, so it runs alongside the
 /// normal app and never receives the browser's downloads.
 pub fn pipe_name() -> String {
-    let user: String = std::env::var("USERNAME")
+    let user: String = std::env::var(if cfg!(windows) { "USERNAME" } else { "USER" })
         .unwrap_or_default()
         .chars()
         .filter(|c| c.is_ascii_alphanumeric() || *c == '-' || *c == '_')
         .collect();
-    match std::env::var_os("BDOWNLOADER_DATA") {
-        Some(dir) => format!(r"\\.\pipe\bdownloader-{user}-{:016x}", fnv1a(dir.as_encoded_bytes())),
-        None => format!(r"\\.\pipe\bdownloader-{user}"),
+    let name = match std::env::var_os("BDOWNLOADER_DATA") {
+        Some(dir) => format!("bdownloader-{user}-{:016x}", fnv1a(dir.as_encoded_bytes())),
+        None => format!("bdownloader-{user}"),
+    };
+    if cfg!(windows) {
+        format!(r"\\.\pipe\{name}")
+    } else {
+        // macOS gives each user a private temporary folder ($TMPDIR).
+        std::env::temp_dir().join(format!("{name}.sock")).to_string_lossy().into_owned()
     }
 }
 
@@ -212,7 +217,12 @@ pub fn ask(request: &Request) -> io::Result<Reply> {
 }
 
 /// Opens the pipe (for reading the answer too, if `answer`) and writes the request.
+#[cfg(windows)]
 fn connect(request: &Request, answer: bool) -> io::Result<std::fs::File> {
+    use std::fs::OpenOptions;
+    use std::thread::sleep;
+    use std::time::{Duration, Instant};
+
     const ERROR_PIPE_BUSY: i32 = 231;
     let mut line = serde_json::to_vec(request)?;
     line.push(b'\n');
@@ -228,6 +238,21 @@ fn connect(request: &Request, answer: bool) -> io::Result<std::fs::File> {
             Err(e) => return Err(e),
         }
     }
+}
+
+/// Connects to the app's socket and writes the request; the answer, if any,
+/// comes back on the same connection.
+#[cfg(unix)]
+fn connect(request: &Request, _answer: bool) -> io::Result<std::os::unix::net::UnixStream> {
+    let mut line = serde_json::to_vec(request)?;
+    line.push(b'\n');
+    // A socket left behind by an app that crashed refuses connections: not running either.
+    let mut socket = std::os::unix::net::UnixStream::connect(pipe_name()).map_err(|e| match e.kind() {
+        io::ErrorKind::ConnectionRefused => io::Error::from(io::ErrorKind::NotFound),
+        _ => e,
+    })?;
+    socket.write_all(&line)?;
+    Ok(socket)
 }
 
 #[cfg(test)]

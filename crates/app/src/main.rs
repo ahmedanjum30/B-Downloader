@@ -41,8 +41,9 @@ fn main() -> iced::Result {
     // only adds theirs. Without it iced draws on the CPU instead. On laptops
     // with two GPUs, the power-saving (built-in) one: drawing a list is light
     // work, and waking a gaming GPU for it costs battery. Set by the user, the
-    // `WGPU_BACKEND` and `WGPU_POWER_PREF` variables win.
-    for (name, value) in [("WGPU_BACKEND", "dx12"), ("WGPU_POWER_PREF", "low")] {
+    // `WGPU_BACKEND` and `WGPU_POWER_PREF` variables win. On macOS, Metal.
+    let backend = if cfg!(target_os = "macos") { "metal" } else { "dx12" };
+    for (name, value) in [("WGPU_BACKEND", backend), ("WGPU_POWER_PREF", "low")] {
         if std::env::var_os(name).is_none() {
             // SAFETY: nothing else runs yet that reads or writes the environment.
             unsafe { std::env::set_var(name, value) };

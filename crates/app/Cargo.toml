@@ -39,6 +39,10 @@ windows = { version = "0.62", features = ["UI_Notifications", "Data_Xml_Dom"] }
 winreg = "0.56"
 windows-sys = { version = "0.61", features = ["Win32_Foundation", "Win32_Storage_Packaging_Appx", "Win32_System_Memory", "Win32_System_Power", "Win32_System_SystemInformation", "Win32_System_Threading"] }
 
+[target.'cfg(target_os = "macos")'.dependencies]
+# The GPU renderer's Metal back-end, the one macOS has.
+wgpu = { version = "27", default-features = false, features = ["metal"] }
+
 [dev-dependencies]
 tokio = { version = "1.53", features = ["macros", "rt-multi-thread"] }
 

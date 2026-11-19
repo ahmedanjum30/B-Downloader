@@ -196,6 +196,10 @@ pub fn data_dir() -> PathBuf {
     if let Some(dir) = std::env::var_os("BDOWNLOADER_DATA") {
         return dir.into();
     }
+    #[cfg(target_os = "macos")]
+    if let Some(home) = std::env::var_os("HOME") {
+        return PathBuf::from(home).join("Library/Application Support/B-Downloader");
+    }
     std::env::var_os("APPDATA")
         .map(PathBuf::from)
         .unwrap_or_else(|| PathBuf::from("."))
@@ -260,10 +264,18 @@ pub fn save_downloads(downloads: &[SavedDownload]) -> io::Result<()> {
 
 /// Opens a file with its default program.
 pub fn open_file(path: &Path) {
-    let _ = std::process::Command::new("explorer").arg(path).spawn();
+    let opener = if cfg!(target_os = "macos") { "open" } else { "explorer" };
+    let _ = std::process::Command::new(opener).arg(path).spawn();
+}
+
+/// Opens Finder with the file selected.
+#[cfg(target_os = "macos")]
+pub fn show_in_folder(path: &Path) {
+    let _ = std::process::Command::new("open").arg("-R").arg(path).spawn();
 }
 
 /// Opens Explorer with the file selected.
+#[cfg(not(target_os = "macos"))]
 pub fn show_in_folder(path: &Path) {
     let mut command = std::process::Command::new("explorer");
     #[cfg(windows)]

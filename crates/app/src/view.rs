@@ -18,7 +18,9 @@ use crate::{format, store};
 /// The sidebar's width.
 const SIDEBAR_WIDTH: f32 = 236.0;
 
-pub const FONT: Font = Font::with_name("Segoe UI");
+/// The system's UI font: Segoe UI on Windows; on macOS, Helvetica Neue (the
+/// San Francisco system font isn't reachable by name).
+pub const FONT: Font = Font::with_name(if cfg!(target_os = "macos") { "Helvetica Neue" } else { "Segoe UI" });
 pub const SEMIBOLD: Font = Font {
     weight: Weight::Semibold,
     ..FONT
