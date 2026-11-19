@@ -6,6 +6,8 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+## [1.3.9] - 2026-11-19
+
 ### Added
 - macOS: magnet links and .torrent files open in B-Downloader from the
   browser and Finder, also when it isn't running yet.
