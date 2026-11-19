@@ -6,6 +6,20 @@
 // The list is kept in session storage, because the browser stops this
 // script when it's idle.
 
+// Adds a listener to a browser event, if the browser has it and takes the
+// options. Safari lacks some events (webNavigation.onHistoryStateUpdated)
+// and options; one of them mustn't stop the rest of the extension loading.
+// Loaded first (background.js, Firefox's manifest), so the others use it too.
+function listen(event, ...args) {
+  if (!event) return false;
+  try {
+    event.addListener(...args);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 const VIDEO_FILE = /^video\/(mp4|webm|x-matroska|quicktime|x-flv|x-msvideo|3gpp|ogg)\b/i;
 const PLAYLIST = /mpegurl/i;
 // Parts of streams, which make no sense alone.
@@ -183,11 +197,8 @@ function rememberSentHeaders(details) {
 
 // Chromium browsers only show Referer and Origin with "extraHeaders";
 // Firefox shows them anyway and refuses that option.
-try {
-  chrome.webRequest.onSendHeaders.addListener(rememberSentHeaders, { urls: ["<all_urls>"], types: REQUEST_TYPES }, ["requestHeaders", "extraHeaders"]);
-} catch {
-  chrome.webRequest.onSendHeaders.addListener(rememberSentHeaders, { urls: ["<all_urls>"], types: REQUEST_TYPES }, ["requestHeaders"]);
-}
+listen(chrome.webRequest?.onSendHeaders, rememberSentHeaders, { urls: ["<all_urls>"], types: REQUEST_TYPES }, ["requestHeaders", "extraHeaders"]) ||
+  listen(chrome.webRequest?.onSendHeaders, rememberSentHeaders, { urls: ["<all_urls>"], types: REQUEST_TYPES }, ["requestHeaders"]);
 
 // Where a request came from: what the player sent, or else the frame that made it.
 function requestSource(details) {
@@ -399,7 +410,8 @@ async function onHeaders(details) {
   });
 }
 
-chrome.webRequest.onHeadersReceived.addListener(
+listen(
+  chrome.webRequest?.onHeadersReceived,
   (details) => {
     onHeaders(details).catch(() => {});
   },
@@ -408,7 +420,7 @@ chrome.webRequest.onHeadersReceived.addListener(
 );
 
 // A new page in the tab starts with an empty list.
-chrome.webNavigation.onCommitted.addListener((details) => {
+listen(chrome.webNavigation?.onCommitted, (details) => {
   if (details.frameId !== 0) return;
   for (const key of smallVideos.keys()) if (key.startsWith(`${details.tabId} `)) smallVideos.delete(key);
   candidates.delete(details.tabId);

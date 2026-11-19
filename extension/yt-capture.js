@@ -61,7 +61,8 @@ function captureKey(cpn) {
   return `ytcap:${cpn}`;
 }
 
-chrome.webRequest.onBeforeRequest.addListener(
+listen(
+  chrome.webRequest?.onBeforeRequest,
   (details) => {
     if (details.method !== "POST" || !/[?&]sabr=1/.test(details.url)) return;
     let cpn;
@@ -114,7 +115,7 @@ async function youtubeReady(tabId, cpn) {
 
 // Moving to another video (YouTube changes pages without loading them)
 // makes the capture stale.
-chrome.webNavigation.onHistoryStateUpdated.addListener((details) => {
+listen(chrome.webNavigation?.onHistoryStateUpdated, (details) => {
   if (details.frameId !== 0 || !YOUTUBE_PAGE.test(details.url)) return;
   update(details.tabId, (state) => {
     if (!state.youtube) return false;

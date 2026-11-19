@@ -6,12 +6,18 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+## [1.4.1] - 2026-11-19
+
 ### Added
 - macOS: a Safari extension, inside the app. Safari takes it once "Allow
   unsigned extensions" is on (it isn't signed by Apple yet); the app's
   Browser extension panel has a Safari tab with the steps. Safari can't
   hand over downloads as they start: right-click "Download with
   B-Downloader" and the Download this video bar send them instead.
+
+### Changed
+- Browser extension 1.1.2: it loads in browsers that lack some of the
+  events it listens to (Safari), instead of failing to start.
 
 ## [1.4.0] - 2026-11-19
 
