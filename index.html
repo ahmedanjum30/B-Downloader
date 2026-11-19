@@ -112,6 +112,7 @@
   .brew.featured code { font-size: 15.5px; }
   .brew.featured button { background: var(--grad); color: var(--accent-fg); border: 0; padding: 8px 14px; font-weight: 600; }
   .alt { margin: 12px 0 0; color: var(--muted); font-size: 14.5px; }
+  [hidden] { display: none !important; }
 </style>
 </head>
 <body>
@@ -231,7 +232,7 @@
       </details>
       <details>
         <summary>Is there a Mac version?</summary>
-        <p>Yes, for Macs with Apple Silicon (M1 or later) on macOS 11 or later. Install it with <a href="https://brew.sh">Homebrew</a>: <code>brew install --cask ahmedanjum30/tap/b-downloader</code>, and <code>brew upgrade</code> keeps it up to date. Or download <b>B-Downloader-&lt;version&gt;-macos.zip</b> from the <a href="https://github.com/ahmedanjum30/B-Downloader/releases/latest">latest release</a>, unzip it and drag the app to Applications; the first time, right-click it and choose <b>Open</b>, since it isn't signed with an Apple Developer ID yet. Magnet links and .torrent files open in it from the browser and Finder. The browser extension works with Chrome, Edge, Firefox, Brave, Opera and Vivaldi on the Mac; Safari isn't supported. Intel Macs aren't supported yet.</p>
+        <p>Yes, for Macs with Apple Silicon (M1 or later) on macOS 11 or later. Install it with <a href="https://brew.sh">Homebrew</a>: <code>brew install --cask ahmedanjum30/tap/b-downloader</code>, and <code>brew upgrade</code> keeps it up to date. Or download <b>B-Downloader-&lt;version&gt;-macos.zip</b> from the <a href="https://github.com/ahmedanjum30/B-Downloader/releases/latest">latest release</a>, unzip it and drag the app to Applications; the first time, right-click it and choose <b>Open</b>, since it isn't signed with an Apple Developer ID yet. Magnet links and .torrent files open in it from the browser and Finder. The browser extension works with Chrome, Edge, Firefox, Brave, Opera and Vivaldi on the Mac, and in Safari it comes inside the app: open <b>Browser extension</b> in B-Downloader and pick the Safari tab for the steps. Safari takes it once <b>Allow unsigned extensions</b> is on in its Developer settings (until B-Downloader is signed by Apple), and there downloads come through the right-click menu and the video bar rather than by themselves. Intel Macs aren't supported yet.</p>
       </details>
       <details>
         <summary>Windows says "Windows protected your PC". Is it safe?</summary>
