@@ -6,7 +6,7 @@ Thanks for helping improve BDownloader.
 
 Please open an issue and include:
 
-- the BDownloader version and your Windows version
+- the BDownloader version and your Windows or macOS version
 - the URL you were downloading, if you can share it, or at least the kind of site (direct link, file host, CDN)
 - what you expected to happen and what happened instead
 
@@ -25,7 +25,7 @@ cargo run -p bdownloader-cli -- URL      # download URL with the engine (Ctrl+C 
 cargo test --workspace                   # unit tests and end-to-end tests against a local server
 ```
 
-The app keeps its download list and settings in `%APPDATA%\BDownloader`. To try changes without touching your real list, point it at another folder:
+The app keeps its download list and settings in `%APPDATA%\BDownloader` (on macOS, `~/Library/Application Support/B-Downloader`). To try changes without touching your real list, point it at another folder:
 
 ```powershell
 $env:BDOWNLOADER_DATA = "$env:TEMP\bdl-dev"; cargo run -p bdownloader -- https://example.com/file.zip
@@ -35,11 +35,19 @@ $env:BDOWNLOADER_DATA = "$env:TEMP\bdl-dev"; cargo run -p bdownloader -- https:/
 
 `scripts/build-installer.ps1` builds the release binaries and `dist/BDownloader-Setup-<version>.exe` from `installer/bdownloader.toml`. For a test installer, `-Quick` uses the `quick` profile: it rebuilds in seconds after a change instead of about two minutes, for a somewhat bigger `.exe`. Releases always use the full release profile. It needs [B-Installer](https://github.com/ahmedanjum30/B-Installer) (`cargo install --git https://github.com/ahmedanjum30/B-Installer bi setup`). To test it without clicking through the wizard: `BDownloader-Setup-<version>.exe /VERYSILENT`, and `unins000.exe /VERYSILENT` in the install folder to remove it.
 
-The app icon is drawn by `scripts/app-icon.ps1` into `crates/app/assets`.
+The app icon is drawn by `scripts/app-icon.ps1` into `crates/app/assets` (including `bdownloader.icns` for macOS).
+
+### macOS
+
+`scripts/macos-app.sh` builds `dist/B-Downloader.app` and zips it as `dist/B-Downloader-<version>-macos.zip`: for Apple Silicon and Intel together (built for both and joined with `lipo`), or with `--native` only for the Mac it runs on. The app is signed ad hoc. CI builds the Apple Silicon app on every push to `main`; the run's artifacts have the zip.
+
+To check from Windows that the code compiles for macOS: `rustup target add aarch64-apple-darwin`, then `cargo clippy --workspace --all-targets --target aarch64-apple-darwin -- -D warnings`.
+
+What differs on macOS: a Unix socket in `$TMPDIR` instead of the named pipe, the bridge's manifests in `~/Library/Application Support/<browser>/NativeMessagingHosts/` instead of the registry, the system proxy from `scutil --proxy`, notifications through `osascript`, sleep with `pmset sleepnow`, and the Metal renderer instead of DirectX 12.
 
 ### Browser extension
 
-1. Build the workspace (`cargo build`), so `bdl-host.exe` sits next to `BDownloader.exe`, and start the app once. At startup it registers the bridge with every Chromium browser that has been used on the PC (`HKCU\Software\<browser>\NativeMessagingHosts\com.bdownloader.host`).
+1. Build the workspace (`cargo build`), so `bdl-host.exe` sits next to `BDownloader.exe`, and start the app once. At startup it registers the bridge with every Chromium browser that has been used on the PC (`HKCU\Software\<browser>\NativeMessagingHosts\com.bdownloader.host`; on macOS, `com.bdownloader.host.json` in each browser's `NativeMessagingHosts` folder).
 2. Open `chrome://extensions`, turn on Developer mode and load the `extension` folder unpacked. The app's **Browser extension** panel shows the same steps and the folder path.
 
 The `key` in `extension/manifest.json` fixes the unpacked extension's ID (`glehdmgljkbkfnbigknlpjjmfegaagfi`). The bridge only accepts the IDs listed in `EXTENSION_IDS` in `crates/app/src/browser.rs`, so if you change the key, update that list too.

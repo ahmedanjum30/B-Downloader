@@ -6,7 +6,7 @@
 
 windows
 
-A native Windows 10/11 desktop app (Rust, iced GUI toolkit), not a web page. It also ships a Manifest V3 browser extension, whose only UI is a small popup and an in-page "Download this video" bar.
+A native Windows 10/11 desktop app (Rust, iced GUI toolkit), not a web page, with a macOS version (11 or later) in testing. It also ships a Manifest V3 browser extension, whose only UI is a small popup and an in-page "Download this video" bar.
 
 ## Users
 

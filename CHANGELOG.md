@@ -6,6 +6,13 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+### Added
+- macOS version (being tested, built from source with
+  `scripts/macos-app.sh`): downloads, torrents, the browser extension, the
+  menu-bar icon, notifications, sleep or shut down when done, and torrents
+  through the system's SOCKS5 proxy. Not yet: opening magnet links and
+  .torrent files from the browser or Finder, and updates.
+
 ## [1.3.7] - 2026-11-18
 
 ### Fixed

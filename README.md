@@ -2,14 +2,14 @@
 
 [![Support on Patreon](https://img.shields.io/badge/Support%20on-Patreon-F96854?style=for-the-badge&logo=patreon&logoColor=white)](https://www.patreon.com/cw/ahmedanjum30)
 
-**A fast, lightweight download manager for Windows.** BDownloader splits each file into several parts and downloads them in parallel over multiple connections, so downloads finish faster and can be paused and resumed at any time.
+**A fast, lightweight download manager for Windows, with macOS on the way.** BDownloader splits each file into several parts and downloads them in parallel over multiple connections, so downloads finish faster and can be paused and resumed at any time.
 
 [![CI](https://github.com/ahmedanjum30/B-Downloader/actions/workflows/ci.yml/badge.svg)](https://github.com/ahmedanjum30/B-Downloader/actions/workflows/ci.yml)
 [![License: PolyForm Noncommercial](https://img.shields.io/badge/license-PolyForm%20Noncommercial-blue.svg)](LICENSE)
 
 Free for personal and other non-commercial use. See [License](#license).
 
-**[Download the latest version](https://github.com/ahmedanjum30/B-Downloader/releases/latest)** for Windows 10 and 11, or get it from the [Microsoft Store](https://apps.microsoft.com/detail/xp89fxjjf4j45w).
+**[Download the latest version](https://github.com/ahmedanjum30/B-Downloader/releases/latest)** for Windows 10 and 11, or get it from the [Microsoft Store](https://apps.microsoft.com/detail/xp89fxjjf4j45w). A macOS version (macOS 11 or later, Apple Silicon and Intel) is being tested; until it's released, you can [build it yourself](#macos).
 
 ## Features
 
@@ -45,6 +45,18 @@ The installer on the Releases page is built by this repository's [release workfl
 
 To add the browser extension, open **Browser extension** in BDownloader and follow the steps.
 
+### macOS
+
+The macOS version isn't released yet. To try it, build the app on your Mac (you need [Rust](https://rustup.rs/) and Xcode's command-line tools, `xcode-select --install`):
+
+```sh
+git clone https://github.com/ahmedanjum30/B-Downloader.git
+cd B-Downloader
+sh scripts/macos-app.sh --native   # only for this Mac; leave out --native for Apple Silicon and Intel
+```
+
+This makes `dist/B-Downloader.app`; drag it to Applications. It's signed ad hoc, not with an Apple Developer ID, so open it the first time with a right-click > **Open**, then **Open**. It keeps its list and settings in `~/Library/Application Support/B-Downloader` and sits in the menu bar when its window is closed. Not there yet: opening magnet links and .torrent files from the browser or Finder (add them in the Add download dialog instead), and updates (rebuild to update). A Homebrew install is planned.
+
 Questions or ideas? Ask in [Discussions](https://github.com/ahmedanjum30/B-Downloader/discussions). Found a bug? Open an [issue](https://github.com/ahmedanjum30/B-Downloader/issues).
 
 ## Building from source
@@ -55,7 +67,7 @@ You need [Rust](https://rustup.rs/) 1.99 or newer.
 cargo build --release
 ```
 
-The app is at `target/release/BDownloader.exe`. See [CONTRIBUTING.md](CONTRIBUTING.md) for development details.
+The app is at `target/release/BDownloader.exe` (`target/release/BDownloader` on macOS; `scripts/macos-app.sh` wraps it in an `.app`). See [CONTRIBUTING.md](CONTRIBUTING.md) for development details.
 
 ## Project layout
 
@@ -65,7 +77,7 @@ The app is at `target/release/BDownloader.exe`. See [CONTRIBUTING.md](CONTRIBUTI
 | `crates/app` | The desktop app (`BDownloader.exe`), built with iced. |
 | `crates/cli` | `bdl.exe`, a small command-line front end for trying the engine without the GUI. |
 | `crates/host` | `bdl-host.exe`, the bridge the browser extension talks to (Chrome native messaging). |
-| `crates/ipc` | The messages sent to a running app over a named pipe. |
+| `crates/ipc` | The messages sent to a running app over a named pipe (a Unix socket on macOS). |
 | `extension` | The browser extension (Manifest V3). |
 
 ## Credits
