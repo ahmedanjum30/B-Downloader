@@ -3,12 +3,12 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>BDownloader: free, fast download manager for Windows</title>
-<meta name="description" content="BDownloader is a free, lightweight download manager for Windows. Multi-connection downloads, pause and resume, a browser extension for Edge, Chrome and Firefox, and video downloads including HLS and YouTube up to 4K.">
+<title>BDownloader: free, fast download manager for Windows and Mac</title>
+<meta name="description" content="BDownloader is a free, lightweight download manager for Windows and Mac. Multi-connection downloads, pause and resume, a browser extension for Edge, Chrome and Firefox, and video downloads including HLS and YouTube up to 4K.">
 <link rel="canonical" href="https://ahmedanjum30.github.io/B-Downloader/">
 <link rel="icon" type="image/png" href="images/icon.png">
 <meta property="og:type" content="website">
-<meta property="og:title" content="BDownloader: free, fast download manager for Windows">
+<meta property="og:title" content="BDownloader: free, fast download manager for Windows and Mac">
 <meta property="og:description" content="Multi-connection downloads, pause and resume, a browser extension, and video downloads up to 4K. Free for personal use.">
 <meta property="og:url" content="https://ahmedanjum30.github.io/B-Downloader/">
 <meta property="og:image" content="https://ahmedanjum30.github.io/B-Downloader/images/social.png">
@@ -19,9 +19,9 @@
   "@context": "https://schema.org",
   "@type": "SoftwareApplication",
   "name": "BDownloader",
-  "operatingSystem": "Windows 10, Windows 11",
+  "operatingSystem": "Windows 10, Windows 11, macOS 11 or later (Apple Silicon)",
   "applicationCategory": "UtilitiesApplication",
-  "description": "A free, lightweight download manager for Windows with multi-connection downloads, pause and resume, a browser extension, and video downloads including HLS streams and YouTube.",
+  "description": "A free, lightweight download manager for Windows and Mac with multi-connection downloads, pause and resume, a browser extension, and video downloads including HLS streams and YouTube.",
   "offers": { "@type": "Offer", "price": "0", "priceCurrency": "USD" },
   "author": { "@type": "Person", "name": "Ahmad Anjum", "url": "https://github.com/ahmedanjum30" },
   "url": "https://ahmedanjum30.github.io/B-Downloader/",
@@ -102,6 +102,11 @@
   footer { border-top: 1px solid var(--line); padding: 32px 0; color: var(--muted); font-size: 14.5px; }
   footer .wrap { display: flex; flex-wrap: wrap; gap: 12px 24px; justify-content: space-between; }
   footer a { color: var(--muted); }
+  .brew { display: inline-flex; align-items: center; gap: 10px; margin: 18px auto 0; padding: 8px 8px 8px 14px; border: 1px solid var(--line); border-radius: 10px; background: var(--card); font-size: 14.5px; color: var(--muted); max-width: 100%; }
+  .brew code { min-width: 0; color: var(--fg); font: 14px/1.4 ui-monospace, "SF Mono", Menlo, Consolas, monospace; overflow-wrap: anywhere; text-align: left; }
+  .brew button { flex: none; border: 1px solid var(--line); background: var(--bg-soft); color: var(--fg); border-radius: 7px; padding: 5px 10px; font: inherit; font-size: 13.5px; cursor: pointer; }
+  .brew button:hover { border-color: var(--accent); }
+  @media (max-width: 640px) { .brew { flex-wrap: wrap; justify-content: center; } }
 </style>
 </head>
 <body>
@@ -121,7 +126,7 @@
   <div class="hero">
     <div class="wrap">
       <h1>Downloads, done properly.</h1>
-      <p class="lead">BDownloader is a free, lightweight download manager for Windows. It downloads every file over several connections at once, pauses and resumes anything, and catches downloads and videos straight from your browser.</p>
+      <p class="lead">BDownloader is a free, lightweight download manager for Windows and Mac. It downloads every file over several connections at once, pauses and resumes anything, and catches downloads and videos straight from your browser.</p>
       <div class="cta">
         <a class="button primary" id="download" href="https://github.com/ahmedanjum30/B-Downloader/releases/latest">
           <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M12 4v11"/><path d="m7 10 5 5 5-5"/><path d="M5 20h14"/></svg>
@@ -135,7 +140,8 @@
         </a>
         <a class="button secondary" href="https://github.com/ahmedanjum30/B-Downloader">View on GitHub</a>
       </div>
-      <p class="meta">Windows 10 and 11 · About 5 MB · No admin rights needed · Free for personal use</p>
+      <p class="meta">Windows 10 and 11 · macOS 11 or later on Apple Silicon · About 5 MB · No admin rights needed · Free for personal use</p>
+      <div class="brew" id="mac"><span>On a Mac:</span><code id="brew-command">brew install --cask ahmedanjum30/tap/b-downloader</code><button type="button" id="brew-copy">Copy</button></div>
       <div class="shot"><img src="images/app.png" width="1400" height="900" alt="BDownloader with two files downloading over 8 connections each, then the downloads that need you (one paused, two failed, one offering Refresh link), a queued download and finished ones"></div>
     </div>
   </div>
@@ -153,7 +159,7 @@
         <div class="card">
           <div class="icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="6" y="5" width="4" height="14" rx="1"/><rect x="14" y="5" width="4" height="14" rx="1"/></svg></div>
           <h3>Pause and resume anything</h3>
-          <p>Stop a download and continue later, even after closing the app or restarting the PC. Link expired? Give it a fresh one and it continues where it stopped.</p>
+          <p>Stop a download and continue later, even after closing the app or restarting your computer. Link expired? Give it a fresh one and it continues where it stopped.</p>
         </div>
         <div class="card">
           <div class="icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3a14 14 0 0 1 0 18M12 3a14 14 0 0 0 0 18"/></svg></div>
@@ -183,12 +189,12 @@
         <div class="card">
           <div class="icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2v10"/><path d="M18.4 6.6a9 9 0 1 1-12.8 0"/></svg></div>
           <h3>Sleep or shut down when done</h3>
-          <p>Leave a big download running and let the PC sleep or turn off once it's finished, after a countdown you can cancel.</p>
+          <p>Leave a big download running and let the computer sleep or turn off once it's finished, after a countdown you can cancel.</p>
         </div>
         <div class="card">
           <div class="icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M13 2 4 14h7l-1 8 9-12h-7z"/></svg></div>
           <h3>Small and light</h3>
-          <p>A native app written in Rust: no bundled browser engine, little memory while idle, and it keeps itself up to date while staying out of your way in the tray.</p>
+          <p>A native app written in Rust: no bundled browser engine, little memory while idle, and it keeps itself up to date while staying out of your way in the tray or menu bar.</p>
         </div>
       </div>
     </div>
@@ -218,6 +224,10 @@
         <p>Yes, for personal and other non-commercial use, with every feature included. There are no ads and no paid version. If you'd like to support it, there's <a href="https://www.patreon.com/cw/ahmedanjum30">Patreon</a>.</p>
       </details>
       <details>
+        <summary>Is there a Mac version?</summary>
+        <p>Yes, for Macs with Apple Silicon (M1 or later) on macOS 11 or later. Install it with <a href="https://brew.sh">Homebrew</a>: <code>brew install --cask ahmedanjum30/tap/b-downloader</code>, and <code>brew upgrade</code> keeps it up to date. Or download <b>B-Downloader-&lt;version&gt;-macos.zip</b> from the <a href="https://github.com/ahmedanjum30/B-Downloader/releases/latest">latest release</a>, unzip it and drag the app to Applications; the first time, right-click it and choose <b>Open</b>, since it isn't signed with an Apple Developer ID yet. Magnet links and .torrent files open in it from the browser and Finder. The browser extension works with Chrome, Edge, Firefox, Brave, Opera and Vivaldi on the Mac; Safari isn't supported. Intel Macs aren't supported yet.</p>
+      </details>
+      <details>
         <summary>Windows says "Windows protected your PC". Is it safe?</summary>
         <p>BDownloader isn't code-signed yet, so Windows doesn't know the publisher and warns about it. Click <b>More info</b>, then <b>Run anyway</b>. The installer is built from the public source code by GitHub's release workflow, and you can check it against the <code>SHA256SUMS.txt</code> file on each release. Updates installed by BDownloader itself don't show the warning. To avoid it altogether, install BDownloader from the <a href="https://apps.microsoft.com/detail/xp89fxjjf4j45w">Microsoft Store</a>.</p>
       </details>
@@ -231,7 +241,7 @@
       </details>
       <details>
         <summary>Do I need admin rights to install it?</summary>
-        <p>No. It installs for your Windows user only, in your own AppData folder, and can be removed from Installed apps like any program.</p>
+        <p>No. On Windows it installs for your user only, in your own AppData folder, and can be removed from Installed apps like any program. On a Mac, Homebrew puts it in Applications and <code>brew uninstall --cask b-downloader</code> removes it.</p>
       </details>
       <details>
         <summary>Can I use it at work?</summary>
@@ -243,7 +253,7 @@
       </details>
       <details>
         <summary>Can I install it from the command line?</summary>
-        <p>Download the installer and run it with <code>/VERYSILENT</code> for a silent install.</p>
+        <p>On Windows, download the installer and run it with <code>/VERYSILENT</code> for a silent install. On a Mac, <code>brew install --cask ahmedanjum30/tap/b-downloader</code>.</p>
       </details>
     </div>
   </section>
@@ -253,13 +263,14 @@
       <h2>Ready when you are</h2>
       <p class="sub">Download BDownloader and add the extension to your browser. It takes a minute.</p>
       <div class="cta">
-        <a class="button primary" href="https://github.com/ahmedanjum30/B-Downloader/releases/latest">Download for Windows</a>
+        <a class="button primary" id="download-bottom" href="https://github.com/ahmedanjum30/B-Downloader/releases/latest">Download for Windows</a>
         <a class="store" href="https://apps.microsoft.com/detail/xp89fxjjf4j45w?mode=direct" aria-label="Get BDownloader from the Microsoft Store">
           <picture>
             <source srcset="https://get.microsoft.com/images/en-us%20light.svg" media="(prefers-color-scheme: light)">
             <img src="https://get.microsoft.com/images/en-us%20dark.svg" width="200" height="48" alt="Get it from Microsoft">
           </picture>
         </a>
+        <a class="button secondary" href="#mac">Get it for Mac</a>
         <a class="button secondary" href="https://www.patreon.com/cw/ahmedanjum30">Support on Patreon</a>
       </div>
     </div>
@@ -274,17 +285,38 @@
 </footer>
 
 <script>
-  // The newest installer and its version, straight from GitHub. Without it,
-  // the button still leads to the latest release.
+  // On a Mac (Apple Silicon only, but browsers don't tell which), the buttons
+  // offer the Mac app; elsewhere, the Windows installer.
+  const mac = /mac/i.test((navigator.userAgentData && navigator.userAgentData.platform) || navigator.platform || "");
+  const label = mac ? "Download for Mac" : "Download for Windows";
+  document.getElementById("download-label").textContent = label;
+  document.getElementById("download-bottom").textContent = label;
+  // The Microsoft Store is Windows only.
+  if (mac) document.querySelectorAll(".store").forEach((badge) => (badge.hidden = true));
+
+  // The newest download and its version, straight from GitHub. Without it,
+  // the buttons still lead to the latest release.
   fetch("https://api.github.com/repos/ahmedanjum30/B-Downloader/releases/latest")
     .then((r) => (r.ok ? r.json() : null))
     .then((release) => {
-      const asset = release && release.assets.find((a) => /^BDownloader-Setup-.*\.exe$/.test(a.name));
+      const name = mac ? /^B-Downloader-.*-macos\.zip$/ : /^BDownloader-Setup-.*\.exe$/;
+      const asset = release && release.assets.find((a) => name.test(a.name));
       if (!asset) return;
-      document.getElementById("download").href = asset.browser_download_url;
-      document.getElementById("download-label").textContent = "Download for Windows · " + release.tag_name;
+      for (const id of ["download", "download-bottom"]) document.getElementById(id).href = asset.browser_download_url;
+      document.getElementById("download-label").textContent = label + " · " + release.tag_name;
     })
     .catch(() => {});
+
+  // Copies the Homebrew command.
+  document.getElementById("brew-copy").addEventListener("click", (e) => {
+    const text = document.getElementById("brew-command").textContent;
+    try {
+      navigator.clipboard.writeText(text).then(() => {
+        e.target.textContent = "Copied";
+        setTimeout(() => (e.target.textContent = "Copy"), 1500);
+      }, () => {});
+    } catch (_) {}
+  });
 </script>
 </body>
 </html>
