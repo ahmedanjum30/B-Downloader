@@ -50,6 +50,7 @@ cask "b-downloader" do
   uninstall quit: "com.ahmadanjum.bdownloader"
 
   zap trash: [
+    "~/B-Downloader",
     "~/Library/Application Support/B-Downloader",
     "~/Library/Application Support/BraveSoftware/Brave-Browser/NativeMessagingHosts/com.bdownloader.host.json",
     "~/Library/Application Support/Chromium/NativeMessagingHosts/com.bdownloader.host.json",

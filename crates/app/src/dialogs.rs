@@ -904,18 +904,20 @@ pub fn extension<'a>(browser: Browser, connected: bool, copied: Option<&str>) ->
         if browser.one_click() {
             body = body.push(muted("Or add it yourself, without the store:").size(13));
         }
-        body.push(step("1", "Copy this address and paste it into the browser's address bar:"))
+        let body = body
+            .push(step("1", "Copy this address and paste it into the browser's address bar:"))
             .push(copy_field(page, page_copied))
-            .push(step("2", browser.developer_mode()))
-            .push(step(
+            .push(step("2", browser.developer_mode()));
+        if cfg!(target_os = "macos") {
+            body.push(step(
                 "3",
-                if cfg!(target_os = "macos") {
-                    "Click Load unpacked. The folder is in your Library, which the window hides: press ⌘⇧G, paste this path and press Return, then click Select."
-                } else {
-                    "Click Load unpacked and choose this folder:"
-                },
+                "Click Load unpacked, then choose Users, your name, B-Downloader, extension, and click Select. This folder:",
             ))
             .push(copy_field(folder, folder_copied))
+        } else {
+            body.push(step("3", "Click Load unpacked and choose this folder:"))
+                .push(copy_field(folder, folder_copied))
+        }
     };
     body = body.push(muted("It shows as connected here once the browser has talked to B-Downloader.").size(13));
 

@@ -11,8 +11,8 @@ All notable changes to this project are documented here. The format follows
   was closed to the menu bar. Nothing happened before.
 - macOS: the Chrome (and Edge, Brave, Opera, Vivaldi) extension can be
   loaded by hand. Its folder was inside the app, where the browser's folder
-  picker can't go; it's now copied to
-  `~/Library/Application Support/B-Downloader/extension`.
+  picker can't go; it's now copied to `~/B-Downloader/extension` (Users,
+  your name, B-Downloader, extension in the picker).
 
 ## [1.3.9] - 2026-11-19
 

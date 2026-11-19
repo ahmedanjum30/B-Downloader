@@ -155,9 +155,11 @@ pub fn extension_dir() -> Option<PathBuf> {
     shipped_extension_dir()
 }
 
-/// Copies the extension to B-Downloader's own folder (Application Support),
-/// fresh at every start, so the browser loads this version's. It stays put
-/// when Homebrew replaces the app.
+/// Copies the extension to `~/B-Downloader/extension`, fresh at every start,
+/// so the browser loads this version's. A folder in the home folder, because
+/// the browser's folder picker hides Library (where Application Support is)
+/// and people look in the system's Library instead. It stays put when
+/// Homebrew replaces the app. `BDOWNLOADER_DATA` (development) keeps it there.
 #[cfg(target_os = "macos")]
 fn copy_extension(from: &std::path::Path) -> io::Result<PathBuf> {
     fn copy_dir(from: &std::path::Path, to: &std::path::Path) -> io::Result<()> {
@@ -173,7 +175,11 @@ fn copy_extension(from: &std::path::Path) -> io::Result<PathBuf> {
         }
         Ok(())
     }
-    let to = crate::store::data_dir().join("extension");
+    let to = match (std::env::var_os("BDOWNLOADER_DATA"), std::env::var_os("HOME")) {
+        (None, Some(home)) => PathBuf::from(home).join("B-Downloader"),
+        _ => crate::store::data_dir(),
+    }
+    .join("extension");
     // Files a newer version dropped shouldn't linger.
     match std::fs::remove_dir_all(&to) {
         Err(e) if e.kind() != io::ErrorKind::NotFound => return Err(e),
