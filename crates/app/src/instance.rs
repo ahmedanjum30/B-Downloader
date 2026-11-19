@@ -165,6 +165,8 @@ pub fn listen_safari() -> impl Stream<Item = Message> {
 #[derive(Clone, Copy, PartialEq, Eq)]
 enum Peer {
     App,
+    /// Only Safari's helper connects to the app directly (macOS).
+    #[cfg(target_os = "macos")]
     Browser,
 }
 
