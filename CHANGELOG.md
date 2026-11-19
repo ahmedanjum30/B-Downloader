@@ -6,6 +6,14 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+### Fixed
+- macOS: clicking B-Downloader in the Dock brings its window back after it
+  was closed to the menu bar. Nothing happened before.
+- macOS: the Chrome (and Edge, Brave, Opera, Vivaldi) extension can be
+  loaded by hand. Its folder was inside the app, where the browser's folder
+  picker can't go; it's now copied to
+  `~/Library/Application Support/B-Downloader/extension`.
+
 ## [1.3.9] - 2026-11-19
 
 ### Added

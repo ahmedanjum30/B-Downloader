@@ -907,7 +907,14 @@ pub fn extension<'a>(browser: Browser, connected: bool, copied: Option<&str>) ->
         body.push(step("1", "Copy this address and paste it into the browser's address bar:"))
             .push(copy_field(page, page_copied))
             .push(step("2", browser.developer_mode()))
-            .push(step("3", "Click Load unpacked and choose this folder:"))
+            .push(step(
+                "3",
+                if cfg!(target_os = "macos") {
+                    "Click Load unpacked. The folder is in your Library, which the window hides: press ⌘⇧G, paste this path and press Return, then click Select."
+                } else {
+                    "Click Load unpacked and choose this folder:"
+                },
+            ))
             .push(copy_field(folder, folder_copied))
     };
     body = body.push(muted("It shows as connected here once the browser has talked to B-Downloader.").size(13));

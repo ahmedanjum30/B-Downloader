@@ -1,5 +1,5 @@
 //! Magnet links and .torrent files opened on macOS: from the browser, Finder
-//! or `open`. macOS doesn't pass them on the command line as Windows does,
+//! or `open`; and the Dock icon clicked to bring the window back. macOS doesn't pass them on the command line as Windows does,
 //! but sends the app (starting it first if needed) an Apple Event: "get URL"
 //! for a link, "open documents" for files.
 //!
@@ -34,6 +34,9 @@ const GET_URL: u32 = code(b"GURL");
 /// The "open documents" event: files, from Finder or `open`.
 const CORE_SUITE: u32 = code(b"aevt");
 const OPEN_DOCUMENTS: u32 = code(b"odoc");
+/// The "reopen" event: the Dock icon (or the app in Finder) clicked while
+/// the app is running, with its window perhaps closed to the menu bar.
+const REOPEN: u32 = code(b"rapp");
 /// The event's main parameter: the URL, or the list of files.
 const DIRECT_OBJECT: u32 = code(b"----");
 
@@ -56,6 +59,7 @@ define_class!(
             for (class, id, selector) in [
                 (GET_URL, GET_URL, sel!(getURL:withReplyEvent:)),
                 (CORE_SUITE, OPEN_DOCUMENTS, sel!(openDocuments:withReplyEvent:)),
+                (CORE_SUITE, REOPEN, sel!(reopen:withReplyEvent:)),
             ] {
                 // SAFETY: this object has the method, taking the event and its reply.
                 let () = unsafe {
@@ -70,6 +74,13 @@ define_class!(
             if let Some(link) = direct_object(event).and_then(|d| d.stringValue()) {
                 open(&link.to_string());
             }
+        }
+
+        /// Brings the window back, as starting the app again does on Windows.
+        #[unsafe(method(reopen:withReplyEvent:))]
+        fn reopen(&self, _event: &NSAppleEventDescriptor, _reply: &NSAppleEventDescriptor) {
+            log::info!("reopened from the Dock");
+            send(Request::Show);
         }
 
         /// Files: the direct object is a list of them, or a single one.
@@ -102,9 +113,7 @@ fn open(arg: &str) {
     match crate::instance::request_for(arg) {
         Some(request) => {
             log::info!("opened from macOS: {arg}");
-            if let Some(sender) = SENDER.get() {
-                let _ = sender.unbounded_send(request);
-            }
+            send(request);
         }
         None => log::info!("asked to open something that isn't a magnet link or a .torrent file"),
     }
@@ -134,6 +143,12 @@ pub fn install() {
     }
     // Neither the notification center nor the event manager keeps it; it lives as long as the app.
     std::mem::forget(handler);
+}
+
+fn send(request: Request) {
+    if let Some(sender) = SENDER.get() {
+        let _ = sender.unbounded_send(request);
+    }
 }
 
 /// Opened links and files, as app messages. Ones opened before the app was

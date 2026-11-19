@@ -135,9 +135,57 @@ fn exe_dir() -> Option<PathBuf> {
     Some(std::env::current_exe().ok()?.parent()?.to_owned())
 }
 
-/// The extension folder: next to the app when installed (in the bundle's
-/// Resources on macOS), or in the source tree for development builds.
+/// The extension folder: next to the app when installed, or in the source
+/// tree for development builds. On macOS, a copy of the one in the app's
+/// bundle: a browser's folder picker can't look inside an app.
 pub fn extension_dir() -> Option<PathBuf> {
+    #[cfg(target_os = "macos")]
+    {
+        static COPY: std::sync::OnceLock<Option<PathBuf>> = std::sync::OnceLock::new();
+        COPY.get_or_init(|| {
+            let copy = copy_extension(&shipped_extension_dir()?);
+            if let Err(e) = &copy {
+                log::warn!("couldn't copy the browser extension out of the app: {e}");
+            }
+            copy.ok()
+        })
+        .clone()
+    }
+    #[cfg(not(target_os = "macos"))]
+    shipped_extension_dir()
+}
+
+/// Copies the extension to B-Downloader's own folder (Application Support),
+/// fresh at every start, so the browser loads this version's. It stays put
+/// when Homebrew replaces the app.
+#[cfg(target_os = "macos")]
+fn copy_extension(from: &std::path::Path) -> io::Result<PathBuf> {
+    fn copy_dir(from: &std::path::Path, to: &std::path::Path) -> io::Result<()> {
+        std::fs::create_dir_all(to)?;
+        for entry in std::fs::read_dir(from)? {
+            let entry = entry?;
+            let target = to.join(entry.file_name());
+            if entry.file_type()?.is_dir() {
+                copy_dir(&entry.path(), &target)?;
+            } else {
+                std::fs::copy(entry.path(), target)?;
+            }
+        }
+        Ok(())
+    }
+    let to = crate::store::data_dir().join("extension");
+    // Files a newer version dropped shouldn't linger.
+    match std::fs::remove_dir_all(&to) {
+        Err(e) if e.kind() != io::ErrorKind::NotFound => return Err(e),
+        _ => {}
+    }
+    copy_dir(from, &to)?;
+    Ok(to)
+}
+
+/// The extension folder as shipped: next to BDownloader.exe, in the app
+/// bundle's Resources on macOS, or in the source tree.
+fn shipped_extension_dir() -> Option<PathBuf> {
     let installed = exe_dir()?.join("extension");
     let bundled = exe_dir()?.join("../Resources/extension");
     let source = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../extension");

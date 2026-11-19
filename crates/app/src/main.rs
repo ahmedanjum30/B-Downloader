@@ -57,6 +57,8 @@ fn main() -> iced::Result {
     // Magnet links and .torrent files from the browser or Finder.
     #[cfg(target_os = "macos")]
     open_events::install();
+    // On macOS, copies the extension out of the app, where browsers can load it.
+    let _ = browser::extension_dir();
 
     // A daemon rather than one window: a download from the browser while the
     // app is in the tray gets its dialog in a window of its own. The app opens
