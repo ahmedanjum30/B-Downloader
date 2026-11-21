@@ -7,12 +7,75 @@
 //! colour only where it means something: a download's state.
 
 use std::sync::LazyLock;
+use std::sync::atomic::{AtomicUsize, Ordering};
 
+use iced::border::Radius;
+use iced::font::{Family, Weight};
 use iced::gradient::Linear;
 use iced::theme::Palette;
 use iced::widget::slider::{self as slider_widget, HandleShape};
 use iced::widget::{button, container, pick_list, progress_bar, scrollable, text_input};
-use iced::{Background, Border, Color, Degrees, Gradient, Shadow, Theme};
+use iced::{Background, Border, Color, Degrees, Font, Gradient, Shadow, Theme};
+
+/// The app's looks: the two standard ones and the two hand-drawn ones.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Look {
+    Dark,
+    Light,
+    /// Graphite pencil on cream sketchbook paper.
+    Graphite,
+    /// Chalk on a slate board.
+    Chalk,
+}
+
+impl Look {
+    const ALL: [Look; 4] = [Look::Dark, Look::Light, Look::Graphite, Look::Chalk];
+
+    pub fn colors(self) -> &'static Colors {
+        match self {
+            Look::Dark => &DARK,
+            Look::Light => &LIGHT,
+            Look::Graphite => &GRAPHITE,
+            Look::Chalk => &CHALK,
+        }
+    }
+
+    fn name(self) -> &'static str {
+        match self {
+            Look::Dark => "BDownloader Dark",
+            Look::Light => "BDownloader Light",
+            Look::Graphite => "BDownloader Graphite",
+            Look::Chalk => "BDownloader Chalk",
+        }
+    }
+
+    pub fn theme(self) -> Theme {
+        THEMES[self as usize].clone()
+    }
+
+    /// Makes this the look the views take their fonts from. Styles get the
+    /// theme passed in; text gets its font when the view is built.
+    pub fn apply(self) {
+        CURRENT.store(self as usize, Ordering::Relaxed);
+    }
+
+    pub fn current() -> Look {
+        Look::ALL[CURRENT.load(Ordering::Relaxed)]
+    }
+
+    /// The look a theme (or one of its faded copies) belongs to: each has its
+    /// own window ground.
+    fn of(theme: &Theme) -> Look {
+        let ground = theme.palette().background;
+        let same = |c: Color| (c.r - ground.r).abs() < 0.002 && (c.g - ground.g).abs() < 0.002 && (c.b - ground.b).abs() < 0.002;
+        Look::ALL
+            .into_iter()
+            .find(|look| same(look.colors().background))
+            .unwrap_or(if theme.extended_palette().is_dark { Look::Dark } else { Look::Light })
+    }
+}
+
+static CURRENT: AtomicUsize = AtomicUsize::new(0);
 
 pub struct Colors {
     pub background: Color,
@@ -32,6 +95,34 @@ pub struct Colors {
     pub warning: Color,
     pub danger: Color,
     pub track: Color,
+    /// Width of drawn outlines (cards, inputs, outlined buttons).
+    pub line: f32,
+    /// Corners of controls and of cards. The hand-drawn looks give each
+    /// corner its own radius, so boxes look drawn rather than ruled.
+    pub radius: Radius,
+    pub card_radius: Radius,
+    /// Hand-drawn: outlines where the standard looks use fills (the selected
+    /// sidebar entry, file badges, progress tracks).
+    pub sketch: bool,
+    /// Body text, and labels, buttons and headings.
+    pub font: Font,
+    pub strong: Font,
+}
+
+/// The standard looks' font: the system's UI font (see `view::FONT`).
+pub const SYSTEM_FONT: Font = Font::with_name(if cfg!(target_os = "macos") { "Helvetica Neue" } else { "Segoe UI" });
+
+const fn corners(top_left: f32, top_right: f32, bottom_right: f32, bottom_left: f32) -> Radius {
+    Radius {
+        top_left,
+        top_right,
+        bottom_right,
+        bottom_left,
+    }
+}
+
+const fn round(r: f32) -> Radius {
+    corners(r, r, r, r)
 }
 
 const fn rgb(hex: u32) -> Color {
@@ -64,6 +155,15 @@ pub const DARK: Colors = Colors {
     warning: rgb(0xe3a008),
     danger: rgb(0xf85149),
     track: rgb(0x2c2c34),
+    line: 1.0,
+    radius: round(RADIUS),
+    card_radius: round(CARD_RADIUS),
+    sketch: false,
+    font: SYSTEM_FONT,
+    strong: Font {
+        weight: Weight::Semibold,
+        ..SYSTEM_FONT
+    },
 };
 
 pub const LIGHT: Colors = Colors {
@@ -81,6 +181,61 @@ pub const LIGHT: Colors = Colors {
     warning: rgb(0xb87500),
     danger: rgb(0xd93a33),
     track: rgb(0xebebef),
+    ..DARK
+};
+
+/// Graphite pencil on cream sketchbook paper, with blue ballpoint for what
+/// moves and the main action.
+pub const GRAPHITE: Colors = Colors {
+    background: rgb(0xf4efe1),
+    sidebar: rgb(0xf4efe1),
+    surface: rgb(0xfbf8ef),
+    surface_hover: rgb(0xebe4d2),
+    border: rgb(0x2b2a26),
+    text: rgb(0x2b2a26),
+    muted: rgb(0x5c584e),
+    accent: rgb(0x2b57a6),
+    accent_end: rgb(0x2b57a6),
+    on_accent: rgb(0xffffff),
+    success: rgb(0x2f7a3a),
+    warning: rgb(0x94590a),
+    danger: rgb(0xb3261e),
+    track: rgb(0xe4ddca),
+    line: 1.6,
+    radius: corners(9.0, 4.0, 8.0, 3.0),
+    card_radius: corners(14.0, 5.0, 12.0, 6.0),
+    sketch: true,
+    font: Font::with_name("Patrick Hand"),
+    strong: Font {
+        family: Family::Name("Kalam"),
+        weight: Weight::Bold,
+        ..Font::DEFAULT
+    },
+};
+
+/// Chalk on a slate board: the dark hand-drawn look.
+pub const CHALK: Colors = Colors {
+    background: rgb(0x262b28),
+    sidebar: rgb(0x262b28),
+    surface: rgb(0x2b312d),
+    surface_hover: rgb(0x363d38),
+    // Chalk at 55% on the slate.
+    border: rgb(0x93948d),
+    text: rgb(0xece9df),
+    muted: rgb(0xb9b7ac),
+    accent: rgb(0x8cc4f0),
+    accent_end: rgb(0x8cc4f0),
+    on_accent: rgb(0x1d2220),
+    success: rgb(0xa3d9a0),
+    warning: rgb(0xf2c46b),
+    danger: rgb(0xf4978e),
+    track: rgb(0x363d38),
+    line: 1.5,
+    radius: corners(7.0, 3.0, 8.0, 3.0),
+    card_radius: corners(12.0, 4.0, 10.0, 5.0),
+    sketch: true,
+    font: Font::with_name("Gochi Hand"),
+    strong: Font::with_name("Gochi Hand"),
 };
 
 /// The blue-to-violet gradient, left to right.
@@ -102,8 +257,7 @@ fn theme_from(name: &'static str, c: &Colors) -> Theme {
     )
 }
 
-pub static DARK_THEME: LazyLock<Theme> = LazyLock::new(|| theme_from("BDownloader Dark", &DARK));
-pub static LIGHT_THEME: LazyLock<Theme> = LazyLock::new(|| theme_from("BDownloader Light", &LIGHT));
+static THEMES: LazyLock<[Theme; 4]> = LazyLock::new(|| Look::ALL.map(|look| theme_from(look.name(), look.colors())));
 
 /// Steps a fading dialog's colors go through.
 const FADE_STEPS: usize = 24;
@@ -124,21 +278,21 @@ fn faded(c: &Colors, a: f32) -> Colors {
         warning: alpha(c.warning, a),
         danger: alpha(c.danger, a),
         track: alpha(c.track, a),
+        ..*c
     }
 }
 
 /// Each theme at every fade step, from nearly see-through to nearly opaque:
 /// a fading dialog draws with these, so all its colors fade together.
-static FADES: LazyLock<[Vec<(Theme, Colors)>; 2]> = LazyLock::new(|| {
-    let steps = |name: &'static str, c: &Colors| {
+static FADES: LazyLock<[Vec<(Theme, Colors)>; 4]> = LazyLock::new(|| {
+    Look::ALL.map(|look| {
         (0..FADE_STEPS)
             .map(|i| {
-                let colors = faded(c, i as f32 / FADE_STEPS as f32);
-                (theme_from(name, &colors), colors)
+                let colors = faded(look.colors(), i as f32 / FADE_STEPS as f32);
+                (theme_from(look.name(), &colors), colors)
             })
             .collect()
-    };
-    [steps("BDownloader Dark", &DARK), steps("BDownloader Light", &LIGHT)]
+    })
 });
 
 fn fade_step(a: f32) -> Option<usize> {
@@ -147,25 +301,18 @@ fn fade_step(a: f32) -> Option<usize> {
 
 /// `theme` with every color at `a` of its opacity, for a fading dialog.
 pub fn faded_theme(theme: &Theme, a: f32) -> Theme {
-    let dark = theme.extended_palette().is_dark;
+    let look = Look::of(theme);
     match fade_step(a) {
-        Some(step) => FADES[usize::from(!dark)][step].0.clone(),
-        None => {
-            if dark {
-                DARK_THEME.clone()
-            } else {
-                LIGHT_THEME.clone()
-            }
-        }
+        Some(step) => FADES[look as usize][step].0.clone(),
+        None => look.theme(),
     }
 }
 
 pub fn colors(theme: &Theme) -> &'static Colors {
-    let dark = theme.extended_palette().is_dark;
+    let look = Look::of(theme);
     match fade_step(theme.palette().background.a) {
-        Some(step) => &FADES[usize::from(!dark)][step].1,
-        None if dark => &DARK,
-        None => &LIGHT,
+        Some(step) => &FADES[look as usize][step].1,
+        None => look.colors(),
     }
 }
 
@@ -174,7 +321,7 @@ pub const RADIUS: f32 = 8.0;
 /// Cards, panels and dialogs.
 const CARD_RADIUS: f32 = 12.0;
 
-fn border(color: Color, width: f32, radius: f32) -> Border {
+fn border(color: Color, width: f32, radius: impl Into<Radius>) -> Border {
     Border {
         color,
         width,
@@ -212,7 +359,7 @@ pub fn card(theme: &Theme) -> container::Style {
     let c = colors(theme);
     container::Style {
         background: Some(c.surface.into()),
-        border: border(c.border, 1.0, CARD_RADIUS),
+        border: border(c.border, c.line, c.card_radius),
         ..container::Style::default()
     }
 }
@@ -221,7 +368,7 @@ pub fn card(theme: &Theme) -> container::Style {
 pub fn card_alert(theme: &Theme) -> container::Style {
     let c = colors(theme);
     container::Style {
-        border: border(alpha(c.danger, 0.45), 1.0, CARD_RADIUS),
+        border: border(alpha(c.danger, 0.45), c.line, c.card_radius),
         ..card(theme)
     }
 }
@@ -232,7 +379,7 @@ pub fn dialog(theme: &Theme) -> container::Style {
     let c = colors(theme);
     container::Style {
         background: Some(c.background.into()),
-        border: border(c.border, 1.0, CARD_RADIUS),
+        border: border(c.border, c.line, c.card_radius),
         text_color: Some(c.text),
         ..container::Style::default()
     }
@@ -271,9 +418,20 @@ pub fn file_badge(failed: bool) -> impl Fn(&Theme) -> container::Style {
     move |theme| {
         let c = colors(theme);
         container::Style {
-            background: Some(c.surface_hover.into()),
-            border: border(Color::TRANSPARENT, 0.0, 8.0),
-            text_color: Some(if failed { c.danger } else { c.muted }),
+            // Drawn as an outline in the hand-drawn looks.
+            background: (!c.sketch).then_some(c.surface_hover.into()),
+            border: if c.sketch {
+                border(if failed { c.danger } else { c.border }, c.line, c.radius)
+            } else {
+                border(Color::TRANSPARENT, 0.0, 8.0)
+            },
+            text_color: Some(if failed {
+                c.danger
+            } else if c.sketch {
+                c.text
+            } else {
+                c.muted
+            }),
             ..container::Style::default()
         }
     }
@@ -283,7 +441,7 @@ pub fn file_badge(failed: bool) -> impl Fn(&Theme) -> container::Style {
 pub fn pill(theme: &Theme) -> container::Style {
     let c = colors(theme);
     container::Style {
-        border: border(c.border, 1.0, 999.0),
+        border: border(c.border, c.line, 999.0),
         text_color: Some(c.text),
         ..container::Style::default()
     }
@@ -294,7 +452,7 @@ pub fn panel(theme: &Theme) -> container::Style {
     let c = colors(theme);
     container::Style {
         background: Some(c.surface_hover.into()),
-        border: border(Color::TRANSPARENT, 0.0, RADIUS + 2.0),
+        border: border(Color::TRANSPARENT, 0.0, c.radius),
         ..container::Style::default()
     }
 }
@@ -304,7 +462,7 @@ pub fn outline(theme: &Theme) -> container::Style {
     let c = colors(theme);
     container::Style {
         background: Some(c.background.into()),
-        border: border(c.border, 1.0, RADIUS),
+        border: border(c.border, c.line, c.radius),
         ..container::Style::default()
     }
 }
@@ -334,7 +492,7 @@ pub fn logo(theme: &Theme) -> container::Style {
     let c = colors(theme);
     container::Style {
         background: Some(gradient(c)),
-        border: border(Color::TRANSPARENT, 0.0, 8.0),
+        border: border(Color::TRANSPARENT, 0.0, c.radius),
         text_color: Some(c.on_accent),
         ..container::Style::default()
     }
@@ -355,7 +513,7 @@ pub fn tooltip(theme: &Theme) -> container::Style {
     container::Style {
         background: Some(c.text.into()),
         text_color: Some(c.background),
-        border: border(Color::TRANSPARENT, 0.0, RADIUS),
+        border: border(Color::TRANSPARENT, 0.0, c.radius),
         ..container::Style::default()
     }
 }
@@ -382,7 +540,7 @@ pub fn primary(theme: &Theme, status: button::Status) -> button::Style {
         } else {
             c.on_accent
         },
-        border: border(Color::TRANSPARENT, 0.0, RADIUS),
+        border: border(Color::TRANSPARENT, 0.0, c.radius),
         shadow: Shadow::default(),
         snap: true,
     }
@@ -398,7 +556,7 @@ pub fn danger(theme: &Theme, status: button::Status) -> button::Style {
     button::Style {
         background: Some(background.into()),
         text_color: c.on_accent,
-        border: border(Color::TRANSPARENT, 0.0, RADIUS),
+        border: border(Color::TRANSPARENT, 0.0, c.radius),
         shadow: Shadow::default(),
         snap: true,
     }
@@ -414,7 +572,7 @@ pub fn secondary(theme: &Theme, status: button::Status) -> button::Style {
     button::Style {
         background: Some(background.into()),
         text_color: if status == button::Status::Disabled { c.muted } else { c.text },
-        border: border(c.border, 1.0, RADIUS),
+        border: border(c.border, c.line, c.radius),
         shadow: Shadow::default(),
         snap: true,
     }
@@ -427,7 +585,7 @@ pub fn ghost(theme: &Theme, status: button::Status) -> button::Style {
     button::Style {
         background: hovered.then_some(Background::Color(c.surface_hover)),
         text_color: if hovered { c.text } else { c.muted },
-        border: border(Color::TRANSPARENT, 0.0, RADIUS),
+        border: border(Color::TRANSPARENT, 0.0, c.radius),
         shadow: Shadow::default(),
         snap: true,
     }
@@ -443,7 +601,7 @@ pub fn icon_button(theme: &Theme, status: button::Status) -> button::Style {
     button::Style {
         background,
         text_color: c.text,
-        border: border(Color::TRANSPARENT, 0.0, RADIUS),
+        border: border(Color::TRANSPARENT, 0.0, c.radius),
         shadow: Shadow::default(),
         snap: true,
     }
@@ -454,13 +612,19 @@ pub fn nav(selected: bool) -> impl Fn(&Theme, button::Status) -> button::Style {
     move |theme, status| {
         let c = colors(theme);
         let background = match (selected, status) {
+            // The hand-drawn looks circle the selected entry instead.
+            (true, _) if c.sketch => None,
             (true, _) | (false, button::Status::Hovered | button::Status::Pressed) => Some(Background::Color(c.surface_hover)),
             _ => None,
         };
         button::Style {
             background,
             text_color: if selected { c.text } else { c.muted },
-            border: border(Color::TRANSPARENT, 0.0, RADIUS),
+            border: if selected && c.sketch {
+                border(c.border, c.line, c.radius)
+            } else {
+                border(Color::TRANSPARENT, 0.0, c.radius)
+            },
             shadow: Shadow::default(),
             snap: true,
         }
@@ -476,7 +640,7 @@ pub fn tab(selected: bool) -> impl Fn(&Theme, button::Status) -> button::Style {
         button::Style {
             background: selected.then_some(Background::Color(c.background)),
             text_color: if selected || hovered { c.text } else { c.muted },
-            border: border(if selected { c.border } else { Color::TRANSPARENT }, 1.0, RADIUS),
+            border: border(if selected { c.border } else { Color::TRANSPARENT }, c.line, c.radius),
             shadow: Shadow::default(),
             snap: true,
         }
@@ -494,7 +658,7 @@ pub fn input(theme: &Theme, status: text_input::Status) -> text_input::Style {
     };
     text_input::Style {
         background: Color::TRANSPARENT.into(),
-        border: border(border_color, 1.0, RADIUS),
+        border: border(border_color, c.line, c.radius),
         icon: c.muted,
         placeholder: c.muted,
         value: c.text,
@@ -511,7 +675,7 @@ pub fn bare_pick_list(theme: &Theme, status: pick_list::Status) -> pick_list::St
         placeholder_color: c.muted,
         handle_color: if hovered { c.text } else { c.muted },
         background: Color::TRANSPARENT.into(),
-        border: border(Color::TRANSPARENT, 0.0, RADIUS),
+        border: border(Color::TRANSPARENT, 0.0, c.radius),
     }
 }
 
@@ -564,7 +728,7 @@ pub fn progress(pick: Pick) -> impl Fn(&Theme) -> progress_bar::Style {
         progress_bar::Style {
             background: c.track.into(),
             bar: pick(c).into(),
-            border: border(Color::TRANSPARENT, 0.0, 3.0),
+            border: track_border(c),
         }
     }
 }
@@ -575,6 +739,15 @@ pub fn progress_gradient(theme: &Theme) -> progress_bar::Style {
     progress_bar::Style {
         background: c.track.into(),
         bar: gradient(c),
-        border: border(Color::TRANSPARENT, 0.0, 3.0),
+        border: track_border(c),
+    }
+}
+
+/// A progress track's edge: drawn in pencil or chalk in the hand-drawn looks.
+fn track_border(c: &Colors) -> Border {
+    if c.sketch {
+        border(c.border, 1.0, corners(4.0, 2.0, 4.0, 2.0))
+    } else {
+        border(Color::TRANSPARENT, 0.0, 3.0)
     }
 }

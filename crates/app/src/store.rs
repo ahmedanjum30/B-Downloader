@@ -13,6 +13,10 @@ pub enum ThemeChoice {
     System,
     Dark,
     Light,
+    /// Hand-drawn: graphite pencil on paper.
+    Graphite,
+    /// Hand-drawn: chalk on slate.
+    Chalk,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

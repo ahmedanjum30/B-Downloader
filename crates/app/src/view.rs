@@ -18,20 +18,39 @@ use crate::{format, store};
 /// The sidebar's width.
 const SIDEBAR_WIDTH: f32 = 236.0;
 
-/// The system's UI font: Segoe UI on Windows; on macOS, Helvetica Neue (the
-/// San Francisco system font isn't reachable by name).
-pub const FONT: Font = Font::with_name(if cfg!(target_os = "macos") { "Helvetica Neue" } else { "Segoe UI" });
-pub const SEMIBOLD: Font = Font {
-    weight: Weight::Semibold,
-    ..FONT
-};
-pub const BOLD: Font = Font {
-    weight: Weight::Bold,
-    ..FONT
-};
+/// The current look's body font: the system's UI font in the standard looks,
+/// a handwriting font in the hand-drawn ones.
+pub fn font() -> Font {
+    style::Look::current().colors().font
+}
+
+/// Labels, buttons and headings.
+pub fn semibold() -> Font {
+    style::Look::current().colors().strong
+}
+
+pub fn bold() -> Font {
+    let c = style::Look::current().colors();
+    // The handwriting fonts come in one weight each.
+    if c.sketch {
+        c.strong
+    } else {
+        Font {
+            weight: Weight::Bold,
+            ..c.font
+        }
+    }
+}
+
+/// Text in the current look's font. Every view builds its text with this,
+/// so switching looks switches fonts too.
+pub fn txt<'a>(content: impl text::IntoFragment<'a>) -> text::Text<'a> {
+    text(content).font(font())
+}
 
 /// What `window` shows: the main window, or a dialog in a window of its own.
 pub fn window_view(app: &App, window: iced::window::Id) -> Element<'_, Message> {
+    app.look().apply();
     if Some(window) == app.dialog_window {
         dialog_window(app)
     } else {
@@ -140,7 +159,7 @@ fn modal<'a>(base: impl Into<Element<'a, Message>>, content: Element<'a, Message
 
 /// Text in one of the theme's colors.
 pub fn colored<'a>(content: impl text::IntoFragment<'a>, pick: Pick) -> text::Text<'a> {
-    text(content).style(move |theme| text::Style {
+    txt(content).style(move |theme| text::Style {
         color: Some(pick(style::colors(theme))),
     })
 }
@@ -212,7 +231,7 @@ fn nav_item<'a>(handle: &icons::Handle, label: &'a str, count: Option<usize>, se
     let pick: Pick = if selected { |c| c.text } else { |c| c.muted };
     let mut content = row![
         icon(handle, 16.0, pick),
-        text(label).size(14).font(if selected { SEMIBOLD } else { FONT }).width(Fill)
+        txt(label).size(14).font(if selected { semibold() } else { font() }).width(Fill)
     ]
     .spacing(10)
     .align_y(Center);
@@ -276,7 +295,7 @@ fn toolbar(app: &App) -> Element<'_, Message> {
     let add = button(
         row![
             icon(&icons::LINK, 17.0, |c| c.text),
-            text("Add URL").size(14).font(SEMIBOLD),
+            txt("Add URL").size(14).font(semibold()),
             container(icon(&icons::DOWNLOAD, 16.0, |c| c.on_accent)).center(30).style(style::logo),
         ]
         .spacing(12)
@@ -306,6 +325,7 @@ fn toolbar(app: &App) -> Element<'_, Message> {
 
     let search = stack![
         text_input("Search downloads", &app.search)
+            .font(font())
             .on_input(Message::Search)
             .padding(Padding {
                 top: 8.0,
@@ -391,7 +411,7 @@ fn groups<'a>(items: &[&'a Item]) -> iced::widget::Column<'a, Message> {
 
 fn group_heading<'a>(title: &'a str, count: usize, note: Option<String>) -> Element<'a, Message> {
     let mut heading = row![
-        text(title).size(14).font(SEMIBOLD),
+        txt(title).size(14).font(semibold()),
         container(muted(count.to_string()).size(12)).padding([1, 8]).style(style::panel),
     ]
     .spacing(10)
@@ -415,7 +435,7 @@ fn compact_row(item: &Item, divided: bool) -> Element<'_, Message> {
     let id = item.id;
     let (word, word_pick, detail, detail_pick) = status(item);
     let name = row![
-        text(format::middle_ellipsis(&item.display_name(), 60))
+        txt(format::middle_ellipsis(&item.display_name(), 60))
             .size(14)
             .wrapping(text::Wrapping::None),
         muted(kind_of(item)).size(12),
@@ -500,7 +520,7 @@ fn status_bar(app: &App) -> Element<'_, Message> {
     right = right.push(
         row![
             icon(&icons::DOWNLOAD, 15.0, |c| c.muted),
-            text(format::speed(speed)).size(13).font(SEMIBOLD)
+            txt(format::speed(speed)).size(13).font(semibold())
         ]
         .spacing(6)
         .align_y(Center),
@@ -522,7 +542,7 @@ fn update_banner(app: &App) -> Option<Element<'_, Message>> {
         return None;
     }
     let small = |label: &'static str, message: Message, primary: bool| -> Element<'_, Message> {
-        button(text(label).size(13).font(SEMIBOLD))
+        button(txt(label).size(13).font(semibold()))
             .padding([7, 14])
             .style(if primary { style::primary } else { style::secondary })
             .on_press(message)
@@ -547,9 +567,12 @@ fn update_banner(app: &App) -> Option<Element<'_, Message>> {
         Update::Failed(_) if app.update_manual => (app.update.status(), vec![small("Try again", Message::UpdateNow, false)]),
         _ => return None,
     };
-    let mut bar = row![icon(&icons::DOWNLOAD, 18.0, |c| c.accent), text(line).size(14).font(SEMIBOLD).width(Fill)]
-        .spacing(12)
-        .align_y(Center);
+    let mut bar = row![
+        icon(&icons::DOWNLOAD, 18.0, |c| c.accent),
+        txt(line).size(14).font(semibold()).width(Fill)
+    ]
+    .spacing(12)
+    .align_y(Center);
     for action in actions {
         bar = bar.push(action);
     }
@@ -569,7 +592,7 @@ fn speed_limit(app: &App) -> Element<'_, Message> {
     let toggle = button(
         row![
             icon(&icons::GAUGE, 16.0, if on { |c| c.accent } else { |c| c.muted }),
-            text(if on { "Limit to" } else { "No speed limit" }).size(14).font(SEMIBOLD),
+            txt(if on { "Limit to" } else { "No speed limit" }).size(14).font(semibold()),
         ]
         .spacing(8)
         .align_y(Center),
@@ -581,6 +604,7 @@ fn speed_limit(app: &App) -> Element<'_, Message> {
     if on {
         control = control.push(
             text_input("5", &app.speed_limit_text)
+                .font(font())
                 .on_input(Message::SpeedLimit)
                 .padding([4, 8])
                 .size(14)
@@ -618,7 +642,7 @@ fn queue_bar(app: &App) -> Element<'_, Message> {
     }
     let control = if app.queue_running {
         button(
-            row![icon(&icons::PAUSE, 15.0, |c| c.text), text("Stop queue").size(14).font(SEMIBOLD)]
+            row![icon(&icons::PAUSE, 15.0, |c| c.text), txt("Stop queue").size(14).font(semibold())]
                 .spacing(8)
                 .align_y(Center),
         )
@@ -627,7 +651,7 @@ fn queue_bar(app: &App) -> Element<'_, Message> {
         .on_press(Message::StopQueue)
     } else {
         button(
-            row![icon(&icons::PLAY, 15.0, |c| c.on_accent), text("Start queue").size(14).font(SEMIBOLD)]
+            row![icon(&icons::PLAY, 15.0, |c| c.on_accent), txt("Start queue").size(14).font(semibold())]
                 .spacing(8)
                 .align_y(Center),
         )
@@ -638,7 +662,7 @@ fn queue_bar(app: &App) -> Element<'_, Message> {
     row![
         icon(&icons::CLOCK, 16.0, if app.queue_running { |c| c.accent } else { |c| c.muted }),
         muted(line).size(14).width(Fill),
-        button(text("Schedule").size(14).font(SEMIBOLD))
+        button(txt("Schedule").size(14).font(semibold()))
             .padding([8, 12])
             .style(style::secondary)
             .on_press(Message::SettingsTab(SettingsTab::Queue)),
@@ -655,7 +679,7 @@ fn when_done(app: &App) -> Element<'_, Message> {
     let choice = pick_list(&WhenDone::ALL[..], Some(app.when_done), Message::WhenDone)
         .padding([5, 8])
         .text_size(14)
-        .font(SEMIBOLD)
+        .font(semibold())
         .style(style::bare_pick_list);
     container(
         row![icon(&icons::POWER, 16.0, if on { |c| c.accent } else { |c| c.muted }), choice]
@@ -676,7 +700,7 @@ fn when_done(app: &App) -> Element<'_, Message> {
 fn add_button<'a>(with_label: bool) -> Element<'a, Message> {
     let mut content = row![icon(&icons::PLUS, 16.0, |c| c.on_accent)].spacing(8).align_y(Center);
     if with_label {
-        content = content.push(text("Add download").size(14).font(SEMIBOLD));
+        content = content.push(txt("Add download").size(14).font(semibold()));
     }
     button(content)
         .padding(if with_label { [9, 14] } else { [9, 10] })
@@ -692,7 +716,7 @@ fn empty_state<'a>() -> Element<'a, Message> {
                 .center(84)
                 .style(style::accent_soft(42.0)),
             space().height(8),
-            text("No downloads yet").size(20).font(SEMIBOLD),
+            txt("No downloads yet").size(20).font(semibold()),
             muted("Copy a link and press Ctrl+V, or click Add download.").size(14),
             space().height(8),
             add_button(true),
@@ -711,7 +735,7 @@ fn torrents_empty_state<'a>() -> Element<'a, Message> {
                 .center(84)
                 .style(style::accent_soft(42.0)),
             space().height(8),
-            text("No torrents yet").size(20).font(SEMIBOLD),
+            txt("No torrents yet").size(20).font(semibold()),
             muted("Click a magnet link in your browser, or paste one in Add download. .torrent files work too.").size(14),
             space().height(8),
             add_button(true),
@@ -728,7 +752,7 @@ pub fn file_badge<'a>(extension: String) -> Element<'a, Message> {
 }
 
 fn badge<'a>(extension: String, failed: bool) -> Element<'a, Message> {
-    container(text(extension).size(10).font(BOLD))
+    container(txt(extension).size(10).font(bold()))
         .center(36)
         .style(style::file_badge(failed))
         .into()
@@ -793,14 +817,14 @@ fn download_card(item: &Item) -> Element<'_, Message> {
     let failed = matches!(item.state, State::Failed(_));
     let (word, word_pick, detail, detail_pick) = status(item);
 
-    let name = text(format::middle_ellipsis(&item.display_name(), 70))
+    let name = txt(format::middle_ellipsis(&item.display_name(), 70))
         .size(15)
-        .font(SEMIBOLD)
+        .font(semibold())
         .wrapping(text::Wrapping::None);
     let pill = container(
         row![
             container(space()).width(6).height(6).style(style::dot(word_pick)),
-            text(word).size(12).font(SEMIBOLD)
+            txt(word).size(12).font(semibold())
         ]
         .spacing(6)
         .align_y(Center),
@@ -813,7 +837,7 @@ fn download_card(item: &Item) -> Element<'_, Message> {
 
     let mut actions = row![].spacing(2).align_y(Center);
     if item.state.is_running() {
-        actions = actions.push(text(format!("{:.0}%", item.fraction() * 100.0)).size(14).font(SEMIBOLD));
+        actions = actions.push(txt(format!("{:.0}%", item.fraction() * 100.0)).size(14).font(semibold()));
         actions = actions.push(Space::new().width(6));
         actions = actions.push(action(&icons::PAUSE, "Pause", Message::Pause(id)));
     }
@@ -882,7 +906,7 @@ fn text_action<'a>(handle: Option<&icons::Handle>, label: &'a str, message: Mess
     if let Some(handle) = handle {
         content = content.push(icon(handle, 15.0, |c| c.text));
     }
-    button(content.push(text(label).size(13).font(SEMIBOLD)))
+    button(content.push(txt(label).size(13).font(semibold())))
         .padding([6, 10])
         .style(style::secondary)
         .on_press(message)
@@ -960,7 +984,7 @@ fn action<'a>(handle: &icons::Handle, tip: &'a str, message: Message) -> Element
             .padding(8)
             .style(style::icon_button)
             .on_press(message),
-        container(text(tip).size(12)).padding([5, 9]).style(style::tooltip),
+        container(txt(tip).size(12)).padding([5, 9]).style(style::tooltip),
         tooltip::Position::Top,
     )
     .gap(4)

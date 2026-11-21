@@ -12,7 +12,7 @@ Please open an issue and include:
 
 ## Development
 
-You need [Rust](https://rustup.rs/) 1.99 or newer. The project uses the Rust 2024 edition and is a Cargo workspace:
+You need [Rust](https://rustup.rs/) 1.100 or newer. The project uses the Rust 2024 edition and is a Cargo workspace:
 
 - `crates/core`: the download engine. Keep it free of UI code.
 - `crates/app`: the iced desktop app.
@@ -36,6 +36,8 @@ $env:BDOWNLOADER_DATA = "$env:TEMP\bdl-dev"; cargo run -p bdownloader -- https:/
 `scripts/build-installer.ps1` builds the release binaries and `dist/BDownloader-Setup-<version>.exe` from `installer/bdownloader.toml`. For a test installer, `-Quick` uses the `quick` profile: it rebuilds in seconds after a change instead of about two minutes, for a somewhat bigger `.exe`. Releases always use the full release profile. It needs [B-Installer](https://github.com/ahmedanjum30/B-Installer) (`cargo install --git https://github.com/ahmedanjum30/B-Installer bi setup`). To test it without clicking through the wizard: `BDownloader-Setup-<version>.exe /VERYSILENT`, and `unins000.exe /VERYSILENT` in the install folder to remove it.
 
 The app icon is drawn by `scripts/app-icon.ps1` into `crates/app/assets` (including `bdownloader.icns` for macOS).
+
+The hand-drawn themes' fonts in `crates/app/assets/fonts` are cut down to Latin letters and punctuation, which keeps them small (`pyftsubset` from fontTools, `--unicodes=U+0020-007E,U+00A0-00FF,U+2013-2026,...`). Gochi Hand is left whole: its license reserves its name for unmodified copies.
 
 ### macOS
 

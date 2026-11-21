@@ -2,6 +2,10 @@
 
 The desktop app (`crates/app`, iced) follows AB Download Manager's world: charcoal panels, one blue-to-violet gradient, and a list grouped by what needs the user.
 
+## How design work is done
+
+All design work (new screens, themes, redesigns, mockups and variants to choose from) uses both the **impeccable** and **ui-ux-pro-max** skills together. Show proposals in impeccable's live server for review before any change to the app's code.
+
 ## Colour
 
 Tokens live in `crates/app/src/style.rs` (`Colors`, `DARK`, `LIGHT`).
@@ -20,6 +24,22 @@ Tokens live in `crates/app/src/style.rs` (`Colors`, `DARK`, `LIGHT`).
 | danger | #f85149 | | Failed |
 
 The gradient (`style::gradient`, 90°) appears on only three things: running progress bars, the Add URL tile, and the primary button's fill. Everything else stays grey, so the gradient always means "moving" or "the main action".
+
+### Hand-drawn themes
+
+Two more looks, picked in Settings, sit beside Dark and Light (`GRAPHITE`, `CHALK` in `style.rs`; mockups in `.impeccable/mocks/screens/sketch.html`). Each brings its own fonts, line weight and corners; layout and behaviour stay the same.
+
+| Token | Graphite | Chalk | Use |
+|---|---|---|---|
+| background | #f4efe1 cream paper | #262b28 slate | Window ground |
+| surface | #fbf8ef | #2b312d | Cards, inputs |
+| border | #2b2a26 graphite | #93948d chalk at 55% | Drawn outlines, 1.6px / 1.5px |
+| text / muted | #2b2a26 / #5c584e | #ece9df / #b9b7ac | |
+| accent | #2b57a6 ballpoint | #8cc4f0 chalk blue | Solid, no gradient |
+| fonts | Patrick Hand, Kalam Bold | Gochi Hand | Body, then labels and headings |
+
+- Corners differ per corner (Graphite controls 9/4/8/3px, cards 14/5/12/6px), so boxes look drawn rather than ruled.
+- Where Dark and Light use a fill, the hand-drawn looks draw an outline instead: the selected sidebar entry, file badges, progress tracks.
 
 ## Shape
 

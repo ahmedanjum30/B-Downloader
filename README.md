@@ -26,7 +26,7 @@ Free for personal and other non-commercial use. See [License](#license).
 - **Optional integrity check.** Verify a finished file's MD5 or SHA-256 checksum.
 - **Stays out of the way.** Runs in the tray, uses little memory while idle, and updates itself.
 - **Native and lightweight.** Written in Rust with the [iced](https://iced.rs) GUI toolkit; the installer is about 6 MB. No bundled browser engine.
-- **Modern interface** with dark and light themes, live speed and time left, and a progress bar that shows what each connection is downloading.
+- **Modern interface** with dark and light themes, plus two hand-drawn ones (Graphite pencil and Chalk on slate), live speed and time left, and a progress bar that shows what each connection is downloading.
 
 ## Installing
 
@@ -69,7 +69,7 @@ Questions or ideas? Ask in [Discussions](https://github.com/ahmedanjum30/B-Downl
 
 ## Building from source
 
-You need [Rust](https://rustup.rs/) 1.99 or newer.
+You need [Rust](https://rustup.rs/) 1.100 or newer.
 
 ```sh
 cargo build --release
@@ -90,7 +90,7 @@ The app is at `target/release/BDownloader.exe` (`target/release/BDownloader` on 
 
 ## Credits
 
-Icons from [Lucide](https://lucide.dev) (ISC license).
+Icons from [Lucide](https://lucide.dev) (ISC license). The hand-drawn themes use the [Patrick Hand](https://fonts.google.com/specimen/Patrick+Hand), [Kalam](https://fonts.google.com/specimen/Kalam) and [Gochi Hand](https://fonts.google.com/specimen/Gochi+Hand) fonts (SIL Open Font License, in `crates/app/assets/fonts`).
 
 ## License
 

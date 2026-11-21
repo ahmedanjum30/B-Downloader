@@ -20,7 +20,9 @@ jobs:
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v7
-      - uses: dtolnay/rust-toolchain@stable
+      - uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: "1.100"
       # Compiled dependencies from CI's release-cache job on main. Tag builds
       # can't reuse each other's caches, so this one only restores.
       - uses: Swatinem/rust-cache@v2
@@ -65,7 +67,9 @@ jobs:
     runs-on: macos-latest
     steps:
       - uses: actions/checkout@v7
-      - uses: dtolnay/rust-toolchain@stable
+      - uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: "1.100"
       - uses: Swatinem/rust-cache@v2
       - name: Build the app
         run: sh scripts/macos-app.sh --native

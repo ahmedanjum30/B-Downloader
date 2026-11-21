@@ -9,6 +9,7 @@ on:
       - "third_party/**"
       - "Cargo.toml"
       - "Cargo.lock"
+      - "rust-toolchain.toml"
       - "rustfmt.toml"
       - ".github/workflows/ci.yml"
   pull_request:
@@ -17,6 +18,7 @@ on:
       - "third_party/**"
       - "Cargo.toml"
       - "Cargo.lock"
+      - "rust-toolchain.toml"
       - "rustfmt.toml"
       - ".github/workflows/ci.yml"
   workflow_dispatch:
@@ -32,8 +34,9 @@ jobs:
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v7
-      - uses: dtolnay/rust-toolchain@stable
+      - uses: dtolnay/rust-toolchain@master
         with:
+          toolchain: "1.100"
           components: rustfmt, clippy
       - uses: Swatinem/rust-cache@v2
 
@@ -50,8 +53,9 @@ jobs:
     runs-on: macos-latest
     steps:
       - uses: actions/checkout@v7
-      - uses: dtolnay/rust-toolchain@stable
+      - uses: dtolnay/rust-toolchain@master
         with:
+          toolchain: "1.100"
           components: clippy
       - uses: Swatinem/rust-cache@v2
       - name: Clippy
@@ -74,7 +78,9 @@ jobs:
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v7
-      - uses: dtolnay/rust-toolchain@stable
+      - uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: "1.100"
       - uses: Swatinem/rust-cache@v2
         with:
           shared-key: release

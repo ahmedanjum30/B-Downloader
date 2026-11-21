@@ -68,7 +68,11 @@ fn main() -> iced::Result {
         .title(App::title)
         .theme(App::theme)
         .subscription(App::subscription)
-        .default_font(view::FONT)
+        .default_font(style::SYSTEM_FONT)
+        // The hand-drawn looks' handwriting (SIL Open Font License, see assets/fonts).
+        .font(include_bytes!("../assets/fonts/PatrickHand-Regular.ttf").as_slice())
+        .font(include_bytes!("../assets/fonts/Kalam-Bold.ttf").as_slice())
+        .font(include_bytes!("../assets/fonts/GochiHand-Regular.ttf").as_slice())
         .run()
 }
 

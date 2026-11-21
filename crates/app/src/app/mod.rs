@@ -545,12 +545,24 @@ impl App {
     }
 
     pub fn current_theme(&self) -> Theme {
-        let dark = match self.settings.theme {
-            ThemeChoice::System => self.system_dark,
-            ThemeChoice::Dark => true,
-            ThemeChoice::Light => false,
+        self.look().theme()
+    }
+
+    /// The look to draw with. While Settings is open, the theme picked there
+    /// shows at once; Save keeps it, closing without saving goes back.
+    pub fn look(&self) -> style::Look {
+        let theme = match &self.modal {
+            Some(Modal::Settings(draft)) => draft.theme,
+            _ => self.settings.theme,
         };
-        if dark { style::DARK_THEME.clone() } else { style::LIGHT_THEME.clone() }
+        match theme {
+            ThemeChoice::System if self.system_dark => style::Look::Dark,
+            ThemeChoice::System => style::Look::Light,
+            ThemeChoice::Dark => style::Look::Dark,
+            ThemeChoice::Light => style::Look::Light,
+            ThemeChoice::Graphite => style::Look::Graphite,
+            ThemeChoice::Chalk => style::Look::Chalk,
+        }
     }
 
     pub fn subscription(&self) -> Subscription<Message> {

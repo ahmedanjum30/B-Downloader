@@ -1,0 +1,5 @@
+# Everyone, and CI, builds with the same Rust. Raise it together with
+# `rust-version` in Cargo.toml.
+[toolchain]
+channel = "1.100"
+components = ["rustfmt", "clippy"]

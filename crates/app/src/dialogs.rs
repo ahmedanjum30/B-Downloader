@@ -13,7 +13,7 @@ use crate::icons::{self, icon};
 use crate::item::{Item, State};
 use crate::store::{self, HashKind, Settings, ThemeChoice};
 use crate::style;
-use crate::view::{BOLD, SEMIBOLD, colored, file_badge, muted};
+use crate::view::{bold, colored, file_badge, font, muted, semibold, txt};
 
 fn frame<'a>(title: &'a str, body: Element<'a, Message>, footer: Element<'a, Message>) -> Element<'a, Message> {
     sized_frame(title, body, footer, 540.0)
@@ -34,7 +34,7 @@ pub fn bare<T>(build: impl FnOnce() -> T) -> T {
 }
 
 fn sized_frame<'a>(title: &'a str, body: Element<'a, Message>, footer: Element<'a, Message>, width: f32) -> Element<'a, Message> {
-    let mut header = row![text(title).size(20).font(BOLD).width(Fill)].align_y(Center);
+    let mut header = row![txt(title).size(20).font(bold()).width(Fill)].align_y(Center);
     if BARE.get() {
         return container(column![header, body, footer].spacing(22))
             .padding(26)
@@ -59,17 +59,17 @@ fn sized_frame<'a>(title: &'a str, body: Element<'a, Message>, footer: Element<'
 }
 
 fn field<'a>(label: &'a str, content: impl Into<Element<'a, Message>>) -> Element<'a, Message> {
-    column![muted(label).size(13).font(SEMIBOLD), content.into()].spacing(8).into()
+    column![muted(label).size(13).font(semibold()), content.into()].spacing(8).into()
 }
 
 fn input<'a>(placeholder: &'a str, value: &'a str) -> text_input::TextInput<'a, Message> {
-    text_input(placeholder, value).padding(12).size(14).style(style::input)
+    text_input(placeholder, value).font(font()).padding(12).size(14).style(style::input)
 }
 
 fn folder_picker<'a>(dir: &Path) -> Element<'a, Message> {
     row![
         container(
-            text(format::middle_ellipsis(&dir.display().to_string(), 52))
+            txt(format::middle_ellipsis(&dir.display().to_string(), 52))
                 .size(14)
                 .wrapping(text::Wrapping::None)
         )
@@ -77,7 +77,7 @@ fn folder_picker<'a>(dir: &Path) -> Element<'a, Message> {
         .width(Fill)
         .clip(true)
         .style(style::panel),
-        button(text("Browse").size(14))
+        button(txt("Browse").size(14))
             .padding([11, 16])
             .style(style::secondary)
             .on_press(Message::BrowseFolder),
@@ -97,7 +97,7 @@ fn stepper<'a>(value: usize, max: usize, on_change: fn(usize) -> Message) -> Ele
     };
     row![
         step(&icons::MINUS, value > 1, value.saturating_sub(1)),
-        container(text(value.to_string()).size(15).font(SEMIBOLD)).center_x(44),
+        container(txt(value.to_string()).size(15).font(semibold())).center_x(44),
         step(&icons::PLUS, value < max, value + 1),
         slider(1..=max as u32, value as u32, move |n| on_change(n as usize))
             .width(Fill)
@@ -112,7 +112,7 @@ fn footer<'a>(confirm: &'a str, on_confirm: Option<Message>) -> Element<'a, Mess
     row![
         space().width(Fill),
         cancel(),
-        button(text(confirm).size(14).font(SEMIBOLD))
+        button(txt(confirm).size(14).font(semibold()))
             .padding([9, 16])
             .style(style::primary)
             .on_press_maybe(on_confirm),
@@ -122,7 +122,7 @@ fn footer<'a>(confirm: &'a str, on_confirm: Option<Message>) -> Element<'a, Mess
 }
 
 fn cancel<'a>() -> Element<'a, Message> {
-    button(text("Cancel").size(14).font(SEMIBOLD))
+    button(txt("Cancel").size(14).font(semibold()))
         .padding([9, 14])
         .style(style::ghost)
         .on_press(Message::CloseModal)
@@ -137,7 +137,7 @@ pub fn add(dialog: &AddDialog, existing: Option<(u64, u64)>) -> Element<'_, Mess
         .on_paste(Message::AddUrlPasted)
         .on_submit(Message::AddUrlSubmit);
     let torrent_file = button(
-        row![icon(&icons::FOLDER, 16.0, |c| c.text), text("Torrent file").size(14)]
+        row![icon(&icons::FOLDER, 16.0, |c| c.text), txt("Torrent file").size(14)]
             .spacing(8)
             .align_y(Center),
     )
@@ -226,10 +226,10 @@ pub fn add(dialog: &AddDialog, existing: Option<(u64, u64)>) -> Element<'_, Mess
             container(
                 row![
                     icon(&icons::LINK, 18.0, |c| c.accent),
-                    text(format!("You already have {} of this file in an unfinished download.", format::size(done)))
+                    txt(format!("You already have {} of this file in an unfinished download.", format::size(done)))
                         .size(14)
                         .width(Fill),
-                    button(text("Continue that download").size(13).font(SEMIBOLD))
+                    button(txt("Continue that download").size(13).font(semibold()))
                         .padding([7, 14])
                         .style(style::primary)
                         .on_press(Message::ContinueExisting(id)),
@@ -258,12 +258,14 @@ pub fn add(dialog: &AddDialog, existing: Option<(u64, u64)>) -> Element<'_, Mess
         .on_toggle(Message::AddVerify)
         .size(18)
         .text_size(14)
+        .font(font())
         .spacing(10);
     let mut checksum = column![row![icon(&icons::SHIELD, 18.0, |c| c.muted), verify].spacing(10).align_y(Center)].spacing(10);
     if dialog.verify {
         checksum = checksum.push(
             row![
                 pick_list(&HashKind::ALL[..], Some(dialog.hash_kind), Message::AddHashKind)
+                    .font(font())
                     .padding(11)
                     .text_size(14)
                     .width(120),
@@ -281,11 +283,11 @@ fn add_footer(dialog: &AddDialog) -> Element<'_, Message> {
     row![
         space().width(Fill),
         cancel(),
-        button(text("Download later").size(14).font(SEMIBOLD))
+        button(txt("Download later").size(14).font(semibold()))
             .padding([9, 14])
             .style(style::secondary)
             .on_press_maybe(dialog.can_submit().then_some(Message::ConfirmAddLater)),
-        button(text("Download").size(14).font(SEMIBOLD))
+        button(txt("Download").size(14).font(semibold()))
             .padding([10, 20])
             .style(style::primary)
             .on_press_maybe(dialog.can_submit().then_some(Message::ConfirmAdd)),
@@ -327,6 +329,7 @@ fn file_list<'a>(
             .on_toggle(on_all)
             .size(18)
             .text_size(14)
+            .font(font())
             .spacing(10)
             .width(Fill),
         muted(format!(
@@ -345,6 +348,7 @@ fn file_list<'a>(
                 .on_toggle(move |on| on_file(i, on))
                 .size(16)
                 .text_size(13)
+                .font(font())
                 .spacing(10)
                 .width(Fill),
             muted(format::size(file.size)).size(12),
@@ -389,13 +393,13 @@ fn certificate_warning<'a>() -> Element<'a, Message> {
     column![
         colored("The site's security certificate isn't trusted by Windows.", |c| c.danger)
             .size(13)
-            .font(SEMIBOLD),
+            .font(semibold()),
         muted(
             "Often a work or school network inspecting HTTPS. It can also be someone changing the file on the way: \
              only download anyway on a network you trust."
         )
         .size(13),
-        button(text("Download anyway (skip certificate check)").size(13).font(SEMIBOLD))
+        button(txt("Download anyway (skip certificate check)").size(13).font(semibold()))
             .padding([7, 12])
             .style(style::secondary)
             .on_press(Message::AddSkipCertificateCheck),
@@ -411,7 +415,7 @@ fn hint<'a>(content: &'a str) -> Element<'a, Message> {
 
 fn choices<'a, T: Copy + PartialEq>(options: &[(T, &'a str)], current: T, on_press: fn(T) -> Message) -> Element<'a, Message> {
     let buttons = row(options.iter().map(|&(value, label)| {
-        button(text(label).size(14).width(Fill).center())
+        button(txt(label).size(14).width(Fill).center())
             .padding([8, 12])
             .width(Fill)
             .style(style::tab(current == value))
@@ -443,7 +447,7 @@ fn updates<'a>(draft: &Settings, status: String) -> Element<'a, Message> {
         ),
         row![
             muted(status).size(13).width(Fill),
-            button(text("Check now").size(13))
+            button(txt("Check now").size(13))
                 .padding([7, 14])
                 .style(style::secondary)
                 .on_press(Message::CheckForUpdates { manual: true }),
@@ -465,7 +469,7 @@ fn help<'a>() -> Element<'a, Message> {
                      versions and B-Downloader's log, for you to check before sending."
                 ),
                 row![
-                    button(text("Report a problem").size(14).font(SEMIBOLD))
+                    button(txt("Report a problem").size(14).font(semibold()))
                         .padding([9, 16])
                         .style(style::primary)
                         .on_press(Message::OpenReport),
@@ -478,7 +482,7 @@ fn help<'a>() -> Element<'a, Message> {
             column![
                 hint("A record of connection errors, retries and updates. Links are kept without their tokens, and cookies never."),
                 row![
-                    button(text("Open log folder").size(14))
+                    button(txt("Open log folder").size(14))
                         .padding([9, 16])
                         .style(style::secondary)
                         .on_press(Message::OpenLogs),
@@ -500,8 +504,15 @@ fn queue_settings(draft: &Settings) -> Element<'_, Message> {
     let time = |enabled: bool, label: &'static str, value: &str, on_toggle: fn(bool) -> Message, on_input: fn(String) -> Message| {
         let valid = store::parse_time(value).is_some();
         let mut line = row![
-            checkbox(enabled).label(label).on_toggle(on_toggle).size(18).text_size(14).spacing(10),
+            checkbox(enabled)
+                .label(label)
+                .on_toggle(on_toggle)
+                .size(18)
+                .text_size(14)
+                .font(font())
+                .spacing(10),
             text_input("HH:MM", value)
+                .font(font())
                 .on_input(on_input)
                 .padding([6, 8])
                 .size(14)
@@ -557,6 +568,7 @@ fn general(draft: &Settings) -> Element<'_, Message> {
         .on_toggle(Message::SettingsSortByType)
         .size(18)
         .text_size(14)
+        .font(font())
         .spacing(10);
     column![
         field(
@@ -574,7 +586,9 @@ fn general(draft: &Settings) -> Element<'_, Message> {
                 &[
                     (ThemeChoice::System, "System"),
                     (ThemeChoice::Dark, "Dark"),
-                    (ThemeChoice::Light, "Light")
+                    (ThemeChoice::Light, "Light"),
+                    (ThemeChoice::Graphite, "Graphite"),
+                    (ThemeChoice::Chalk, "Chalk")
                 ],
                 draft.theme,
                 Message::SettingsTheme
@@ -604,6 +618,7 @@ fn torrents<'a>(draft: &'a Settings, seed_ratio_text: &'a str) -> Element<'a, Me
             .on_toggle(Message::SettingsSeed)
             .size(18)
             .text_size(14)
+            .font(font())
             .spacing(10),
     ]
     .spacing(8);
@@ -612,6 +627,7 @@ fn torrents<'a>(draft: &'a Settings, seed_ratio_text: &'a str) -> Element<'a, Me
             row![
                 muted("Until they've uploaded").size(13),
                 text_input("1", seed_ratio_text)
+                    .font(font())
                     .on_input(Message::SettingsSeedRatio)
                     .padding([6, 8])
                     .size(14)
@@ -682,7 +698,7 @@ pub fn settings<'a>(
     theme: &Theme,
 ) -> Element<'a, Message> {
     let tabs = column(SettingsTab::ALL.map(|t| {
-        button(text(t.label()).size(14).font(if t == tab { SEMIBOLD } else { crate::view::FONT }))
+        button(txt(t.label()).size(14).font(if t == tab { semibold() } else { crate::view::font() }))
             .padding([8, 10])
             .width(Fill)
             .style(style::nav(t == tab))
@@ -703,7 +719,7 @@ pub fn settings<'a>(
         SettingsTab::Help => (help(), "Report a problem, or find the log."),
     };
     let section = column![
-        column![text(tab.label()).size(18).font(SEMIBOLD), muted(about).size(13)].spacing(2),
+        column![txt(tab.label()).size(18).font(semibold()), muted(about).size(13)].spacing(2),
         container(space()).width(Fill).height(1).style(style::rule),
         content,
     ]
@@ -728,6 +744,7 @@ pub fn report(dialog: &ReportDialog) -> Element<'_, Message> {
             "What went wrong?",
             column![
                 text_editor(&dialog.description)
+                    .font(font())
                     .placeholder("For example: the download from this site stops at 50% and says the link expired.")
                     .on_action(Message::ReportEdit)
                     .height(140)
@@ -742,6 +759,7 @@ pub fn report(dialog: &ReportDialog) -> Element<'_, Message> {
             .on_toggle(Message::ReportIncludeLog)
             .size(18)
             .text_size(14)
+            .font(font())
             .spacing(10),
         hint(
             "It opens on GitHub in your browser, with your app and Windows versions added. Reports are public: \
@@ -766,7 +784,7 @@ pub fn power_countdown<'a>(action: WhenDone, seconds: u64) -> Element<'a, Messag
     let body = column![
         row![
             icon(&icons::POWER, 20.0, |c| c.accent),
-            text(format!("Downloads are done. Your PC will {verb} in {seconds} seconds."))
+            txt(format!("Downloads are done. Your PC will {verb} in {seconds} seconds."))
                 .size(15)
                 .width(Fill),
         ]
@@ -783,13 +801,13 @@ fn copy_field<'a>(value: String, copied: bool) -> Element<'a, Message> {
     let label: Element<'a, Message> = if copied {
         row![
             icon(&icons::CHECK, 15.0, |c| c.success),
-            colored("Copied", |c| c.success).size(13).font(SEMIBOLD)
+            colored("Copied", |c| c.success).size(13).font(semibold())
         ]
         .spacing(6)
         .align_y(Center)
         .into()
     } else {
-        row![icon(&icons::COPY, 15.0, |c| c.muted), muted("Copy").size(13).font(SEMIBOLD)]
+        row![icon(&icons::COPY, 15.0, |c| c.muted), muted("Copy").size(13).font(semibold())]
             .spacing(6)
             .align_y(Center)
             .into()
@@ -800,9 +818,9 @@ fn copy_field<'a>(value: String, copied: bool) -> Element<'a, Message> {
     button(
         row![
             container(
-                text(format::middle_ellipsis(&value, 50))
+                txt(format::middle_ellipsis(&value, 50))
                     .size(14)
-                    .font(SEMIBOLD)
+                    .font(semibold())
                     .wrapping(text::Wrapping::None)
             )
             .width(Fill)
@@ -830,7 +848,7 @@ pub fn extension<'a>(browser: Browser, connected: bool, copied: Option<&str>) ->
             container(icon(&icons::GLOBE, 22.0, |c| c.accent))
                 .center(44)
                 .style(style::accent_soft(12.0)),
-            column![colored(title, pick).size(15).font(SEMIBOLD), muted(detail).size(13)].spacing(3),
+            column![colored(title, pick).size(15).font(semibold()), muted(detail).size(13)].spacing(3),
         ]
         .spacing(14)
         .align_y(Center),
@@ -841,7 +859,7 @@ pub fn extension<'a>(browser: Browser, connected: bool, copied: Option<&str>) ->
 
     // One tab per browser; the steps below are for the chosen one.
     let tabs = row(Browser::tabs().iter().map(|&b| {
-        button(text(b.name()).size(13).width(Fill).center())
+        button(txt(b.name()).size(13).width(Fill).center())
             .padding([7, 4])
             .width(Fill)
             .style(style::tab(b == browser))
@@ -852,10 +870,10 @@ pub fn extension<'a>(browser: Browser, connected: bool, copied: Option<&str>) ->
 
     let step = |n: &'a str, line: &'a str| {
         row![
-            container(colored(n, |c| c.accent).size(12).font(BOLD))
+            container(colored(n, |c| c.accent).size(12).font(bold()))
                 .center(24)
                 .style(style::accent_soft(12.0)),
-            text(line).size(14).width(Fill),
+            txt(line).size(14).width(Fill),
         ]
         .spacing(12)
         .align_y(Center)
@@ -866,7 +884,7 @@ pub fn extension<'a>(browser: Browser, connected: bool, copied: Option<&str>) ->
     if browser == Browser::Safari {
         let body = column![
             status,
-            muted("How to add it").size(13).font(SEMIBOLD),
+            muted("How to add it").size(13).font(semibold()),
             container(tabs).padding(4).style(style::panel),
             step("1", "In Safari, open Settings, then Advanced, and turn on Show features for web developers."),
             step("2", "Open the Developer tab and turn on Allow unsigned extensions. Safari asks for your Mac's password."),
@@ -877,7 +895,7 @@ pub fn extension<'a>(browser: Browser, connected: bool, copied: Option<&str>) ->
         .spacing(12);
         let footer = row![
             space().width(Fill),
-            button(text("Close").size(14))
+            button(txt("Close").size(14))
                 .padding([10, 18])
                 .style(style::secondary)
                 .on_press(Message::CloseModal),
@@ -887,11 +905,11 @@ pub fn extension<'a>(browser: Browser, connected: bool, copied: Option<&str>) ->
 
     let mut body = column![
         status,
-        muted("What it does").size(13).font(SEMIBOLD),
-        text("• Downloads you start in the browser go to B-Downloader.").size(14),
-        text("• Right-click a link and choose Download with B-Downloader.").size(14),
-        text("• Videos, YouTube too, get a Download this video bar.").size(14),
-        muted("How to add it").size(13).font(SEMIBOLD),
+        muted("What it does").size(13).font(semibold()),
+        txt("• Downloads you start in the browser go to B-Downloader.").size(14),
+        txt("• Right-click a link and choose Download with B-Downloader.").size(14),
+        txt("• Videos, YouTube too, get a Download this video bar.").size(14),
+        muted("How to add it").size(13).font(semibold()),
         container(tabs).padding(4).style(style::panel),
     ]
     .spacing(12);
@@ -904,11 +922,11 @@ pub fn extension<'a>(browser: Browser, connected: bool, copied: Option<&str>) ->
         };
         body = body.push(
             row![
-                button(text(format!("Add to {}", browser.name())).size(14))
+                button(txt(format!("Add to {}", browser.name())).size(14))
                     .padding([10, 18])
                     .style(style::primary)
                     .on_press(Message::AddExtension(browser)),
-                text(hint).size(14).width(Fill),
+                txt(hint).size(14).width(Fill),
             ]
             .spacing(14)
             .align_y(Center),
@@ -948,7 +966,7 @@ pub fn extension<'a>(browser: Browser, connected: bool, copied: Option<&str>) ->
 
     let footer = row![
         space().width(Fill),
-        button(text("Close").size(14))
+        button(txt("Close").size(14))
             .padding([10, 18])
             .style(style::secondary)
             .on_press(Message::CloseModal),
@@ -968,7 +986,7 @@ pub fn refresh(dialog: &RefreshDialog) -> Element<'_, Message> {
         row![
             file_badge(extension),
             column![
-                text(format::middle_ellipsis(&dialog.name, 48)).size(15).font(SEMIBOLD),
+                txt(format::middle_ellipsis(&dialog.name, 48)).size(15).font(semibold()),
                 muted(size).size(13)
             ]
             .spacing(3)
@@ -982,7 +1000,7 @@ pub fn refresh(dialog: &RefreshDialog) -> Element<'_, Message> {
 
     let mut body = column![
         file,
-        text(
+        txt(
             "Download links often stop working after a while. Give B-Downloader a new link to the same file, and it continues from where it stopped."
         )
         .size(14),
@@ -992,7 +1010,7 @@ pub fn refresh(dialog: &RefreshDialog) -> Element<'_, Message> {
     if dialog.referrer.is_some() {
         body = body.push(
             row![
-                button(text("Open download page").size(14))
+                button(txt("Open download page").size(14))
                     .padding([10, 16])
                     .style(style::secondary)
                     .on_press(Message::RefreshFromPage),
@@ -1064,7 +1082,7 @@ pub fn remove(item: &Item, delete_file: bool) -> Element<'_, Message> {
         container(
             row![
                 file_badge(item.extension()),
-                text(format::middle_ellipsis(&item.display_name(), 48)).size(15).font(SEMIBOLD),
+                txt(format::middle_ellipsis(&item.display_name(), 48)).size(15).font(semibold()),
             ]
             .spacing(14)
             .align_y(Center),
@@ -1076,13 +1094,14 @@ pub fn remove(item: &Item, delete_file: bool) -> Element<'_, Message> {
     .spacing(16);
 
     if finished {
-        body = body.push(text("It's removed from the list. The file itself stays where it is, unless you tick the box.").size(14));
+        body = body.push(txt("It's removed from the list. The file itself stays where it is, unless you tick the box.").size(14));
         body = body.push(
             checkbox(delete_file)
                 .label("Also delete the file from disk (moves it to the Recycle Bin)")
                 .on_toggle(Message::RemoveDeleteFile)
                 .size(18)
                 .text_size(14)
+                .font(font())
                 .spacing(10),
         );
     } else {
@@ -1091,19 +1110,19 @@ pub fn remove(item: &Item, delete_file: bool) -> Element<'_, Message> {
         } else {
             "Nothing has been downloaded yet.".to_owned()
         };
-        body = body.push(text(format!("The download stops and is removed from the list. {done}")).size(14));
+        body = body.push(txt(format!("The download stops and is removed from the list. {done}")).size(14));
     }
 
     let footer = row![
         space().width(Fill),
-        button(text("Cancel").size(14))
+        button(txt("Cancel").size(14))
             .padding([10, 18])
             .style(style::secondary)
             .on_press(Message::CloseModal),
         button(
-            text(if finished && !delete_file { "Remove" } else { "Remove and delete" })
+            txt(if finished && !delete_file { "Remove" } else { "Remove and delete" })
                 .size(14)
-                .font(SEMIBOLD)
+                .font(semibold())
         )
         .padding([10, 20])
         .style(style::danger)
@@ -1148,7 +1167,7 @@ pub fn details<'a>(item: &'a Item, copied: Option<&str>, limit_text: &'a str, fi
         ("Connections", format!("Up to {}", item.connections))
     };
     let line = |label: &'a str, value: String| {
-        row![muted(label).size(13).width(110), text(value).size(14).width(Fill)]
+        row![muted(label).size(13).width(110), txt(value).size(14).width(Fill)]
             .spacing(12)
             .align_y(Center)
     };
@@ -1161,7 +1180,7 @@ pub fn details<'a>(item: &'a Item, copied: Option<&str>, limit_text: &'a str, fi
         container(
             row![
                 file_badge(item.extension()),
-                text(format::middle_ellipsis(&item.display_name(), 48)).size(15).font(SEMIBOLD),
+                txt(format::middle_ellipsis(&item.display_name(), 48)).size(15).font(semibold()),
             ]
             .spacing(14)
             .align_y(Center),
@@ -1187,7 +1206,7 @@ pub fn details<'a>(item: &'a Item, copied: Option<&str>, limit_text: &'a str, fi
         body = body.push(line("Shared", sharing));
         if let Some(info) = files_of.filter(|t| t.info_hash == torrent_hash(item) && t.files.len() > 1) {
             let chosen = |index: usize| torrent_file_chosen(item, index);
-            body = body.push(muted("Files").size(13).font(SEMIBOLD));
+            body = body.push(muted("Files").size(13).font(semibold()));
             body = body.push(file_list(
                 info,
                 info.files.iter().map(|f| chosen(f.index)).collect(),
@@ -1217,6 +1236,7 @@ pub fn details<'a>(item: &'a Item, copied: Option<&str>, limit_text: &'a str, fi
                 .on_toggle(move |on| Message::ItemLimit(id, on))
                 .size(18)
                 .text_size(14)
+                .font(font())
                 .spacing(10),
         ]
         .spacing(12)
@@ -1225,6 +1245,7 @@ pub fn details<'a>(item: &'a Item, copied: Option<&str>, limit_text: &'a str, fi
             limit = limit
                 .push(
                     text_input("1", limit_text)
+                        .font(font())
                         .on_input(move |typed| Message::ItemLimitText(id, typed))
                         .padding([6, 8])
                         .size(14)
@@ -1236,22 +1257,22 @@ pub fn details<'a>(item: &'a Item, copied: Option<&str>, limit_text: &'a str, fi
         body = body.push(limit);
     }
     body = body
-        .push(muted("Saved in").size(13).font(SEMIBOLD))
+        .push(muted("Saved in").size(13).font(semibold()))
         .push(copyable(item.dir.display().to_string()))
-        .push(muted(if item.is_torrent() { "Torrent" } else { "Link" }).size(13).font(SEMIBOLD))
+        .push(muted(if item.is_torrent() { "Torrent" } else { "Link" }).size(13).font(semibold()))
         .push(copyable(item.url.clone()));
     let page = item.headers.iter().find(|(name, _)| name.eq_ignore_ascii_case("referer"));
     if let Some((_, page)) = page {
-        body = body.push(muted("From page").size(13).font(SEMIBOLD)).push(copyable(page.clone()));
+        body = body.push(muted("From page").size(13).font(semibold())).push(copyable(page.clone()));
     }
 
     let footer = row![
         space().width(Fill),
-        button(text("Open folder").size(14))
+        button(txt("Open folder").size(14))
             .padding([10, 18])
             .style(style::secondary)
             .on_press(Message::OpenDownloadFolder(item.id)),
-        button(text("Close").size(14))
+        button(txt("Close").size(14))
             .padding([10, 18])
             .style(style::secondary)
             .on_press(Message::CloseModal),
@@ -1266,7 +1287,7 @@ fn summary<'a>(badge: String, size: String, support: impl text::IntoFragment<'a>
     container(
         row![
             file_badge(badge),
-            column![text(size).size(15).font(SEMIBOLD), colored(support, pick).size(13)].spacing(3)
+            column![txt(size).size(15).font(semibold()), colored(support, pick).size(13)].spacing(3)
         ]
         .spacing(14)
         .align_y(Center),
