@@ -6,6 +6,19 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+## [1.5.0] - 2026-11-22
+
+### Added
+- Two hand-drawn themes, next to Dark and Light: **Graphite** (pencil on
+  cream sketchbook paper, with blue ballpoint for downloads in progress) and
+  **Chalk** (chalk on a dark slate board). Each has its own handwriting
+  fonts, drawn outlines and uneven corners. Pick one in Settings > General.
+- Clicking a theme in Settings shows it at once, so you can try them all
+  before choosing; Save keeps it, closing Settings without saving goes back.
+
+### Changed
+- Built with Rust 1.100, now pinned for every build.
+
 ## [1.4.1] - 2026-11-19
 
 ### Added
