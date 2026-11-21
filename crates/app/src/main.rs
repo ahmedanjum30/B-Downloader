@@ -3,6 +3,7 @@
 
 mod app;
 mod browser;
+mod caption;
 mod dialogs;
 mod format;
 mod icons;

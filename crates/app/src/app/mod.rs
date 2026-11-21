@@ -35,7 +35,7 @@ use crate::item::{Item, State};
 use crate::store::{self, HashKind, Settings, ThemeChoice};
 use crate::tray::{self, Tray, TrayAction};
 use crate::update::{self, Relaunch, Release};
-use crate::{browser, format, instance, memory, style};
+use crate::{browser, caption, format, instance, memory, style};
 
 /// Where people can support BDownloader.
 pub const SUPPORT_URL: &str = "https://www.patreon.com/cw/ahmedanjum30";
@@ -354,6 +354,8 @@ pub struct App {
     /// A dialog for a download from the browser, shown in a window of its own
     /// while the main window is in the tray.
     pub dialog_window: Option<window::Id>,
+    /// The look the windows' title bars were last painted for.
+    caption_look: style::Look,
     /// The dialog window is showing (it opens hidden until it has its size).
     dialog_window_shown: bool,
     /// The main window has the focus: someone's looking at the downloads.
@@ -403,6 +405,7 @@ impl App {
             motion: motion::Motion::default(),
             main_window: None,
             dialog_window: None,
+            caption_look: style::Look::Dark,
             dialog_window_shown: false,
             main_focused: false,
             checked: std::collections::HashMap::new(),
@@ -424,7 +427,9 @@ impl App {
         // links and .torrent files ask which files to download first.
         let (main_window, opened) = window::open(crate::main_window());
         app.main_window = Some(main_window);
-        let mut tasks: Vec<Task<Message>> = vec![opened.discard()];
+        app.caption_look = app.look();
+        let look = app.caption_look;
+        let mut tasks: Vec<Task<Message>> = vec![opened.then(move |id| caption::paint(id, look))];
         tasks.extend(instance::from_args().into_iter().map(|r| Task::done(Message::External(r))));
         tasks.extend([
             system::theme().map(Message::SystemTheme),
@@ -489,8 +494,9 @@ impl App {
         });
         self.dialog_window = Some(id);
         self.dialog_window_shown = false;
+        let look = self.look();
         Task::batch([
-            opened.discard(),
+            opened.then(move |id| caption::paint(id, look)),
             // In case it's never measured, it still shows.
             Task::perform(tokio::time::sleep(Duration::from_millis(400)), |_| Message::DialogWindowShow),
         ])
@@ -637,6 +643,21 @@ impl App {
     }
 
     pub fn update(&mut self, message: Message) -> Task<Message> {
+        let task = self.update_app(message);
+        // A new theme, or one previewed in Settings: the title bars follow.
+        let look = self.look();
+        if look == self.caption_look {
+            return task;
+        }
+        self.caption_look = look;
+        let repaint = [self.main_window, self.dialog_window]
+            .into_iter()
+            .flatten()
+            .map(|id| caption::paint(id, look));
+        Task::batch(std::iter::once(task).chain(repaint))
+    }
+
+    fn update_app(&mut self, message: Message) -> Task<Message> {
         // The routine refreshes never close a dialog, so they skip keeping a
         // copy of it for its fade-out.
         let routine = matches!(
