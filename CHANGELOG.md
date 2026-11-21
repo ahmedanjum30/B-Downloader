@@ -6,6 +6,14 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+## [1.5.1] - 2026-11-22
+
+### Fixed
+- In the Graphite and Chalk themes, the window's title bar (with the
+  minimize, maximize and close buttons) takes the theme's paper or slate
+  color, title and outline, instead of Windows' grey. Windows 11; earlier
+  versions of Windows keep their own title bar.
+
 ## [1.5.0] - 2026-11-22
 
 ### Added
