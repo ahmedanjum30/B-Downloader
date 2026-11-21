@@ -19,6 +19,7 @@
 - Video downloads: a "Download this video" bar on web videos; HLS streams (including AES-128 encrypted); YouTube in any quality up to 4K, joined into one MP4, without third-party tools.
 - Global speed limit, tray icon (menu bar on Mac), automatic updates (Homebrew on Mac), per-download details.
 - Torrents: magnet links and .torrent files, which open in the app from the browser and Explorer or Finder.
+- Themes: Dark and Light (following the system), and two hand-drawn ones, Graphite (pencil on sketchbook paper) and Chalk (chalk on slate), each previewed as soon as it's clicked in Settings (version 1.5.0 and later).
 - Alternative to: Internet Download Manager (IDM), Free Download Manager, JDownloader.
 
 ## Questions
