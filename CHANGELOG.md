@@ -6,6 +6,12 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+### Fixed
+- The Add download dialog no longer stays open, with "Your browser is
+  downloading this one", for a browser download B-Downloader can't take
+  over. When the site is slow to refuse and the dialog has already opened,
+  it now closes by itself, and the browser carries on with the download.
+
 ## [1.5.3] - 2026-11-22
 
 ### Changed

@@ -51,8 +51,6 @@ pub struct AddDialog {
     /// A download the browser handed over, numbered: its link check is
     /// running, and its answer fills the dialog in.
     pub offer: Option<u64>,
-    /// The check found the app doesn't get the file, so the browser kept it.
-    pub left_to_browser: bool,
     /// The user chose to download it although its certificate failed.
     pub skip_certificate_check: bool,
 }
@@ -77,7 +75,6 @@ impl AddDialog {
             torrent: None,
             selected: Vec::new(),
             offer: None,
-            left_to_browser: false,
             skip_certificate_check: false,
         }
     }
@@ -169,15 +166,10 @@ impl AddDialog {
 
     /// The check failed on the site's certificate, so "Download anyway" can be offered.
     pub fn certificate_failed(&self) -> bool {
-        !self.left_to_browser
-            && !self.skip_certificate_check
-            && matches!(&self.probe, Probe::Failed(e) if bdownloader_core::is_certificate_message(e))
+        !self.skip_certificate_check && matches!(&self.probe, Probe::Failed(e) if bdownloader_core::is_certificate_message(e))
     }
 
     pub fn can_submit(&self) -> bool {
-        if self.left_to_browser {
-            return false;
-        }
         if self.is_torrent() {
             // Its files have to be known to choose from them.
             return self.selected.iter().any(|on| *on);
@@ -208,7 +200,6 @@ impl App {
                     dialog.url = url;
                     dialog.probe = Probe::Idle;
                     dialog.offer = None;
-                    dialog.left_to_browser = false;
                     dialog.skip_certificate_check = false;
                     // A different link is no longer the captured YouTube video, or the torrent.
                     dialog.youtube = None;
@@ -225,7 +216,6 @@ impl App {
                     dialog.torrent = None;
                     dialog.selected.clear();
                     dialog.offer = None;
-                    dialog.left_to_browser = false;
                     return self.probe();
                 }
             }
@@ -523,9 +513,12 @@ impl App {
                 let probe_id = dialog.probe_id;
                 self.handle_add(Message::Probed(probe_id, Ok(info)))
             }
+            // The browser kept it, so the dialog has nothing to offer: it
+            // closes rather than wait to be cancelled. (A slow site's refusal
+            // comes after the dialog has opened.)
             Err(reason) => {
-                dialog.probe = Probe::Failed(format!("Your browser is downloading this one: {reason}"));
-                dialog.left_to_browser = true;
+                log::info!("closed the dialog, the browser is downloading it: {reason}");
+                self.modal = None;
                 Task::none()
             }
         }
