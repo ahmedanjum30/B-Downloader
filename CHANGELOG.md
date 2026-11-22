@@ -6,6 +6,8 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+## [1.5.2] - 2026-11-22
+
 ### Fixed
 - Small downloads from the browser are no longer downloaded twice. The
   browser often finished a small file while B-Downloader was still checking
