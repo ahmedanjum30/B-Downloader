@@ -94,20 +94,49 @@ jobs:
       - name: Add the macOS app to the checksums
         run: cd dist && sha256sum B-Downloader-*-macos.zip >> SHA256SUMS.txt
 
+      # The notes: this version's section of CHANGELOG.md, then how to
+      # install. GitHub adds the list of changes below them.
+      - uses: actions/checkout@v7
+        with:
+          path: source
+          sparse-checkout: CHANGELOG.md
+          sparse-checkout-cone-mode: false
+      - name: Write the release notes
+        shell: bash
+        run: |
+          version="${GITHUB_REF_NAME#v}"
+          # The lines under "## [<version>]", up to the next version's heading.
+          awk -v v="$version" '
+            index($0, "## [" v "]") == 1 { on = 1; next }
+            on && /^## \[/ { exit }
+            on { print }
+          ' source/CHANGELOG.md > changes.md
+          {
+            echo "## What's new in $version"
+            if grep -q '[^[:space:]]' changes.md; then
+              cat changes.md
+            else
+              echo "::warning::CHANGELOG.md has no entry for $version" >&2
+            fi
+            cat <<EOF
+
+          ## Install
+
+          **Windows:** download **BDownloader-Setup-$version.exe** below and run it. It installs for your user only, without admin rights. Already have BDownloader? It updates itself.
+
+          > **Windows says "Windows protected your PC"?** Click **More info**, then **Run anyway**. BDownloader isn't code-signed yet, so Windows doesn't know the publisher. The installer is the one built by this repository's release workflow; you can check it against \`SHA256SUMS.txt\`.
+
+          **Mac (Apple Silicon):** \`brew install --cask ahmedanjum30/tap/b-downloader\`, or \`brew upgrade\` if you have it. Or download **B-Downloader-$version-macos.zip** below, unzip it and drag the app to Applications; the first time, right-click it and choose **Open**.
+
+          To add the browser extension, open **Browser extension** in BDownloader. It's on [Firefox Add-ons](https://addons.mozilla.org/firefox/addon/bdownloader/) and [Edge Add-ons](https://microsoftedge.microsoft.com/addons/detail/kfbjnlpmchkeaphhdeidpdpcomoohdfa). The extension zip is for loading it unpacked in other Chromium browsers.
+          EOF
+          } > notes.md
+          cat notes.md
+
       - uses: softprops/action-gh-release@v3
         with:
           files: dist/*
-          # Shown above the generated list of changes.
-          body: |
-            ## Install
-
-            Download **BDownloader-Setup-${{ github.ref_name }}.exe** below and run it. It installs for your user only, without admin rights. Already have BDownloader 0.1.1 or later? It updates itself.
-
-            > **Windows says "Windows protected your PC"?** Click **More info**, then **Run anyway**. BDownloader isn't code-signed yet, so Windows doesn't know the publisher. The installer is the one built by this repository's release workflow; you can check it against `SHA256SUMS.txt`.
-
-            **On a Mac** (Apple Silicon): `brew install --cask ahmedanjum30/tap/b-downloader`, or download **B-Downloader-${{ github.ref_name }}-macos.zip**, unzip it and drag the app to Applications.
-
-            To add the browser extension, open **Browser extension** in BDownloader. It's on [Firefox Add-ons](https://addons.mozilla.org/firefox/addon/bdownloader/) and [Edge Add-ons](https://microsoftedge.microsoft.com/addons/detail/kfbjnlpmchkeaphhdeidpdpcomoohdfa). The extension zip is for loading it unpacked in other Chromium browsers.
+          body_path: notes.md
           generate_release_notes: true
 
   # A changed extension goes to Firefox Add-ons for review; Firefox then
