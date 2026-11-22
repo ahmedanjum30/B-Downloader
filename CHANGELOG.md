@@ -6,6 +6,8 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+## [1.5.4] - 2026-11-22
+
 ### Fixed
 - The Add download dialog no longer stays open, with "Your browser is
   downloading this one", for a browser download B-Downloader can't take
