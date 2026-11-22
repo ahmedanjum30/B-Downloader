@@ -6,6 +6,14 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+### Fixed
+- Small downloads from the browser are no longer downloaded twice. The
+  browser often finished a small file while B-Downloader was still checking
+  its link; the extension then removed the browser's copy and B-Downloader
+  downloaded it again. Files under 2 MB now stay in the browser (right-click
+  "Download with B-Downloader" still sends them), and a download the browser
+  has already finished is never taken away from it. Browser extension 1.1.3.
+
 ## [1.5.1] - 2026-11-22
 
 ### Fixed

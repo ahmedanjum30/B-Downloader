@@ -11,6 +11,10 @@ if (typeof importScripts === "function") importScripts("videos.js", "yt-capture.
 
 const HOST = "com.bdownloader.host";
 const MENU_ID = "bdownloader";
+// Downloads smaller than this stay in the browser: it has them in a moment,
+// and several connections gain nothing on a small file. Taking one over
+// meant the browser often finished it first and then lost it.
+const SMALL_FILE = 2 * 1024 * 1024;
 
 function isWebUrl(url) {
   return /^https?:\/\//i.test(url || "");
@@ -152,9 +156,17 @@ async function takeOver(item, url, suggest, saved) {
   // download after a check). So the browser's download stays until
   // BDownloader has checked it gets the same file.
   const size = item.totalBytes > 0 ? item.totalBytes : item.fileSize > 0 ? item.fileSize : null;
+  if (size !== null && size < SMALL_FILE) {
+    suggest();
+    return;
+  }
   const expect = { mime: item.mime || null, size };
   const from = { incognito: item.incognito, cookieStoreId: item.cookieStoreId };
   const taken = await handOver(url, item.referrer, name, null, dir, expect, from);
+  // The browser may have finished it while BDownloader checked the link
+  // (Firefox doesn't hold a download back): then it keeps its file.
+  const [now] = await chrome.downloads.search({ id: item.id }).catch(() => []);
+  if (taken && now && now.state === "complete") return;
   if (taken) {
     // Cancelled rather than paused: a paused download can keep its
     // connection open, and sites that limit connections count it against BDownloader.
