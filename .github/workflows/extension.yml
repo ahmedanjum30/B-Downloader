@@ -7,6 +7,11 @@ name: Extension
 
 on:
   workflow_dispatch:
+    inputs:
+      force_edge:
+        description: "Submit to Edge even if unchanged (a version Edge refused while it reviewed the one before)"
+        type: boolean
+        default: false
 
 permissions:
   contents: read
@@ -37,7 +42,7 @@ jobs:
         run: ./scripts/package-extension.ps1
       - name: Submit to Edge Add-ons
         shell: pwsh
-        run: ./scripts/publish-edge.ps1
+        run: ./scripts/publish-edge.ps1 ${{ inputs.force_edge && '-Force' || '' }}
         env:
           EDGE_CLIENT_ID: ${{ secrets.EDGE_CLIENT_ID }}
           EDGE_API_KEY: ${{ secrets.EDGE_API_KEY }}

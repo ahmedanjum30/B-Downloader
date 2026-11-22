@@ -1,14 +1,18 @@
 # Submits a new version of the extension to Edge Add-ons, so Edge updates it
 # for everyone once Microsoft has reviewed it.
 #
-#   powershell -ExecutionPolicy Bypass -File scripts\publish-edge.ps1 [-Zip <path>]
+#   powershell -ExecutionPolicy Bypass -File scripts\publish-edge.ps1 [-Zip <path>] [-Force]
 #
 # Needs the Publish API credentials from Partner Center (the extension's
 # page → Publish API) in EDGE_CLIENT_ID, EDGE_API_KEY and EDGE_PRODUCT_ID.
 # Only submits when the extension's version differs from the previous
-# release's, so an unchanged extension isn't sent for review again.
+# release's, so an unchanged extension isn't sent for review again; -Force
+# submits anyway (a version Edge refused while it reviewed the one before).
+#
+# Edge takes no new submission while it's still reviewing the last one. The
+# new version then waits as a draft, and the step warns instead of failing.
 
-param([string]$Zip)
+param([string]$Zip, [switch]$Force)
 
 $ErrorActionPreference = 'Stop'
 $root = Split-Path $PSScriptRoot -Parent
@@ -24,7 +28,7 @@ if (-not $clientId -or -not $apiKey -or -not $productId) {
 
 # The extension's version in the release before this one.
 $previousTag = git -C $root describe --tags --abbrev=0 'HEAD^' 2>$null
-if ($previousTag) {
+if ($previousTag -and -not $Force) {
     $previous = (git -C $root show "${previousTag}:extension/manifest.json" | Out-String | ConvertFrom-Json).version
     if ($previous -eq $version) {
         "Extension $version is unchanged since $previousTag; nothing to submit to Edge."
@@ -69,6 +73,15 @@ The extension talks only to the BDownloader app on the same computer, through th
 '@
 "Submitting extension $version for review"
 $body = @{ notes = $notes } | ConvertTo-Json
-$submit = Invoke-WebRequest -Method Post -Uri $api -Headers $headers -ContentType 'application/json' -Body ([Text.Encoding]::UTF8.GetBytes($body)) -UseBasicParsing
-Wait-Operation "$api/operations/$($submit.Headers.Location)" | Out-Null
+try {
+    $submit = Invoke-WebRequest -Method Post -Uri $api -Headers $headers -ContentType 'application/json' -Body ([Text.Encoding]::UTF8.GetBytes($body)) -UseBasicParsing
+    Wait-Operation "$api/operations/$($submit.Headers.Location)" | Out-Null
+} catch {
+    # Microsoft is still reviewing the version before: this one stays a draft.
+    if ("$_" -match 'in progress|in review|InProgressSubmission') {
+        "::warning::Edge Add-ons is still reviewing the previous version, so extension $version is uploaded as a draft but not submitted. Once that review is done, run the Extension workflow with 'Submit to Edge even if unchanged'."
+        return
+    }
+    throw
+}
 "Extension $version submitted to Edge Add-ons; Edge updates it once Microsoft approves it."
