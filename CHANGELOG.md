@@ -6,6 +6,10 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+### Changed
+- B-Downloader is about 2 MB smaller: the torrent engine no longer includes
+  the parts of its web server that B-Downloader never used.
+
 ## [1.5.4] - 2026-11-22
 
 ### Fixed

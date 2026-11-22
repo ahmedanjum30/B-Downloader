@@ -42,8 +42,11 @@ default-tls = [
 ]
 disable-upload = []
 http-api = [
+    "regex",
     "axum",
+    "axum-extra",
     "tower-http",
+    "librqbit-dualstack-sockets/axum",
 ]
 http-api-client = []
 miri = []
@@ -121,6 +124,7 @@ optional = true
 [dependencies.axum-extra]
 version = "0.12"
 features = ["query"]
+optional = true
 
 [dependencies.backon]
 version = "1.5"
@@ -190,7 +194,6 @@ default-features = false
 
 [dependencies.librqbit-dualstack-sockets]
 version = "0.7"
-features = ["axum"]
 
 [dependencies.librqbit-lsd]
 version = "9.0.1"
@@ -240,6 +243,7 @@ version = "0.10"
 
 [dependencies.regex]
 version = "1"
+optional = true
 
 [dependencies.reqwest]
 version = "0.13"
@@ -351,10 +355,6 @@ default-features = false
 
 [dependencies.urlencoding]
 version = "2"
-
-[dependencies.uuid]
-version = "1"
-features = ["v4"]
 
 [dependencies.walkdir]
 version = "2"

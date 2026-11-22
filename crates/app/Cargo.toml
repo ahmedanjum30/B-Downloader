@@ -17,8 +17,8 @@ path = "src/main.rs"
 bdownloader-core.workspace = true
 bdownloader-ipc.workspace = true
 # `tokio` runs the app's tasks on the same runtime the download engine uses.
-# The software renderer (tiny-skia) instead of the GPU one (wgpu): a list of
-# downloads doesn't need a GPU, and setting up a GPU device costs over 100 MB.
+# Drawn on the GPU (wgpu, set up in main.rs), with the software renderer
+# (tiny-skia) for PCs where no GPU back-end starts.
 iced = { version = "0.14", default-features = false, features = ["wgpu-bare", "tiny-skia", "crisp", "web-colors", "tokio", "svg"] }
 rfd = "0.17"
 # iced's GPU renderer with only the DirectX 12 back-end (iced's own "wgpu"

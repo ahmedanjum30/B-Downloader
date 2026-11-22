@@ -1,3 +1,5 @@
 # Patched copy
 
 librqbit 9.0.1 (Apache-2.0, https://github.com/ikatson/rqbit), patched for B-Downloader: torrent files open read-only and get write access only when written to or resized (`src/storage/filesystem/opened_file.rs`, `fs.rs`), and `storage::filesystem::release_write_access(path)` reopens read-only the open files under a path (a finished download's, before it's shared). Windows won't start a program whose file another process holds open for writing, so an installer downloaded by torrent couldn't run while the torrent was sharing. Used through `[patch.crates-io]` in the workspace `Cargo.toml`.
+
+Its web API's dependencies are optional too, so they aren't built into B-Downloader: `axum-extra`, `regex` and the dual-stack sockets' `axum` feature now come only with the `http-api` feature, and the unused `uuid` is gone. Without `regex`, `only_files_regex` is refused (`src/session.rs`); B-Downloader picks files by index.

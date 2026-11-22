@@ -172,6 +172,9 @@ async fn torrent_from_url(
     torrent_from_bytes(b).context("error decoding torrent")
 }
 
+// B-Downloader: the regex filter (and the regex crate) only with the
+// "regex" feature; without it, only_files_regex is refused.
+#[cfg(feature = "regex")]
 fn compute_only_files_regex<ByteBuf: AsRef<[u8]>>(
     torrent: &ValidatedTorrentMetaV1Info<ByteBuf>,
     filename_re: &str,
@@ -188,6 +191,14 @@ fn compute_only_files_regex<ByteBuf: AsRef<[u8]>>(
         bail!("none of the filenames match the given regex")
     }
     Ok(only_files)
+}
+
+#[cfg(not(feature = "regex"))]
+fn compute_only_files_regex<ByteBuf: AsRef<[u8]>>(
+    _torrent: &ValidatedTorrentMetaV1Info<ByteBuf>,
+    _filename_re: &str,
+) -> anyhow::Result<Vec<usize>> {
+    bail!("only_files_regex needs librqbit's \"regex\" feature")
 }
 
 fn compute_only_files(
