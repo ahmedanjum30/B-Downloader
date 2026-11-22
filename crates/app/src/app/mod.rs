@@ -28,11 +28,12 @@ pub use add::{AddDialog, Probe};
 pub use power::WhenDone;
 pub use refresh::RefreshDialog;
 pub use report::ReportDialog;
-pub use settings::{MAX_AT_ONCE, SettingsTab};
+pub use settings::{MAX_AT_ONCE, SettingsTab, choice_of};
 pub use updates::Update;
 
 use crate::item::{Item, State};
 use crate::store::{self, HashKind, Settings, ThemeChoice};
+use crate::themes::{self, PackState};
 use crate::tray::{self, Tray, TrayAction};
 use crate::update::{self, Relaunch, Release};
 use crate::{browser, caption, format, instance, memory, style};
@@ -215,6 +216,10 @@ pub enum Message {
     /// The speed limit as typed, in MB/s.
     SpeedLimit(String),
     SettingsTheme(ThemeChoice),
+    /// Download a theme, or remove it.
+    ThemeAdd(style::Look),
+    ThemeAdded(style::Look, Result<Vec<Vec<u8>>, String>),
+    ThemeRemove(style::Look),
     SettingsCloseToTray(bool),
     SettingsAutoUpdate(bool),
     SettingsSortByType(bool),
@@ -339,6 +344,8 @@ pub struct App {
     pub item_limit_text: String,
     /// The section Settings shows.
     pub settings_tab: SettingsTab,
+    /// The downloadable themes, in `themes::PACKS` order.
+    pub packs: [PackState; 2],
     /// The seed ratio field in Settings, as typed.
     pub seed_ratio_text: String,
     /// The files of the torrent whose details are showing.
@@ -400,6 +407,7 @@ impl App {
             clock_minute: Some(queue::local_minute()),
             item_limit_text: String::new(),
             settings_tab: SettingsTab::General,
+            packs: [PackState::Missing, PackState::Missing],
             seed_ratio_text,
             details_torrent: None,
             motion: motion::Motion::default(),
@@ -427,9 +435,14 @@ impl App {
         // links and .torrent files ask which files to download first.
         let (main_window, opened) = window::open(crate::main_window());
         app.main_window = Some(main_window);
+        let (fonts, mut tasks) = app.load_themes();
         app.caption_look = app.look();
         let look = app.caption_look;
-        let mut tasks: Vec<Task<Message>> = vec![opened.then(move |id| caption::paint(id, look))];
+        // Fonts load once there's a window to draw them (iced drops them before).
+        tasks.push(opened.then(move |id| {
+            let fonts = fonts.clone().into_iter().map(|f| iced::font::load(f).discard());
+            Task::batch(fonts.chain([caption::paint(id, look)]))
+        }));
         tasks.extend(instance::from_args().into_iter().map(|r| Task::done(Message::External(r))));
         tasks.extend([
             system::theme().map(Message::SystemTheme),
@@ -456,6 +469,10 @@ impl App {
         match std::env::var("BDOWNLOADER_OPEN").as_deref() {
             Ok("extension") => app.modal = Some(Modal::Extension(browser::Browser::Firefox)),
             Ok("settings") => app.modal = Some(Modal::Settings(app.settings.clone())),
+            Ok("themes") => {
+                app.modal = Some(Modal::Settings(app.settings.clone()));
+                app.settings_tab = SettingsTab::Themes;
+            }
             Ok("add") => app.modal = Some(Modal::Add(Box::new(AddDialog::new(&app.settings)))),
             _ => {}
         }
@@ -561,14 +578,46 @@ impl App {
             Some(Modal::Settings(draft)) => draft.theme,
             _ => self.settings.theme,
         };
+        let system = if self.system_dark { style::Look::Dark } else { style::Look::Light };
         match theme {
-            ThemeChoice::System if self.system_dark => style::Look::Dark,
-            ThemeChoice::System => style::Look::Light,
+            ThemeChoice::System => system,
             ThemeChoice::Dark => style::Look::Dark,
             ThemeChoice::Light => style::Look::Light,
-            ThemeChoice::Graphite => style::Look::Graphite,
-            ThemeChoice::Chalk => style::Look::Chalk,
+            // A downloaded theme shows once its fonts are here; until then, the system's.
+            ThemeChoice::Graphite | ThemeChoice::Chalk => {
+                let look = if theme == ThemeChoice::Graphite {
+                    style::Look::Graphite
+                } else {
+                    style::Look::Chalk
+                };
+                if self.pack_state(look) == Some(&PackState::Ready) {
+                    look
+                } else {
+                    system
+                }
+            }
         }
+    }
+
+    /// Where a downloadable theme stands.
+    pub fn pack_state(&self, look: style::Look) -> Option<&PackState> {
+        themes::PACKS.iter().position(|p| p.look == look).map(|i| &self.packs[i])
+    }
+
+    /// The fonts of the themes added before, to load. A theme that's chosen
+    /// but missing (chosen when the app still came with it, or its files were
+    /// deleted) downloads again: the tasks.
+    fn load_themes(&mut self) -> (Vec<Vec<u8>>, Vec<Task<Message>>) {
+        let (mut fonts, mut tasks) = (Vec::new(), Vec::new());
+        for (i, pack) in themes::PACKS.iter().enumerate() {
+            if let Some(found) = themes::read(pack) {
+                self.packs[i] = PackState::Ready;
+                fonts.extend(found);
+            } else if settings::choice_of(pack.look) == Some(self.settings.theme) {
+                tasks.push(self.add_theme(pack.look));
+            }
+        }
+        (fonts, tasks)
     }
 
     pub fn subscription(&self) -> Subscription<Message> {
@@ -811,6 +860,9 @@ impl App {
             | Message::LimitSpeed(_)
             | Message::SpeedLimit(_)
             | Message::SettingsTheme(_)
+            | Message::ThemeAdd(_)
+            | Message::ThemeAdded(..)
+            | Message::ThemeRemove(_)
             | Message::SettingsCloseToTray(_)
             | Message::SettingsAutoUpdate(_)
             | Message::SettingsSortByType(_)

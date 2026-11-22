@@ -170,6 +170,9 @@ enum Peer {
     Browser,
 }
 
+/// How long a browser's download is checked before its dialog opens anyway.
+const OFFER_DELAY: std::time::Duration = std::time::Duration::from_secs(1);
+
 /// Reads one request per line. A download the browser is holding (one with
 /// `expect`) is answered on the same pipe once its link is checked, and only
 /// taken over if the app gets the same file.
@@ -199,11 +202,26 @@ async fn read_requests(client: impl AsyncRead + AsyncWrite, mut output: Sender<M
         if let Request::Add(add) = &request
             && let Some(expected) = &add.expect
         {
-            // The dialog opens at once, checking; the check fills it in, so
-            // nothing seems stuck while it runs.
+            // The dialog opens once the link checks out, or while a slow
+            // check still runs, so nothing seems stuck. A link the app can't
+            // download (a one-time link, a form's POST) is refused quickly
+            // and stays in the browser without the dialog flashing up.
             let id = OFFERS.fetch_add(1, Ordering::Relaxed);
-            let _ = output.send(Message::BrowserOffer(id, add.clone())).await;
-            let checked = check(add, expected).await;
+            let checking = check(add, expected);
+            tokio::pin!(checking);
+            let (checked, offered) = match tokio::time::timeout(OFFER_DELAY, &mut checking).await {
+                Ok(checked) => {
+                    let offered = checked.is_ok();
+                    if offered {
+                        let _ = output.send(Message::BrowserOffer(id, add.clone())).await;
+                    }
+                    (checked, offered)
+                }
+                Err(_) => {
+                    let _ = output.send(Message::BrowserOffer(id, add.clone())).await;
+                    (checking.await, true)
+                }
+            };
             let reply = match &checked {
                 Ok(_) => Reply { ok: true, error: None },
                 Err(reason) => {
@@ -214,7 +232,9 @@ async fn read_requests(client: impl AsyncRead + AsyncWrite, mut output: Sender<M
                     }
                 }
             };
-            let _ = output.send(Message::BrowserChecked(id, checked)).await;
+            if offered {
+                let _ = output.send(Message::BrowserChecked(id, checked)).await;
+            }
             let mut answer = serde_json::to_vec(&reply).unwrap_or_default();
             answer.push(b'\n');
             let _ = write.write_all(&answer).await;

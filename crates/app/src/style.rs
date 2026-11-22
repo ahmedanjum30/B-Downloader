@@ -467,6 +467,20 @@ pub fn outline(theme: &Theme) -> container::Style {
     }
 }
 
+/// A small sample of another look, in its own paper, line and ink, for the
+/// Themes section.
+pub fn swatch(look: Look) -> impl Fn(&Theme) -> container::Style {
+    move |_| {
+        let c = look.colors();
+        container::Style {
+            background: Some(c.background.into()),
+            border: border(c.border, c.line, c.radius),
+            text_color: Some(c.text),
+            ..container::Style::default()
+        }
+    }
+}
+
 /// Picks one of the theme's colors.
 pub type Pick = fn(&Colors) -> Color;
 

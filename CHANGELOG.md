@@ -6,6 +6,22 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+## [1.5.3] - 2026-11-22
+
+### Changed
+- Themes have their own section in Settings. Dark and light come with
+  B-Downloader; the hand-drawn Graphite and Chalk themes are added there and
+  download their fonts (about 135 KB and 40 KB) only then, which makes
+  B-Downloader itself smaller. If you already use one, it downloads again by
+  itself after this update.
+
+### Fixed
+- B-Downloader's window no longer flashes up and closes for a browser download
+  it can't take over, such as a file a site sends only once, after a form or
+  an "are you human?" check. The window now opens once the link checks out,
+  or after a second if the check is still running; otherwise the download
+  simply stays in the browser.
+
 ## [1.5.2] - 2026-11-22
 
 ### Fixed

@@ -16,6 +16,7 @@ mod notify;
 mod open_events;
 mod store;
 mod style;
+mod themes;
 mod tray;
 mod update;
 mod view;
@@ -70,10 +71,6 @@ fn main() -> iced::Result {
         .theme(App::theme)
         .subscription(App::subscription)
         .default_font(style::SYSTEM_FONT)
-        // The hand-drawn looks' handwriting (SIL Open Font License, see assets/fonts).
-        .font(include_bytes!("../assets/fonts/PatrickHand-Regular.ttf").as_slice())
-        .font(include_bytes!("../assets/fonts/Kalam-Bold.ttf").as_slice())
-        .font(include_bytes!("../assets/fonts/GochiHand-Regular.ttf").as_slice())
         .run()
 }
 

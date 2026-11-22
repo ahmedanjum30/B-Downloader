@@ -37,7 +37,7 @@ $env:BDOWNLOADER_DATA = "$env:TEMP\bdl-dev"; cargo run -p bdownloader -- https:/
 
 The app icon is drawn by `scripts/app-icon.ps1` into `crates/app/assets` (including `bdownloader.icns` for macOS).
 
-The hand-drawn themes' fonts in `crates/app/assets/fonts` are cut down to Latin letters and punctuation, which keeps them small (`pyftsubset` from fontTools, `--unicodes=U+0020-007E,U+00A0-00FF,U+2013-2026,...`). Gochi Hand is left whole: its license reserves its name for unmodified copies.
+The hand-drawn themes' fonts in `themes` are cut down to Latin letters and punctuation, which keeps them small (`pyftsubset` from fontTools, `--unicodes=U+0020-007E,U+00A0-00FF,U+2013-2026,...`). Gochi Hand is left whole: its license reserves its name for unmodified copies. They aren't built into the app: Settings > Themes downloads them from GitHub Pages (`themes/` on the `gh-pages` branch) and checks them against the SHA-256 hashes in `crates/app/src/themes.rs`. A changed font needs a new hash there (the `themes` test says which) and a copy on `gh-pages`; as the old app versions still fetch the old file, give a changed font a new name.
 
 ### macOS
 

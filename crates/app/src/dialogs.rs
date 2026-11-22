@@ -13,6 +13,7 @@ use crate::icons::{self, icon};
 use crate::item::{Item, State};
 use crate::store::{self, HashKind, Settings, ThemeChoice};
 use crate::style;
+use crate::themes::{self, PackState};
 use crate::view::{bold, colored, file_badge, font, muted, semibold, txt};
 
 fn frame<'a>(title: &'a str, body: Element<'a, Message>, footer: Element<'a, Message>) -> Element<'a, Message> {
@@ -581,20 +582,6 @@ fn general(draft: &Settings) -> Element<'_, Message> {
             .spacing(10)
         ),
         field(
-            "Theme",
-            choices(
-                &[
-                    (ThemeChoice::System, "System"),
-                    (ThemeChoice::Dark, "Dark"),
-                    (ThemeChoice::Light, "Light"),
-                    (ThemeChoice::Graphite, "Graphite"),
-                    (ThemeChoice::Chalk, "Chalk")
-                ],
-                draft.theme,
-                Message::SettingsTheme
-            )
-        ),
-        field(
             "When I close the window",
             column![
                 choices(
@@ -609,6 +596,71 @@ fn general(draft: &Settings) -> Element<'_, Message> {
     ]
     .spacing(22)
     .into()
+}
+
+fn themes_section<'a>(draft: &Settings, packs: &'a [PackState; 2]) -> Element<'a, Message> {
+    // The downloaded ones join the built-in choices once they're added.
+    let mut options = vec![
+        (ThemeChoice::System, "System"),
+        (ThemeChoice::Dark, "Dark"),
+        (ThemeChoice::Light, "Light"),
+    ];
+    for (pack, state) in themes::PACKS.iter().zip(packs) {
+        if let (PackState::Ready, Some(choice)) = (state, crate::app::choice_of(pack.look)) {
+            options.push((choice, pack.name));
+        }
+    }
+    let list = column(themes::PACKS.iter().zip(packs).map(|(pack, state)| theme_pack(pack, state))).spacing(8);
+    column![
+        field("Theme", choices(&options, draft.theme, Message::SettingsTheme)),
+        field(
+            "Hand-drawn themes",
+            column![
+                list,
+                hint("Downloaded when you add them, so B-Downloader itself stays small. Their fonts are free (SIL Open Font License)."),
+            ]
+            .spacing(10)
+        ),
+    ]
+    .spacing(22)
+    .into()
+}
+
+/// A downloadable theme: a sample in its own colors and handwriting, and
+/// what can be done with it.
+fn theme_pack<'a>(pack: &'a themes::Pack, state: &'a PackState) -> Element<'a, Message> {
+    let colors = pack.look.colors();
+    let sample = container(text("Aa").size(18).font(colors.font))
+        .center_x(52)
+        .center_y(40)
+        .style(style::swatch(pack.look));
+    let mut about = column![txt(pack.name).size(14).font(semibold()), muted(pack.about).size(12)].spacing(2);
+    if let PackState::Failed(reason) = state {
+        about = about.push(colored(format!("Couldn't download it: {reason}"), |c| c.danger).size(12));
+    }
+    let action: Element<'a, Message> = match state {
+        PackState::Missing => button(txt(format!("Add · {}", format::size(pack.size))).size(13))
+            .padding([6, 12])
+            .style(style::secondary)
+            .on_press(Message::ThemeAdd(pack.look))
+            .into(),
+        PackState::Failed(_) => button(txt("Try again").size(13))
+            .padding([6, 12])
+            .style(style::secondary)
+            .on_press(Message::ThemeAdd(pack.look))
+            .into(),
+        PackState::Downloading => button(txt("Downloading…").size(13)).padding([6, 12]).style(style::secondary).into(),
+        PackState::Ready => button(txt("Remove").size(13))
+            .padding([6, 12])
+            .style(style::ghost)
+            .on_press(Message::ThemeRemove(pack.look))
+            .into(),
+    };
+    container(row![sample, about.width(Fill), action].spacing(14).align_y(Center))
+        .padding(10)
+        .width(Fill)
+        .style(style::outline)
+        .into()
 }
 
 fn torrents<'a>(draft: &'a Settings, seed_ratio_text: &'a str) -> Element<'a, Message> {
@@ -686,16 +738,16 @@ fn downloads(draft: &Settings) -> Element<'_, Message> {
     .into()
 }
 
-/// `tab_shown` (0 to 1): how far the section is in, as it fades in after
-/// its tab is picked.
+/// `motion`: how far the section is in (0 to 1), as it fades in after its
+/// tab is picked, and the height it's shown at while it grows or shrinks.
 pub fn settings<'a>(
     draft: &'a Settings,
     update_status: String,
     tab: SettingsTab,
     seed_ratio_text: &'a str,
-    tab_shown: f32,
-    section_height: Option<f32>,
+    (tab_shown, section_height): (f32, Option<f32>),
     theme: &Theme,
+    packs: &'a [PackState; 2],
 ) -> Element<'a, Message> {
     let tabs = column(SettingsTab::ALL.map(|t| {
         button(txt(t.label()).size(14).font(if t == tab { semibold() } else { crate::view::font() }))
@@ -708,7 +760,8 @@ pub fn settings<'a>(
     .spacing(2)
     .width(140);
     let (content, about) = match tab {
-        SettingsTab::General => (general(draft), "Where downloads go and how B-Downloader looks."),
+        SettingsTab::General => (general(draft), "Where downloads go, and what closing the window does."),
+        SettingsTab::Themes => (themes_section(draft, packs), "How B-Downloader looks."),
         SettingsTab::Downloads => (downloads(draft), "How each download uses your connection."),
         SettingsTab::Torrents => (
             torrents(draft, seed_ratio_text),

@@ -4,7 +4,9 @@ use bdownloader_core::MAX_CONNECTIONS;
 use iced::Task;
 
 use super::{App, Message, Modal};
-use crate::store;
+use crate::store::{self, ThemeChoice};
+use crate::style::Look;
+use crate::themes::{self, PackState};
 
 /// The most downloads the queue runs at the same time.
 pub const MAX_AT_ONCE: usize = 10;
@@ -14,6 +16,7 @@ pub const MAX_AT_ONCE: usize = 10;
 pub enum SettingsTab {
     #[default]
     General,
+    Themes,
     Downloads,
     Queue,
     Torrents,
@@ -21,9 +24,19 @@ pub enum SettingsTab {
     Help,
 }
 
+/// The Settings choice for a look.
+pub fn choice_of(look: Look) -> Option<ThemeChoice> {
+    match look {
+        Look::Graphite => Some(ThemeChoice::Graphite),
+        Look::Chalk => Some(ThemeChoice::Chalk),
+        Look::Dark | Look::Light => None,
+    }
+}
+
 impl SettingsTab {
-    pub const ALL: [SettingsTab; 6] = [
+    pub const ALL: [SettingsTab; 7] = [
         SettingsTab::General,
+        SettingsTab::Themes,
         SettingsTab::Downloads,
         SettingsTab::Queue,
         SettingsTab::Torrents,
@@ -34,6 +47,7 @@ impl SettingsTab {
     pub fn label(self) -> &'static str {
         match self {
             SettingsTab::General => "General",
+            SettingsTab::Themes => "Themes",
             SettingsTab::Downloads => "Downloads",
             SettingsTab::Queue => "Queue",
             SettingsTab::Torrents => "Torrents",
@@ -82,6 +96,43 @@ impl App {
             Message::SettingsTheme(theme) => {
                 if let Some(Modal::Settings(draft)) = &mut self.modal {
                     draft.theme = theme;
+                }
+            }
+            Message::ThemeAdd(look) => return self.add_theme(look),
+            Message::ThemeAdded(look, result) => {
+                let Some(i) = themes::PACKS.iter().position(|p| p.look == look) else {
+                    return Task::none();
+                };
+                match result {
+                    Ok(fonts) => {
+                        self.packs[i] = PackState::Ready;
+                        // Added from Settings: it shows at once, as picking one does.
+                        if let (Some(Modal::Settings(draft)), Some(choice)) = (&mut self.modal, choice_of(look)) {
+                            draft.theme = choice;
+                        }
+                        return Task::batch(fonts.into_iter().map(|f| iced::font::load(f).discard()));
+                    }
+                    Err(e) => {
+                        log::warn!("couldn't add the {} theme: {e}", themes::PACKS[i].name);
+                        self.packs[i] = PackState::Failed(e);
+                    }
+                }
+            }
+            Message::ThemeRemove(look) => {
+                let Some(i) = themes::PACKS.iter().position(|p| p.look == look) else {
+                    return Task::none();
+                };
+                themes::remove(look);
+                self.packs[i] = PackState::Missing;
+                let choice = choice_of(look);
+                if let Some(Modal::Settings(draft)) = &mut self.modal
+                    && Some(draft.theme) == choice
+                {
+                    draft.theme = ThemeChoice::System;
+                }
+                if Some(self.settings.theme) == choice {
+                    self.settings.theme = ThemeChoice::System;
+                    let _ = store::save_settings(&self.settings);
                 }
             }
             Message::SettingsCloseToTray(close_to_tray) => {
@@ -153,6 +204,20 @@ impl App {
             _ => {}
         }
         Task::none()
+    }
+
+    /// Downloads a theme's fonts.
+    pub(super) fn add_theme(&mut self, look: Look) -> Task<Message> {
+        let Some(i) = themes::PACKS.iter().position(|p| p.look == look) else {
+            return Task::none();
+        };
+        if matches!(self.packs[i], PackState::Downloading | PackState::Ready) {
+            return Task::none();
+        }
+        self.packs[i] = PackState::Downloading;
+        Task::perform(themes::install(self.engine.clone(), look), move |result| {
+            Message::ThemeAdded(look, result)
+        })
     }
 
     /// Applies the speed limit to running downloads at once and remembers it.

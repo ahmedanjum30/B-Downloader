@@ -37,7 +37,7 @@ Runs in the tray all day; the window is opened to check progress, add a link, or
 ## Brand Commitments
 
 - Name: BDownloader (the Microsoft Store listing is "B-Downloader").
-- Dark and light themes both stay, following Windows by default. Two hand-drawn themes, Graphite and Chalk, are there for those who pick them.
+- Dark and light themes both stay, following Windows by default. Two hand-drawn themes, Graphite and Chalk, download from Settings > Themes for those who want them, so their fonts don't add to everyone's download.
 
 ## Evidence on Hand
 

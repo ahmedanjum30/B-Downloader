@@ -27,7 +27,7 @@ The gradient (`style::gradient`, 90°) appears on only three things: running pro
 
 ### Hand-drawn themes
 
-Two more looks, picked in Settings, sit beside Dark and Light (`GRAPHITE`, `CHALK` in `style.rs`; mockups in `.impeccable/mocks/screens/sketch.html`). Each brings its own fonts, line weight and corners; layout and behaviour stay the same.
+Two more looks, added and picked in Settings > Themes, sit beside Dark and Light. Dark and Light come with the app; these download their fonts when added (`themes.rs`, files in `themes/`, published on GitHub Pages) (`GRAPHITE`, `CHALK` in `style.rs`; mockups in `.impeccable/mocks/screens/sketch.html`). Each brings its own fonts, line weight and corners; layout and behaviour stay the same.
 
 | Token | Graphite | Chalk | Use |
 |---|---|---|---|
