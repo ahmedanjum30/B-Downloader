@@ -694,7 +694,12 @@ async fn a_download_paused_by_an_older_version_continues_and_moves_its_progress_
 
     options.state_dir = Some(state_dir.path().to_owned());
     let handle = engine.start(options);
-    tokio::time::sleep(Duration::from_millis(50)).await;
+    // Its first progress is where it resumed from: about half the file, or
+    // nearly nothing had it started over. Slow machines take a while to get there.
+    let started = std::time::Instant::now();
+    while handle.progress().downloaded == 0 && started.elapsed() < Duration::from_secs(10) {
+        tokio::time::sleep(Duration::from_millis(5)).await;
+    }
     assert!(handle.progress().downloaded >= MB as u64 / 4, "resume started over");
     assert!(!dir.path().join("big.bin.bdl").exists(), "old progress file not moved");
     let path = dir.path().join("big.bin");

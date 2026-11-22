@@ -22,8 +22,6 @@ on:
       - "rustfmt.toml"
       - ".github/workflows/ci.yml"
   workflow_dispatch:
-  # The release workflow runs these checks before building.
-  workflow_call:
 
 env:
   CARGO_TERM_COLOR: always
@@ -86,3 +84,18 @@ jobs:
           shared-key: release
       - name: Build release
         run: cargo build --release --workspace
+
+  # The same for the macOS app (scripts/macos-app.sh --native builds these).
+  release-cache-macos:
+    if: github.ref == 'refs/heads/main'
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: "1.100"
+      - uses: Swatinem/rust-cache@v2
+        with:
+          shared-key: release-macos
+      - name: Build release
+        run: cargo build --release -p bdownloader -p bdownloader-host

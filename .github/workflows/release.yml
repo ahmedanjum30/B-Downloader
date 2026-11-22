@@ -1,5 +1,9 @@
 name: Release
 
+# scripts/release.ps1 tags main and pushes the tag. The tag is the version:
+# each build writes it into Cargo.toml (scripts/set-version.sh), so releases
+# need no version-bump commit. The format, lint and test checks already ran
+# in CI on main, so a release goes straight to building.
 on:
   push:
     tags: ["v*"]
@@ -11,11 +15,6 @@ env:
   CARGO_TERM_COLOR: always
 
 jobs:
-  # The same format, lint and test checks as CI. They run alongside the
-  # build; nothing is published unless both succeed.
-  checks:
-    uses: ./.github/workflows/ci.yml
-
   build:
     runs-on: windows-latest
     steps:
@@ -29,6 +28,10 @@ jobs:
         with:
           shared-key: release
           save-if: false
+      # After the cache is restored: its key includes Cargo.toml.
+      - name: Version from the tag
+        shell: bash
+        run: sh scripts/set-version.sh "${GITHUB_REF_NAME#v}"
 
       # Its prebuilt bi.exe and bi-setup.exe, which have to sit side by side.
       - name: Install B-Installer
@@ -70,7 +73,15 @@ jobs:
       - uses: dtolnay/rust-toolchain@master
         with:
           toolchain: "1.100"
+      # Compiled dependencies from CI's release-cache-macos job on main.
       - uses: Swatinem/rust-cache@v2
+        with:
+          shared-key: release-macos
+          save-if: false
+      # After the cache is restored: its key includes Cargo.toml.
+      - name: Version from the tag
+        shell: bash
+        run: sh scripts/set-version.sh "${GITHUB_REF_NAME#v}"
       - name: Build the app
         run: sh scripts/macos-app.sh --native
       - uses: actions/upload-artifact@v7
@@ -80,7 +91,7 @@ jobs:
           if-no-files-found: error
 
   publish:
-    needs: [checks, build, macos]
+    needs: [build, macos]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/download-artifact@v8
