@@ -7,8 +7,10 @@ All notable changes to this project are documented here. The format follows
 ## [Unreleased]
 
 ### Changed
-- B-Downloader is about 2 MB smaller: the torrent engine no longer includes
-  the parts of its web server that B-Downloader never used.
+- B-Downloader is about 2.5 MB smaller: the torrent engine no longer
+  includes the parts of its web server that B-Downloader never used, and
+  the window is drawn by DirectX 12 (Metal on a Mac) alone, which uses
+  Windows' own software renderer on PCs without a usable graphics card.
 
 ## [1.5.4] - 2026-11-22
 

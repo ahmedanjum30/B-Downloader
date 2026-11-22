@@ -17,9 +17,10 @@ path = "src/main.rs"
 bdownloader-core.workspace = true
 bdownloader-ipc.workspace = true
 # `tokio` runs the app's tasks on the same runtime the download engine uses.
-# Drawn on the GPU (wgpu, set up in main.rs), with the software renderer
-# (tiny-skia) for PCs where no GPU back-end starts.
-iced = { version = "0.14", default-features = false, features = ["wgpu-bare", "tiny-skia", "crisp", "web-colors", "tokio", "svg"] }
+# Drawn on the GPU only (wgpu, set up in main.rs), without iced's software
+# renderer: on a PC without a usable GPU, DirectX 12 draws on the CPU itself
+# (WARP), and Macs all have Metal.
+iced = { version = "0.14", default-features = false, features = ["wgpu-bare", "crisp", "web-colors", "tokio", "svg"] }
 rfd = "0.17"
 # iced's GPU renderer with only the DirectX 12 back-end (iced's own "wgpu"
 # feature brings Vulkan, OpenGL and others too, which only add size here).

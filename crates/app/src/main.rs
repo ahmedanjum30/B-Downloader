@@ -42,7 +42,8 @@ fn main() -> iced::Result {
     logging::init();
     // The window is drawn on the GPU, through DirectX 12: of the GPU back-ends
     // Windows has, it holds the least memory, and starting others alongside
-    // only adds theirs. Without it iced draws on the CPU instead. On laptops
+    // only adds theirs. Without a usable GPU, DirectX 12 draws on the CPU
+    // (WARP). On laptops
     // with two GPUs, the power-saving (built-in) one: drawing a list is light
     // work, and waking a gaming GPU for it costs battery. Set by the user, the
     // `WGPU_BACKEND` and `WGPU_POWER_PREF` variables win. On macOS, Metal.
