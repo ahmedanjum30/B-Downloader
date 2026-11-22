@@ -1,0 +1,57 @@
+name: Release cache
+
+# Compiles the release builds' dependencies on main and saves them, so release
+# builds (on tags, which can only restore caches saved on main) only compile
+# B-Downloader itself. Only the dependencies are cached, so this runs when
+# they or the toolchain change, and by hand (Actions > Release cache > Run).
+#
+# GitHub deletes a cache that goes unused for 7 days. Releases restore these,
+# which keeps them; after a quiet week, run this by hand before releasing, or
+# the release compiles everything (about 10 minutes).
+on:
+  push:
+    branches: [main]
+    paths:
+      - "Cargo.lock"
+      - "**/Cargo.toml"
+      - "third_party/**"
+      - "rust-toolchain.toml"
+      - ".github/workflows/release-cache.yml"
+  workflow_dispatch:
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  # Must match release.yml's build job (shared key "release").
+  windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: "1.100"
+      - uses: Swatinem/rust-cache@v2
+        with:
+          shared-key: release
+      - name: Build release
+        run: cargo build --release --workspace
+
+  # Must match release.yml's macos job (shared key "release-macos"). Also the
+  # app for Apple Silicon to try out: the run's artifacts have it.
+  macos:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: "1.100"
+      - uses: Swatinem/rust-cache@v2
+        with:
+          shared-key: release-macos
+      - name: Build the app
+        run: sh scripts/macos-app.sh --native
+      - uses: actions/upload-artifact@v7
+        with:
+          name: B-Downloader-macos
+          path: dist/*.zip

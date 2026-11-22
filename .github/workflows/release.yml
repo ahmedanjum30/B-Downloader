@@ -22,7 +22,7 @@ jobs:
       - uses: dtolnay/rust-toolchain@master
         with:
           toolchain: "1.100"
-      # Compiled dependencies from CI's release-cache job on main. Tag builds
+      # Compiled dependencies from release-cache.yml's windows job on main. Tag builds
       # can't reuse each other's caches, so this one only restores.
       - uses: Swatinem/rust-cache@v2
         with:
@@ -73,7 +73,7 @@ jobs:
       - uses: dtolnay/rust-toolchain@master
         with:
           toolchain: "1.100"
-      # Compiled dependencies from CI's release-cache-macos job on main.
+      # Compiled dependencies from release-cache.yml's macos job on main.
       - uses: Swatinem/rust-cache@v2
         with:
           shared-key: release-macos
