@@ -310,8 +310,12 @@ pub fn register() -> io::Result<()> {
         "type": "stdio",
         "allowed_origins": EXTENSION_IDS.iter().filter(|id| !id.is_empty()).map(|id| format!("chrome-extension://{id}/")).collect::<Vec<_>>(),
     });
-    let dir = crate::store::data_dir();
+    let dir = manifest_dir();
     std::fs::create_dir_all(&dir)?;
+    // Before 1.5.5 they sat in the data folder itself.
+    for file in manifest_files() {
+        let _ = std::fs::remove_file(crate::store::data_dir().join(file));
+    }
     let manifest_path = dir.join(format!("{HOST_NAME}.json"));
     std::fs::write(&manifest_path, serde_json::to_vec_pretty(&manifest)?)?;
 
@@ -351,13 +355,29 @@ pub fn unregister() -> io::Result<()> {
             let _ = key.delete_subkey_all(HOST_NAME);
         }
     }
-    for file in [format!("{HOST_NAME}.json"), format!("{HOST_NAME}.firefox.json")] {
-        match std::fs::remove_file(crate::store::data_dir().join(file)) {
-            Err(e) if e.kind() != io::ErrorKind::NotFound => return Err(e),
-            _ => {}
+    for dir in [manifest_dir(), crate::store::data_dir()] {
+        for file in manifest_files() {
+            match std::fs::remove_file(dir.join(file)) {
+                Err(e) if e.kind() != io::ErrorKind::NotFound => return Err(e),
+                _ => {}
+            }
         }
     }
+    let _ = std::fs::remove_dir(manifest_dir());
     Ok(())
+}
+
+/// Where the bridge's manifests go: a folder of their own, because browsers
+/// read them. The Microsoft Store package keeps the rest of the app's data
+/// private to it and lets only this folder through (see installer/msix).
+#[cfg(windows)]
+fn manifest_dir() -> PathBuf {
+    crate::store::data_dir().join("NativeMessaging")
+}
+
+#[cfg(windows)]
+fn manifest_files() -> [String; 2] {
+    [format!("{HOST_NAME}.json"), format!("{HOST_NAME}.firefox.json")]
 }
 
 /// Where each browser looks for native messaging hosts on macOS, under

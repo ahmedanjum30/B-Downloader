@@ -45,6 +45,18 @@ The installer on the Releases page is built by this repository's [release workfl
 
 To add the browser extension, open **Browser extension** in BDownloader and follow the steps.
 
+### Uninstalling
+
+Uninstall B-Downloader from Windows Settings > Apps. The website installer's uninstaller also removes what connects browsers to B-Downloader. Your download list and settings stay in `%APPDATA%\BDownloader` in case you reinstall; delete that folder to remove them too.
+
+The Microsoft Store version's data is removed with it, except the browser connection, which Windows keeps because browsers read it: one registry key per browser (`HKEY_CURRENT_USER\Software\<browser>\NativeMessagingHosts\com.bdownloader.host`, for Google Chrome, Microsoft Edge, Brave, Chromium, Opera, Vivaldi and Mozilla Firefox) and two small files in `%APPDATA%\BDownloader\NativeMessaging`. Without the app they do nothing: the browser extension just reports that B-Downloader isn't installed. To remove them, run this in PowerShell:
+
+```powershell
+'Google\Chrome', 'Microsoft\Edge', 'BraveSoftware\Brave-Browser', 'Chromium', 'Opera Software', 'Vivaldi', 'Mozilla' |
+    ForEach-Object { Remove-Item "HKCU:\Software\$_\NativeMessagingHosts\com.bdownloader.host" -ErrorAction SilentlyContinue }
+Remove-Item "$env:APPDATA\BDownloader\NativeMessaging" -Recurse -ErrorAction SilentlyContinue
+```
+
 ### macOS
 
 With [Homebrew](https://brew.sh) on a Mac with Apple Silicon (M1 or later):

@@ -8,6 +8,10 @@
 # install it on this PC (the certificate must be trusted once; see below).
 #
 # Needs the Windows SDK (makeappx.exe and signtool.exe).
+#
+# The version is Cargo.toml's. Each release's run builds the Store package
+# with that release's version (its artifacts have it), so a Store upload
+# comes from there; run this locally to try a package out.
 
 param([switch]$Quick, [switch]$SignForTest)
 

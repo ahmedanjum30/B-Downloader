@@ -65,6 +65,20 @@ jobs:
             dist/SHA256SUMS.txt
           if-no-files-found: error
 
+      # The Microsoft Store package, with this release's version, to upload
+      # in Partner Center: the run's artifacts have it. Unsigned (the Store
+      # signs it), so it isn't a release file. Never holds the release up.
+      - name: Microsoft Store package
+        id: msix
+        continue-on-error: true
+        shell: pwsh
+        run: ./scripts/build-msix.ps1
+      - uses: actions/upload-artifact@v7
+        if: steps.msix.outcome == 'success'
+        with:
+          name: microsoft-store-msix
+          path: dist/BDownloader-*.msix
+
   # The macOS app for Apple Silicon (M1 and later), zipped for Homebrew.
   macos:
     runs-on: macos-latest

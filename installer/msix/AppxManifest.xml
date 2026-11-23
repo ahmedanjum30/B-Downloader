@@ -3,11 +3,13 @@
   The Microsoft Store (MSIX) version of BDownloader. scripts\build-msix.ps1
   fills in {{IDENTITY}}, {{PUBLISHER}} and {{VERSION}} and builds the package.
 
-  Browsers find the bridge (bdl-host.exe) through registry entries and a
-  file in %APPDATA%\BDownloader. MSIX normally keeps an app's registry and
-  AppData writes private to the app, so those few locations are declared
-  unvirtualized (the unvirtualizedResources capability), and the bridge gets
-  an app alias: a fixed path browsers can start, unlike the package folder.
+  Browsers find the bridge (bdl-host.exe) through one registry key per
+  browser and the two JSON manifests in %APPDATA%\BDownloader\NativeMessaging.
+  MSIX normally keeps an app's registry and AppData writes private to the app,
+  so only those keys and that folder are declared unvirtualized (the
+  unvirtualizedResources capability); the app's own data (settings, download
+  list, logs) stays private to the package. The bridge gets an app alias: a
+  fixed path browsers can start, unlike the package folder.
 -->
 <Package
   xmlns="http://schemas.microsoft.com/appx/manifest/foundation/windows10"
@@ -32,7 +34,7 @@
          package is for Windows 11; Windows 10 has the website's installer. -->
     <virtualization:FileSystemWriteVirtualization>
       <virtualization:ExcludedDirectories>
-        <virtualization:ExcludedDirectory>$(KnownFolder:RoamingAppData)\BDownloader</virtualization:ExcludedDirectory>
+        <virtualization:ExcludedDirectory>$(KnownFolder:RoamingAppData)\BDownloader\NativeMessaging</virtualization:ExcludedDirectory>
       </virtualization:ExcludedDirectories>
     </virtualization:FileSystemWriteVirtualization>
     <virtualization:RegistryWriteVirtualization>

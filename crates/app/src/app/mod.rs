@@ -1090,7 +1090,7 @@ impl App {
             Message::OpenLogs => {
                 let dir = store::data_dir().join("logs");
                 let _ = std::fs::create_dir_all(&dir);
-                store::open_file(&dir);
+                store::open_file(&store::shown_path(&dir));
             }
 
             Message::Resized(id, width) => {

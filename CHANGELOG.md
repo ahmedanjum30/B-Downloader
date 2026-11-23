@@ -11,6 +11,10 @@ All notable changes to this project are documented here. The format follows
   includes the parts of its web server that B-Downloader never used, and
   the window is drawn by DirectX 12 (Metal on a Mac) alone, which uses
   Windows' own software renderer on PCs without a usable graphics card.
+- The files that connect browsers to B-Downloader moved to their own folder,
+  `%APPDATA%\BDownloader\NativeMessaging`. In the Microsoft Store version,
+  only that folder is shared with browsers; the download list, settings and
+  log stay private to the app and are removed with it.
 
 ## [1.5.4] - 2026-11-22
 

@@ -276,6 +276,39 @@ pub fn save_downloads(downloads: &[SavedDownload]) -> io::Result<()> {
 }
 
 /// Opens a file with its default program.
+/// Where Explorer finds a folder of the app's data. The Microsoft Store
+/// version's data is private to its package: Windows keeps it in the
+/// package's own folder, which is where Explorer (outside it) has to look.
+pub fn shown_path(path: &Path) -> PathBuf {
+    #[cfg(windows)]
+    if crate::update::is_packaged()
+        && let (Some(family), Some(roaming), Some(local)) = (package_family(), std::env::var_os("APPDATA"), std::env::var_os("LOCALAPPDATA"))
+        && let Ok(inside) = path.strip_prefix(&roaming)
+    {
+        return PathBuf::from(local)
+            .join("Packages")
+            .join(family)
+            .join(r"LocalCache\Roaming")
+            .join(inside);
+    }
+    path.to_owned()
+}
+
+#[cfg(windows)]
+fn package_family() -> Option<String> {
+    use windows_sys::Win32::Storage::Packaging::Appx::GetCurrentPackageFamilyName;
+    let mut len = 0u32;
+    // SAFETY: asks for the length only, then fills a buffer of that length.
+    unsafe {
+        GetCurrentPackageFamilyName(&mut len, std::ptr::null_mut());
+        let mut name = vec![0u16; len as usize];
+        if len == 0 || GetCurrentPackageFamilyName(&mut len, name.as_mut_ptr()) != 0 {
+            return None;
+        }
+        Some(String::from_utf16_lossy(&name[..len.saturating_sub(1) as usize]))
+    }
+}
+
 pub fn open_file(path: &Path) {
     let opener = if cfg!(target_os = "macos") { "open" } else { "explorer" };
     let _ = std::process::Command::new(opener).arg(path).spawn();
