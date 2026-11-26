@@ -6,6 +6,8 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+## [1.5.6] - 2026-11-26
+
 ### Fixed
 - Removing an unfinished download frees its disk space at once. If another
   program (such as an antivirus scan) still had the file open, Windows kept
