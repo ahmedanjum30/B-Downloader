@@ -6,6 +6,12 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+### Fixed
+- Removing an unfinished download frees its disk space at once. If another
+  program (such as an antivirus scan) still had the file open, Windows kept
+  the space taken until a restart or a disk check; the file is now emptied
+  before it's deleted.
+
 ## [1.5.5] - 2026-11-23
 
 ### Changed

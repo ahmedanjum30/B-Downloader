@@ -236,6 +236,13 @@ impl App {
                     for suffix in [".part", ".bdl"] {
                         let mut file = OsString::from(path.as_os_str());
                         file.push(suffix);
+                        // Emptied first: a file something else still has open
+                        // (an antivirus scan, the search indexer) is only hidden
+                        // when deleted, and keeps its space until they let go.
+                        // Emptying it frees a large download's space at once.
+                        if let Ok(open) = std::fs::OpenOptions::new().write(true).open(&file) {
+                            let _ = open.set_len(0);
+                        }
                         let _ = std::fs::remove_file(file);
                     }
                     let _ = std::fs::remove_file(bdownloader_core::state_path(Some(&store::resume_dir()), &path));
