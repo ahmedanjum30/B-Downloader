@@ -9,7 +9,7 @@
 
 Free for personal and other non-commercial use. See [License](#license).
 
-**[Download the latest version](https://github.com/ahmedanjum30/B-Downloader/releases/latest)** for Windows 10 and 11, or get it from the [Microsoft Store](https://apps.microsoft.com/detail/xp89fxjjf4j45w). On a Mac with Apple Silicon (M1 or later, macOS 11 or later), install it with [Homebrew](#macos).
+**[Download the latest version](https://github.com/ahmedanjum30/B-Downloader/releases/latest)** for Windows 10 and 11 (a Microsoft Store version is coming soon). On a Mac with Apple Silicon (M1 or later, macOS 11 or later), install it with [Homebrew](#macos).
 
 ## Features
 
@@ -32,7 +32,7 @@ Free for personal and other non-commercial use. See [License](#license).
 
 Download `BDownloader-Setup-<version>.exe` from [Releases](https://github.com/ahmedanjum30/B-Downloader/releases) and run it. By default it installs for your user only, into `%LOCALAPPDATA%\Programs\BDownloader`, so it doesn't need admin rights; it can also install for everyone on the PC, into Program Files. After that, BDownloader keeps itself up to date (from version 0.1.1 on). For a silent install, run the installer with `/VERYSILENT`.
 
-The [Microsoft Store version](https://apps.microsoft.com/detail/xp89fxjjf4j45w) installs without the "Windows protected your PC" warning and is updated through the Store.
+A Microsoft Store version is coming soon. It will install without the "Windows protected your PC" warning and update through the Store.
 
 ### "Windows protected your PC"
 
@@ -49,7 +49,24 @@ To add the browser extension, open **Browser extension** in BDownloader and foll
 
 Uninstall B-Downloader from Windows Settings > Apps. The website installer's uninstaller also removes what connects browsers to B-Downloader. Your download list and settings stay in `%APPDATA%\BDownloader` in case you reinstall; delete that folder to remove them too.
 
-The Microsoft Store version's data is removed with it, except the browser connection, which Windows keeps because browsers read it: one registry key per browser (`HKEY_CURRENT_USER\Software\<browser>\NativeMessagingHosts\com.bdownloader.host`, for Google Chrome, Microsoft Edge, Brave, Chromium, Opera, Vivaldi and Mozilla Firefox) and two small files in `%APPDATA%\BDownloader\NativeMessaging`. Without the app they do nothing: the browser extension just reports that B-Downloader isn't installed. To remove them, run this in PowerShell:
+The Microsoft Store version's data is removed with it, except the browser connection, which Windows keeps because browsers read it. These are all the leftovers, nothing else:
+
+Registry keys (one per browser):
+
+- `HKEY_CURRENT_USER\Software\Google\Chrome\NativeMessagingHosts\com.bdownloader.host`
+- `HKEY_CURRENT_USER\Software\Microsoft\Edge\NativeMessagingHosts\com.bdownloader.host`
+- `HKEY_CURRENT_USER\Software\BraveSoftware\Brave-Browser\NativeMessagingHosts\com.bdownloader.host`
+- `HKEY_CURRENT_USER\Software\Chromium\NativeMessagingHosts\com.bdownloader.host`
+- `HKEY_CURRENT_USER\Software\Opera Software\NativeMessagingHosts\com.bdownloader.host`
+- `HKEY_CURRENT_USER\Software\Vivaldi\NativeMessagingHosts\com.bdownloader.host`
+- `HKEY_CURRENT_USER\Software\Mozilla\NativeMessagingHosts\com.bdownloader.host`
+
+Files:
+
+- `%APPDATA%\BDownloader\NativeMessaging\com.bdownloader.host.json`
+- `%APPDATA%\BDownloader\NativeMessaging\com.bdownloader.host.firefox.json`
+
+Without the app they do nothing: the browser extension just reports that B-Downloader isn't installed. To remove them all, run this in PowerShell:
 
 ```powershell
 'Google\Chrome', 'Microsoft\Edge', 'BraveSoftware\Brave-Browser', 'Chromium', 'Opera Software', 'Vivaldi', 'Mozilla' |
