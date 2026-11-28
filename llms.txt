@@ -2,7 +2,7 @@
 
 > BDownloader is a free (for personal and non-commercial use), lightweight download manager for Windows 10 and 11 and for Macs with Apple Silicon (macOS 11 or later), written in Rust. It downloads files over multiple connections, pauses and resumes downloads, works with browsers through an extension, and downloads videos (video files, HLS streams, YouTube up to 4K).
 
-- Microsoft Store: https://apps.microsoft.com/detail/xp89fxjjf4j45w (product ID XP89FXJJF4J45W)
+- Microsoft Store: coming soon
 - Download (Windows installer, about 5 MB, no admin rights): https://github.com/ahmedanjum30/B-Downloader/releases/latest
 - Source code and documentation: https://github.com/ahmedanjum30/B-Downloader
 - Mac (Apple Silicon, M1 or later): brew install --cask ahmedanjum30/tap/b-downloader (Homebrew tap: https://github.com/ahmedanjum30/homebrew-tap), or B-Downloader-<version>-macos.zip from the latest release; brew upgrade updates it. Safari: the extension comes inside the Mac app (turn on Allow unsigned extensions in Safari's Developer settings, then the extension under Settings > Extensions); downloads come through the right-click menu and the video bar. Intel Macs aren't supported yet.

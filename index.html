@@ -28,7 +28,7 @@
   "downloadUrl": "https://github.com/ahmedanjum30/B-Downloader/releases/latest",
   "screenshot": "https://ahmedanjum30.github.io/B-Downloader/images/app.png",
   "license": "https://github.com/ahmedanjum30/B-Downloader/blob/main/LICENSE",
-  "sameAs": ["https://apps.microsoft.com/detail/xp89fxjjf4j45w", "https://github.com/ahmedanjum30/B-Downloader"]
+  "sameAs": ["https://github.com/ahmedanjum30/B-Downloader"]
 }
 </script>
 <style>
@@ -76,6 +76,7 @@
   .button.primary:hover { filter: brightness(1.08); }
   .button.secondary { color: var(--fg); border: 1px solid var(--line); background: var(--card); }
   .store img { height: 48px; width: auto; }
+  .store-soon { display: inline-flex; align-items: center; height: 48px; padding: 0 18px; border: 1px dashed currentColor; border-radius: 8px; opacity: 0.7; font-size: 0.95rem; white-space: nowrap; }
   .meta { margin-top: 14px; color: var(--muted); font-size: 14px; }
   .shot { margin: 44px auto 0; max-width: 1040px; border-radius: 12px; overflow: hidden; border: 1px solid var(--line); box-shadow: 0 30px 80px rgba(0, 0, 0, 0.35); }
   section { padding: 72px 0; }
@@ -138,12 +139,7 @@
           <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M12 4v11"/><path d="m7 10 5 5 5-5"/><path d="M5 20h14"/></svg>
           <span id="download-label">Download for Windows</span>
         </a>
-        <a class="store" href="https://apps.microsoft.com/detail/xp89fxjjf4j45w?mode=direct" aria-label="Get BDownloader from the Microsoft Store">
-          <picture>
-            <source srcset="https://get.microsoft.com/images/en-us%20light.svg" media="(prefers-color-scheme: light)">
-            <img src="https://get.microsoft.com/images/en-us%20dark.svg" width="200" height="48" alt="Get it from Microsoft">
-          </picture>
-        </a>
+        <span class="store store-soon">Microsoft Store: coming soon</span>
         <a class="button secondary" href="https://github.com/ahmedanjum30/B-Downloader">View on GitHub</a>
       </div>
       <p class="meta">Windows 10 and 11 · macOS 11 or later on Apple Silicon · About 5 MB · No admin rights needed · Free for personal use</p>
@@ -241,7 +237,7 @@
       </details>
       <details>
         <summary>Windows says "Windows protected your PC". Is it safe?</summary>
-        <p>BDownloader isn't code-signed yet, so Windows doesn't know the publisher and warns about it. Click <b>More info</b>, then <b>Run anyway</b>. The installer is built from the public source code by GitHub's release workflow, and you can check it against the <code>SHA256SUMS.txt</code> file on each release. Updates installed by BDownloader itself don't show the warning. To avoid it altogether, install BDownloader from the <a href="https://apps.microsoft.com/detail/xp89fxjjf4j45w">Microsoft Store</a>.</p>
+        <p>BDownloader isn't code-signed yet, so Windows doesn't know the publisher and warns about it. Click <b>More info</b>, then <b>Run anyway</b>. The installer is built from the public source code by GitHub's release workflow, and you can check it against the <code>SHA256SUMS.txt</code> file on each release. Updates installed by BDownloader itself don't show the warning. A Microsoft Store version, which avoids the warning altogether, is coming soon.</p>
       </details>
       <details>
         <summary>Which browsers does it work with?</summary>
@@ -276,12 +272,7 @@
       <p class="sub">Download BDownloader and add the extension to your browser. It takes a minute.</p>
       <div class="cta">
         <a class="button primary" id="download-bottom" href="https://github.com/ahmedanjum30/B-Downloader/releases/latest">Download for Windows</a>
-        <a class="store" href="https://apps.microsoft.com/detail/xp89fxjjf4j45w?mode=direct" aria-label="Get BDownloader from the Microsoft Store">
-          <picture>
-            <source srcset="https://get.microsoft.com/images/en-us%20light.svg" media="(prefers-color-scheme: light)">
-            <img src="https://get.microsoft.com/images/en-us%20dark.svg" width="200" height="48" alt="Get it from Microsoft">
-          </picture>
-        </a>
+        <span class="store store-soon">Microsoft Store: coming soon</span>
         <a class="button secondary" id="get-mac" href="#mac">Get it for Mac</a>
         <a class="button secondary" href="https://www.patreon.com/cw/ahmedanjum30">Support on Patreon</a>
       </div>
